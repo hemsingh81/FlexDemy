@@ -2,8 +2,8 @@ import { Course, UserProfile, StudyGroupRoom, LeaderboardUser } from '../types';
 
 export const INITIAL_USER: UserProfile = {
   id: 'usr_101',
-  name: 'Alex Rivera',
-  email: 'alex.rivera@flexdemy.edu',
+  name: 'Hem Singh',
+  email: 'Hem.Singh@flexdemy.edu',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   role: 'student',
   streakDays: 14,
@@ -665,14 +665,14 @@ export const MOCK_STUDY_ROOMS: StudyGroupRoom[] = [
     isSyncPlaying: true,
     members: [
       { name: 'Dr. Elena Rostova', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80', isHost: true },
-      { name: 'Alex Rivera', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', isHost: false },
+      { name: 'Hem Singh', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', isHost: false },
       { name: 'Sophia Chen', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80', isHost: false },
       { name: 'David Miller', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80', isHost: false },
     ],
     chatMessages: [
       { id: 'm1', sender: 'Dr. Elena Rostova', text: 'Welcome everyone! We are reviewing the Bloch Sphere geometry today.', timestamp: '10:14 AM' },
-      { id: 'm2', sender: 'Alex Rivera', text: 'Dr. Rostova, why does the state |-> lie on the negative X-axis?', timestamp: '10:15 AM' },
-      { id: 'm3', sender: 'Dr. Elena Rostova', text: 'Great question Alex! Because the phase angle theta = pi/2 and phi = pi, placing it at (-1, 0, 0) in Cartesian coordinates.', timestamp: '10:16 AM' },
+      { id: 'm2', sender: 'Hem Singh', text: 'Dr. Rostova, why does the state |-> lie on the negative X-axis?', timestamp: '10:15 AM' },
+      { id: 'm3', sender: 'Dr. Elena Rostova', text: 'Great question Hem! Because the phase angle theta = pi/2 and phi = pi, placing it at (-1, 0, 0) in Cartesian coordinates.', timestamp: '10:16 AM' },
       { id: 'm4', sender: 'Sophia Chen', text: 'Ah, so measurement relative to X basis gives deterministic outcomes!', timestamp: '10:17 AM' },
     ],
     whiteboardElements: [
@@ -691,7 +691,7 @@ export const MOCK_STUDY_ROOMS: StudyGroupRoom[] = [
     isSyncPlaying: false,
     members: [
       { name: 'Marcus Vance', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', isHost: true },
-      { name: 'Alex Rivera', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', isHost: false },
+      { name: 'Hem Singh', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', isHost: false },
     ],
     chatMessages: [
       { id: 'm10', sender: 'Marcus Vance', text: 'Ready to kick off backprop derivative derivations!', timestamp: '11:00 AM' },
@@ -702,7 +702,7 @@ export const MOCK_STUDY_ROOMS: StudyGroupRoom[] = [
 
 export const MOCK_LEADERBOARD: LeaderboardUser[] = [
   { rank: 1, name: 'Sophia Chen', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80', points: 3890, streakDays: 28, weeklyHours: 14.5, badge: 'Quantum Pioneer' },
-  { rank: 2, name: 'Alex Rivera (You)', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', points: 2450, streakDays: 14, weeklyHours: 9.2, badge: 'Scholar' },
+  { rank: 2, name: 'Hem Singh (You)', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', points: 2450, streakDays: 14, weeklyHours: 9.2, badge: 'Scholar' },
   { rank: 3, name: 'David Miller', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80', points: 2180, streakDays: 11, weeklyHours: 8.0, badge: 'Math Master' },
   { rank: 4, name: 'Aisha Patel', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', points: 1940, streakDays: 9, weeklyHours: 7.1, badge: 'Explorer' },
   { rank: 5, name: 'Lucas Tanaka', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80', points: 1720, streakDays: 7, weeklyHours: 6.4, badge: 'Coder' },
@@ -720,7 +720,7 @@ export const MOCK_TUTOR_SLOTS = [
     durationMinutes: 45,
     isBooked: true,
     bookedByStudentId: 'usr_101',
-    bookedByStudentName: 'Alex Rivera',
+    bookedByStudentName: 'Hem Singh',
     sessionType: 'one_on_one' as const,
     ratePerMinute: 1.50,
     topic: 'Quantum State Vector Matrix Operations & Hilbert Spaces',
@@ -777,9 +777,9 @@ export const MOCK_GROUP_REQUESTS = [
     topic: 'Hadamard & CNOT Quantum Gate Matrix Proofs',
     courseTitle: 'Quantum Computing & Superposition Foundations',
     requestedByStudentId: 'usr_101',
-    requestedByStudentName: 'Alex Rivera',
+    requestedByStudentName: 'Hem Singh',
     studentPool: [
-      { studentId: 'usr_101', studentName: 'Alex Rivera', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
+      { studentId: 'usr_101', studentName: 'Hem Singh', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
       { studentId: 'usr_99', studentName: 'Sophia Chen', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80' },
       { studentId: 'usr_102', studentName: 'David Miller', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80' },
     ],
@@ -817,7 +817,7 @@ export const MOCK_PUBLIC_CLASSES = [
     pricePerMinute: 0.50,
     flatPrice: 30.00,
     subscribers: [
-      { studentId: 'usr_101', studentName: 'Alex Rivera', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
+      { studentId: 'usr_101', studentName: 'Hem Singh', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
       { studentId: 'usr_99', studentName: 'Sophia Chen', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80' },
     ],
     status: 'upcoming' as const,

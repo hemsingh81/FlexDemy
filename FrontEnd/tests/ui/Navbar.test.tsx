@@ -7,7 +7,7 @@ import { UserProfile } from '@/src/types';
 
 const user: UserProfile = {
   id: 'usr_1',
-  name: 'Alex Rivera',
+  name: 'Hem Singh',
   email: '',
   avatar: '',
   role: 'student',
@@ -30,7 +30,7 @@ describe('Navbar', () => {
         user={user}
         activeTab="discover"
         setActiveTab={setActiveTab}
-        onOpenAuth={vi.fn()}
+        onSignOut={vi.fn()}
         onOpenAccessibility={vi.fn()}
         onLanguageChange={vi.fn()}
         onToggleTheme={vi.fn()}
@@ -43,13 +43,13 @@ describe('Navbar', () => {
     expect(setActiveTab).toHaveBeenCalledWith('dashboard');
   });
 
-  it('calls onOpenAuth and onOpenAccessibility from their respective triggers', () => {
+  it('calls onSignOut and onOpenAccessibility from their respective triggers', () => {
     render(
       <Navbar
         user={user}
         activeTab="discover"
         setActiveTab={vi.fn()}
-        onOpenAuth={vi.fn()}
+        onSignOut={vi.fn()}
         onOpenAccessibility={vi.fn()}
         onLanguageChange={vi.fn()}
         onToggleTheme={vi.fn()}

@@ -12,3 +12,5 @@ public sealed class NotFoundException(string entityName, string id)
 public sealed class ValidationException(string message) : AppException(message);
 
 public sealed class ConflictException(string message) : AppException(message);
+
+public sealed class UnauthorizedAppException(string message) : AppException(message);

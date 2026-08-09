@@ -11,7 +11,6 @@ import {
   Globe,
   Sliders,
   LogOut,
-  User as UserIcon,
   Search,
   Sparkles,
   GraduationCap,
@@ -23,7 +22,7 @@ interface NavbarProps {
   user: UserProfile;
   activeTab: 'dashboard' | 'discover' | 'player' | 'groups' | 'assignments' | 'certificates' | 'tutor';
   setActiveTab: (tab: 'dashboard' | 'discover' | 'player' | 'groups' | 'assignments' | 'certificates' | 'tutor') => void;
-  onOpenAuth: () => void;
+  onSignOut: () => void;
   onOpenAccessibility: () => void;
   onLanguageChange: (lang: LanguageCode) => void;
   onToggleTheme: () => void;
@@ -35,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   user,
   activeTab,
   setActiveTab,
-  onOpenAuth,
+  onSignOut,
   onOpenAccessibility,
   onLanguageChange,
   onToggleTheme,
@@ -230,18 +229,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     onClick={() => {
                       setShowProfileDropdown(false);
-                      onOpenAuth();
-                    }}
-                    className="w-full text-left px-4 py-2 text-xs font-medium text-slate-200 hover:bg-white/10 flex items-center space-x-2"
-                  >
-                    <UserIcon className="w-4 h-4 text-slate-300" />
-                    <span>Switch Profile / Auth</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowProfileDropdown(false);
-                      onOpenAuth();
+                      onSignOut();
                     }}
                     className="w-full text-left px-4 py-2 text-xs font-medium text-red-300 hover:bg-red-500/20 flex items-center space-x-2"
                   >

@@ -12,19 +12,19 @@ const room: StudyGroupRoom = {
   id: 'room_1',
   name: 'Quantum Physics Enthusiasts',
   courseTitle: 'Quantum Computing',
-  hostName: 'Alex Rivera',
+  hostName: 'Hem Singh',
   activeCount: 4,
   currentLessonTitle: 'Superposition and Bloch Sphere',
   currentSentenceText: 'A qubit can exist in a superposition of states.',
   isSyncPlaying: true,
-  members: [{ name: 'Alex Rivera', avatar: '', isHost: true }],
+  members: [{ name: 'Hem Singh', avatar: '', isHost: true }],
   chatMessages: [],
   whiteboardElements: [],
 };
 
 const user: UserProfile = {
   id: 'usr_1',
-  name: 'Alex Rivera',
+  name: 'Hem Singh',
   email: '',
   avatar: '',
   role: 'student',

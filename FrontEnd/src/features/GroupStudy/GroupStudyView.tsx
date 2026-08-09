@@ -44,7 +44,7 @@ export const GroupStudyView: React.FC = () => {
 
     const newMsg = {
       id: `msg_${Date.now()}`,
-      sender: 'Alex Rivera (You)',
+      sender: 'Hem Singh (You)',
       text: messageContent.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
@@ -60,7 +60,7 @@ export const GroupStudyView: React.FC = () => {
 
     // Simulate instant peer response for real-time collaboration feel
     setTimeout(() => {
-      const peerNames = activeRoom.members.filter((m) => !m.name.includes('Alex'));
+      const peerNames = activeRoom.members.filter((m) => !m.name.includes('Hem'));
       if (peerNames.length > 0) {
         const randomPeer = peerNames[Math.floor(Math.random() * peerNames.length)];
         const tips = [
@@ -280,7 +280,7 @@ export const GroupStudyView: React.FC = () => {
             {/* Chat Log */}
             <div className="flex-1 my-3 overflow-y-auto space-y-3 pr-1 text-xs">
               {activeRoom.chatMessages.map((msg) => {
-                const isUser = msg.sender.includes('You') || msg.sender.includes('Alex');
+                const isUser = msg.sender.includes('You') || msg.sender.includes('Hem');
                 return (
                   <div key={msg.id} className="space-y-0.5">
                     <div className="flex items-center justify-between text-[10px] text-[#5E6A79]">

@@ -34,7 +34,7 @@ const course: Course = {
 
 const user: UserProfile = {
   id: 'usr_1',
-  name: 'Alex Rivera',
+  name: 'Hem Singh',
   email: '',
   avatar: '',
   role: 'student',
@@ -66,7 +66,7 @@ describe('Dashboard', () => {
 
   it('renders the welcome banner with the user name', () => {
     render(<Dashboard onOpenCourse={vi.fn()} onNavigateTab={vi.fn()} />);
-    expect(screen.getByText(/Welcome back, Alex Rivera/)).toBeInTheDocument();
+    expect(screen.getByText(/Welcome back, Hem Singh/)).toBeInTheDocument();
   });
 
   it('renders nothing while loading', () => {

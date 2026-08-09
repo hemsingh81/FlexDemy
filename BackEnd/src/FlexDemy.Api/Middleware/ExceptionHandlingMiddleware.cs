@@ -21,6 +21,7 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
                 NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
                 ValidationException => (StatusCodes.Status400BadRequest, "Validation Failed"),
                 ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
+                UnauthorizedAppException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
                 _ => (StatusCodes.Status500InternalServerError, "Unexpected Error"),
             };
 

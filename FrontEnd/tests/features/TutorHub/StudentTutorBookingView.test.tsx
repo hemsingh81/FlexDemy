@@ -7,7 +7,7 @@ import { TutorCalendarSlot, UserProfile } from '@/src/types';
 
 const user: UserProfile = {
   id: 'usr_1',
-  name: 'Alex Rivera',
+  name: 'Hem Singh',
   email: '',
   avatar: '',
   role: 'student',

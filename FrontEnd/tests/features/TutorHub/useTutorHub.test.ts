@@ -12,7 +12,7 @@ vi.mock('@/src/services/groupStudyService');
 
 const user: UserProfile = {
   id: 'usr_1',
-  name: 'Alex Rivera',
+  name: 'Hem Singh',
   email: '',
   avatar: 'avatar.png',
   role: 'student',

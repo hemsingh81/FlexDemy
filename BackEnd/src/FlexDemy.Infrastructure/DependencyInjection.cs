@@ -1,8 +1,10 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.Users;
 using FlexDemy.Infrastructure.IdGeneration;
 using FlexDemy.Infrastructure.Persistence;
 using FlexDemy.Infrastructure.Repositories;
+using FlexDemy.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,8 +24,10 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddSingleton<IIdGenerator, GuidV7IdGenerator>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 
         services.AddScoped<ICourseRepository, CourseRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
 
         return services;
     }

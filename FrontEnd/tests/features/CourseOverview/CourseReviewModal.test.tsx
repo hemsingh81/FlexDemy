@@ -67,7 +67,7 @@ describe('CourseReviewModal', () => {
         id: 'rev_new',
         courseId: 'course_1',
         userId: 'usr_101',
-        userName: 'Alex Rivera (You)',
+        userName: 'Hem Singh (You)',
         userAvatar: '',
         rating: 5,
         reviewText: 'Loved it',

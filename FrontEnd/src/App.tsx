@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './ui/Navbar';
-import { AuthModal } from './ui/AuthModal';
 import { AccessibilityModal } from './ui/AccessibilityModal';
+import { LoginPage } from './features/Auth/LoginPage';
+import { SignUpPage } from './features/Auth/SignUpPage';
+import { ForgotPasswordPage } from './features/Auth/ForgotPasswordPage';
 import { AppointmentToast } from './ui/AppointmentToast';
 import { OfflineProgressToast } from './ui/OfflineProgressToast';
 import { Footer } from './ui/Footer';
@@ -41,8 +43,11 @@ function AppShell() {
   const [activeCourseId, setActiveCourseId] = useState<string>('course_quantum_101');
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>(undefined);
 
+  // Auth gate -- mandatory sign-in before the app is reachable (mock-only, no backend yet)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authView, setAuthView] = useState<'login' | 'signup' | 'forgot'>('login');
+
   // Modals
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAccessibilityOpen, setIsAccessibilityOpen] = useState(false);
 
   // Theme & Accessibility Settings
@@ -77,6 +82,27 @@ function AppShell() {
 
   if (isLoading || !user) return null;
 
+  if (!isAuthenticated) {
+    if (authView === 'signup') {
+      return (
+        <SignUpPage
+          onAuthenticated={() => setIsAuthenticated(true)}
+          onGoToLogin={() => setAuthView('login')}
+        />
+      );
+    }
+    if (authView === 'forgot') {
+      return <ForgotPasswordPage onGoToLogin={() => setAuthView('login')} />;
+    }
+    return (
+      <LoginPage
+        onAuthenticated={() => setIsAuthenticated(true)}
+        onGoToSignUp={() => setAuthView('signup')}
+        onGoToForgotPassword={() => setAuthView('forgot')}
+      />
+    );
+  }
+
   return (
     <div className={`min-h-screen bg-slate-50 text-slate-800 selection:bg-indigo-500/20 selection:text-indigo-900 transition-colors duration-200 ${
       highContrast ? 'contrast-125' : ''
@@ -95,7 +121,7 @@ function AppShell() {
         user={user}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onSignOut={() => setIsAuthenticated(false)}
         onOpenAccessibility={() => setIsAccessibilityOpen(true)}
         onLanguageChange={(lang: LanguageCode) => handleUpdateUser({ language: lang })}
         onToggleTheme={() => {}}
@@ -152,13 +178,6 @@ function AppShell() {
       <Footer language={user.language} />
 
       {/* Modals */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        user={user}
-        onUpdateUser={handleUpdateUser}
-      />
-
       <AccessibilityModal
         isOpen={isAccessibilityOpen}
         onClose={() => setIsAccessibilityOpen(false)}
