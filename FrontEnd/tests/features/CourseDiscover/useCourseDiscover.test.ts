@@ -6,9 +6,9 @@ import { useDomain } from '@/src/context/DomainContext';
 vi.mock('@/src/context/DomainContext');
 
 describe('useCourseDiscover', () => {
-  it('passes through courses and isLoading, and derives userLanguage from the user', () => {
+  it('passes through courses and isLoading from the domain context', () => {
     vi.mocked(useDomain).mockReturnValue({
-      user: { language: 'en' } as any,
+      user: {} as any,
       courses: [],
       isLoading: false,
       ensureEnrolled: vi.fn(),
@@ -16,14 +16,16 @@ describe('useCourseDiscover', () => {
       awardPoints: vi.fn(),
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
 
     const { result } = renderHook(() => useCourseDiscover());
 
-    expect(result.current).toEqual({ courses: [], userLanguage: 'en', isLoading: false });
+    expect(result.current).toEqual({ courses: [], isLoading: false });
   });
 
-  it('returns undefined userLanguage when there is no user', () => {
+  it('passes through isLoading when there is no user yet', () => {
     vi.mocked(useDomain).mockReturnValue({
       user: null,
       courses: [],
@@ -33,10 +35,12 @@ describe('useCourseDiscover', () => {
       awardPoints: vi.fn(),
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
 
     const { result } = renderHook(() => useCourseDiscover());
 
-    expect(result.current).toEqual({ courses: [], userLanguage: undefined, isLoading: true });
+    expect(result.current).toEqual({ courses: [], isLoading: true });
   });
 });

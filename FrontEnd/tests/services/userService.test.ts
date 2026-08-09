@@ -14,14 +14,13 @@ const baseUser: UserProfile = {
   name: 'Test User',
   email: 'test@example.com',
   avatar: '',
-  role: 'student',
+  role: 'Student',
   streakDays: 3,
   totalPoints: 100,
   preferredVoice: '',
   ttsRate: 1,
   ttsPitch: 1,
   isDarkMode: false,
-  language: 'en',
   progress: {},
 };
 

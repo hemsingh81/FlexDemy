@@ -5,14 +5,13 @@ export const INITIAL_USER: UserProfile = {
   name: 'Hem Singh',
   email: 'Hem.Singh@flexdemy.edu',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  role: 'student',
+  role: 'Student',
   streakDays: 14,
   totalPoints: 2450,
   preferredVoice: '',
   ttsRate: 1.0,
   ttsPitch: 1.0,
   isDarkMode: false,
-  language: 'en',
   progress: {
     'course_quantum_101': {
       courseId: 'course_quantum_101',

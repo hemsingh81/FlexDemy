@@ -1,13 +1,7 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
-import { LanguageCode, translate } from '../lib/i18n';
 
-interface FooterProps {
-  language?: LanguageCode;
-}
-
-export const Footer: React.FC<FooterProps> = ({ language }) => {
-  const t = (key: string) => translate(key, language || 'en');
+export const Footer: React.FC = () => {
   const year = new Date().getFullYear();
 
   return (
@@ -19,16 +13,16 @@ export const Footer: React.FC<FooterProps> = ({ language }) => {
           </div>
           <div>
             <span className="text-sm font-bold font-display tracking-tight text-white block leading-tight">
-              {t('app_title')}
+              FlexDemy
             </span>
             <span className="text-[10px] font-medium text-slate-300 leading-tight">
-              {t('tagline')}
+              My time. My academy.
             </span>
           </div>
         </div>
 
         <p className="text-[11px] text-slate-300">
-          © {year} {t('app_title')}. All rights reserved.
+          © {year} FlexDemy. All rights reserved.
         </p>
       </div>
     </footer>

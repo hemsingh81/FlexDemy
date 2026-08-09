@@ -25,7 +25,8 @@ public static class CourseMapper
         course.BadgeIcon
     );
 
-    public static Course ToEntity(this CreateCourseRequest request, string id, DateTimeOffset createdAt) => new()
+    // CreatedAt/CreatedBy are stamped by AuditSaveChangesInterceptor on SaveChanges, not here.
+    public static Course ToEntity(this CreateCourseRequest request, string id) => new()
     {
         Id = id,
         Title = request.Title,
@@ -41,6 +42,5 @@ public static class CourseMapper
         EstimatedHours = request.EstimatedHours,
         ThumbnailUrl = request.ThumbnailUrl,
         BadgeIcon = request.BadgeIcon,
-        CreatedAt = createdAt,
     };
 }

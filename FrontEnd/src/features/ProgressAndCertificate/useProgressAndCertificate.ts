@@ -20,8 +20,7 @@ export const useProgressAndCertificate = () => {
     };
   }, []);
 
-  const userLanguage = user?.language ?? 'en';
   const isLoading = isDomainLoading || isLeaderboardLoading;
 
-  return { user, courses, leaderboard, userLanguage, isLoading };
+  return { user, courses, leaderboard, isLoading };
 };

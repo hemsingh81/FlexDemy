@@ -106,6 +106,20 @@
   outline-offset: 2px;
 }
 
+/* Global text selection color -- solid citrus-amber background with ink-navy text.
+   Chosen (instead of a low-opacity color) so selections stay legible against every
+   surface in the app, including the dark #143358 navy Navbar/AdminPanel chrome:
+   a solid amber block reads clearly against both light/cream and dark navy
+   backgrounds, and amber-on-navy-text meets WCAG AA contrast (~4.5:1). */
+::selection {
+  background-color: var(--color-citrus-amber);
+  color: var(--color-ink-navy);
+}
+::-moz-selection {
+  background-color: var(--color-citrus-amber);
+  color: var(--color-ink-navy);
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -120,6 +134,20 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+/* Shared entrance keyframes for transient UI (confirm dialogs, popovers, freshly-mounted
+   panels) -- referenced via Tailwind arbitrary values, e.g. animate-[fade-in-scale_150ms_ease-out].
+   See docs/FRONTEND_TRANSITIONS.md for when to reach for these vs. the Collapse component. */
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Lumen Style Guide Narration Highlight -- references tokens, never raw hex (Style Guide p.2 rule 2) */

@@ -19,7 +19,7 @@ public class CourseService(ICourseRepository repository, IUnitOfWork unitOfWork,
 
     public async Task<CourseDto> CreateCourseAsync(CreateCourseRequest request, CancellationToken cancellationToken = default)
     {
-        var course = request.ToEntity(idGenerator.NewId(), DateTimeOffset.UtcNow);
+        var course = request.ToEntity(idGenerator.NewId());
         repository.Add(course);
         // AD-11: the service commits once, after every repository call for this use-case has staged its change.
         await unitOfWork.SaveChangesAsync(cancellationToken);

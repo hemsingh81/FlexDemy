@@ -141,14 +141,13 @@ export interface UserProfile {
   name: string;
   email: string;
   avatar: string;
-  role: 'student' | 'instructor';
+  role: 'Master' | 'Support' | 'Tutor' | 'Student' | 'Unassigned' | 'PendingTutor' | 'RejectedTutor';
   streakDays: number;
   totalPoints: number;
   preferredVoice: string;
   ttsRate: number;
   ttsPitch: number;
   isDarkMode: boolean;
-  language: 'en' | 'es' | 'fr' | 'de' | 'zh' | 'ja';
   progress: Record<string, UserProgress>; // courseId -> progress
   weeklyGoalHours?: number;
 }

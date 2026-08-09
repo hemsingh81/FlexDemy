@@ -37,3 +37,10 @@ appsettings.*.local.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Environment-specific TLS-inspection CA certs (see src/FlexDemy.Api/certs/README.md) --
+# never commit a corporate proxy's root/intermediate CA to the shared repo.
+src/FlexDemy.Api/certs/*.pem
+src/FlexDemy.Api/certs/*.crt
+!src/FlexDemy.Api/certs/.gitkeep
+!src/FlexDemy.Api/certs/README.md

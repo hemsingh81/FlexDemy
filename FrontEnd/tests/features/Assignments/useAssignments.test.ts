@@ -53,14 +53,13 @@ const user: UserProfile = {
   name: 'Hem Singh',
   email: '',
   avatar: '',
-  role: 'student',
+  role: 'Student',
   streakDays: 4,
   totalPoints: 250,
   preferredVoice: '',
   ttsRate: 1,
   ttsPitch: 1,
   isDarkMode: false,
-  language: 'fr',
   progress: {},
 };
 
@@ -76,17 +75,18 @@ describe('useAssignments', () => {
       awardPoints,
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
 
     const { result } = renderHook(() => useAssignments());
 
     expect(result.current.assignments).toEqual([makeAssignment('asg_1'), makeAssignment('asg_2')]);
-    expect(result.current.userLanguage).toBe('fr');
     expect(result.current.awardPoints).toBe(awardPoints);
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('defaults userLanguage to "en" and returns an empty assignments list when the user/courses are not yet loaded', () => {
+  it('returns an empty assignments list when the user/courses are not yet loaded', () => {
     vi.mocked(useDomain).mockReturnValue({
       user: null,
       courses: [],
@@ -96,12 +96,13 @@ describe('useAssignments', () => {
       awardPoints: vi.fn(),
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
 
     const { result } = renderHook(() => useAssignments());
 
     expect(result.current.assignments).toEqual([]);
-    expect(result.current.userLanguage).toBe('en');
     expect(result.current.isLoading).toBe(true);
   });
 });

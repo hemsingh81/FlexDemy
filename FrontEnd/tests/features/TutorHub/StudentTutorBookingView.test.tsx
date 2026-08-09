@@ -10,14 +10,13 @@ const user: UserProfile = {
   name: 'Hem Singh',
   email: '',
   avatar: '',
-  role: 'student',
+  role: 'Student',
   streakDays: 4,
   totalPoints: 250,
   preferredVoice: '',
   ttsRate: 1,
   ttsPitch: 1,
   isDarkMode: false,
-  language: 'en',
   progress: {},
 };
 

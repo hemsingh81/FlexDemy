@@ -1,4 +1,7 @@
 using FlexDemy.Domain.Courses;
+using FlexDemy.Domain.MasterData;
+using FlexDemy.Domain.Permissions;
+using FlexDemy.Domain.Profiles;
 using FlexDemy.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +11,18 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
 {
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<User> Users => Set<User>();
+
+    public DbSet<Country> Countries => Set<Country>();
+    public DbSet<State> States => Set<State>();
+    public DbSet<City> Cities => Set<City>();
+    public DbSet<Board> Boards => Set<Board>();
+    public DbSet<ClassLevel> ClassLevels => Set<ClassLevel>();
+    public DbSet<Subject> Subjects => Set<Subject>();
+
+    public DbSet<StudentProfile> StudentProfiles => Set<StudentProfile>();
+    public DbSet<TutorProfile> TutorProfiles => Set<TutorProfile>();
+
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

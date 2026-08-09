@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { User, Mail, Lock, UserPlus, ArrowRight, Loader2 } from 'lucide-react';
+import { User, Mail, Lock, UserPlus, ArrowRight } from 'lucide-react';
 import { AuthLayout } from './AuthLayout';
 import { useAuth } from './useAuth';
 import { AuthError } from '../../services/authService';
+import { Button } from '../../ui/Button';
 
 interface SignUpPageProps {
   onAuthenticated: () => void;
@@ -116,15 +117,16 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthenticated, onGoToL
 
         {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
 
-        <button
+        <Button
           type="submit"
-          disabled={isSubmitting}
-          className="w-full py-3 px-4 bg-[#143358] hover:bg-[#143358]/90 disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer"
+          fullWidth
+          isLoading={isSubmitting}
+          loadingText="Creating Account..."
+          icon={<UserPlus className="w-4 h-4" />}
+          trailingIcon={<ArrowRight className="w-4 h-4" />}
         >
-          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-          <span>{isSubmitting ? 'Creating Account...' : 'Create Account'}</span>
-          {!isSubmitting && <ArrowRight className="w-4 h-4" />}
-        </button>
+          Create Account
+        </Button>
       </form>
 
       <p className="text-center text-xs text-[#5E6A79]">

@@ -30,7 +30,6 @@ interface CourseOverviewScreenProps {
   progress?: UserProgress;
   onStartLesson: (courseId: string, lessonId?: string) => void;
   onBack: () => void;
-  userLanguage?: string;
 }
 
 export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({

@@ -35,7 +35,7 @@ const course: Course = {
 describe('CourseDiscover', () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.mocked(useCourseDiscover).mockReturnValue({ courses: [course], userLanguage: 'en', isLoading: false });
+    vi.mocked(useCourseDiscover).mockReturnValue({ courses: [course], isLoading: false });
   });
 
   it('renders the course catalog header and the course title', () => {
@@ -45,7 +45,7 @@ describe('CourseDiscover', () => {
   });
 
   it('renders nothing while loading', () => {
-    vi.mocked(useCourseDiscover).mockReturnValue({ courses: [], userLanguage: undefined, isLoading: true });
+    vi.mocked(useCourseDiscover).mockReturnValue({ courses: [], isLoading: true });
     const { container } = render(<CourseDiscover onOpenCourse={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });

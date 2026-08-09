@@ -15,7 +15,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # Published as 5433 on the host -- a native Windows PostgreSQL service already owns 5432
+      # on this machine, silently intercepting connections meant for this container. Internal
+      # container-to-container traffic (API -> postgres:5432) is unaffected either way.
+      - "5433:5432"
     volumes:
       # postgres:18+ images use pg_ctlcluster-style version-specific subdirectories under
       # /var/lib/postgresql itself -- mounting at .../data (the pre-18 convention) makes the

@@ -1,10 +1,12 @@
+using FlexDemy.Domain.Common;
+
 namespace FlexDemy.Domain.Courses;
 
 // Persistence-ignorant POCO (ARCHITECTURE-SPINE.md AD-4) -- no EF Core attributes here.
 // Table/column mapping lives in Infrastructure/Persistence/Configurations/CourseConfiguration.cs.
-public class Course
+// Id/IsActive/CreatedAt/CreatedBy/UpdatedAt/UpdatedBy/IsDeleted come from AuditableEntity.
+public class Course : AuditableEntity
 {
-    public required string Id { get; set; }
     public required string Title { get; set; }
     public string ShortDescription { get; set; } = string.Empty;
     public string FullDescription { get; set; } = string.Empty;
@@ -20,5 +22,4 @@ public class Course
     public int EstimatedHours { get; set; } = 1;
     public string? ThumbnailUrl { get; set; }
     public string? BadgeIcon { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
 }

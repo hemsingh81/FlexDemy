@@ -32,7 +32,6 @@ describe('AssignmentsView', () => {
     awardPoints.mockClear();
     vi.mocked(useAssignments).mockReturnValue({
       assignments: [assignment],
-      userLanguage: 'en',
       awardPoints,
       isLoading: false,
     });
@@ -47,7 +46,6 @@ describe('AssignmentsView', () => {
   it('renders nothing while loading', () => {
     vi.mocked(useAssignments).mockReturnValue({
       assignments: [],
-      userLanguage: 'en',
       awardPoints,
       isLoading: true,
     });

@@ -15,14 +15,13 @@ const user: UserProfile = {
   name: 'Hem Singh',
   email: '',
   avatar: 'avatar.png',
-  role: 'student',
+  role: 'Student',
   streakDays: 4,
   totalPoints: 250,
   preferredVoice: '',
   ttsRate: 1,
   ttsPitch: 1,
   isDarkMode: false,
-  language: 'en',
   progress: {},
 };
 
@@ -81,6 +80,8 @@ describe('useTutorHub', () => {
       awardPoints: vi.fn(),
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
     vi.mocked(tutorService.getTutorSlots).mockResolvedValue([slot]);
     vi.mocked(groupStudyService.getGroupRequests).mockResolvedValue([groupRequest]);

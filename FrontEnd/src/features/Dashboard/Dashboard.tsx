@@ -17,7 +17,6 @@ import {
   Check,
 } from 'lucide-react';
 import { UserProgress } from '../../types';
-import { translate } from '../../lib/i18n';
 import { useDashboard } from './useDashboard';
 import { WeeklyGoalCard } from './WeeklyGoalCard';
 import { AdaptiveSchedule } from './AdaptiveSchedule';
@@ -40,8 +39,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [courseSortBy, setCourseSortBy] = useState<'recently_accessed' | 'completion_percentage' | 'alphabetical'>('recently_accessed');
 
   if (isLoading || !user) return null;
-
-  const t = (key: string) => translate(key, user.language);
 
   const GRADE_TAGS = ['All', 'Class 10th', 'Class 12th', 'Undergrad / College', 'PhD Level'];
 
@@ -289,7 +286,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-2xl font-bold font-display text-[#142030]">
-                  {t('my_courses')} ({enrolledCourses.length})
+                  My Courses ({enrolledCourses.length})
                 </h2>
                 <p className="text-xs text-[#5E6A79]">
                   Continue learning with interactive text narration and 5-level drilldowns.
@@ -435,7 +432,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         className="w-full sm:w-auto px-5 py-2.5 bg-[#143358] hover:bg-[#143358]/90 text-white font-semibold text-xs rounded-xl shadow-md flex items-center justify-center space-x-2 transition-all flex-shrink-0"
                       >
                         <Play className="w-4 h-4 fill-white" />
-                        <span>{t('continue_learning')}</span>
+                        <span>Continue Learning</span>
                       </button>
                     </div>
                   );
@@ -464,7 +461,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onClick={() => onNavigateTab('groups')}
               className="w-full py-2.5 bg-[#EC7B38] hover:bg-[#EC7B38]/90 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center space-x-2"
             >
-              <span>{t('join_room')}</span>
+              <span>Join Room</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -473,7 +470,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs space-y-4">
             <h3 className="text-base font-bold font-display text-[#142030] flex items-center space-x-2">
               <TrendingUp className="w-4 h-4 text-[#143358]" />
-              <span>{t('recent_activity')}</span>
+              <span>Recent Activity</span>
             </h3>
 
             <div className="space-y-3">

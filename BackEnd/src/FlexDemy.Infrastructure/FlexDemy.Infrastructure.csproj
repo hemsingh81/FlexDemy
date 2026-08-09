@@ -4,6 +4,18 @@
     <ProjectReference Include="..\FlexDemy.Application\FlexDemy.Application.csproj" />
   </ItemGroup>
 
+  <!--
+    Needed for IHttpContextAccessor (Microsoft.AspNetCore.Http.Abstractions), consumed by
+    HttpContextCurrentUserService. Since .NET Core 3.0, ASP.NET Core types for a plain
+    Microsoft.NET.Sdk class library (this project isn't Microsoft.NET.Sdk.Web; only
+    FlexDemy.Api is) come from a FrameworkReference to the shared framework, not a standalone
+    NuGet package; Microsoft.AspNetCore.Http.Abstractions on NuGet targets netstandard2.0 only
+    and isn't the right fit for a net10.0 project referencing Microsoft.AspNetCore.App.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
@@ -11,6 +23,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
 
   <PropertyGroup>

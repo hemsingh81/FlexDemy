@@ -17,7 +17,7 @@ import { StudyGroupRoom } from '../../types';
 import { useGroupStudy } from './useGroupStudy';
 
 export const GroupStudyView: React.FC = () => {
-  const { rooms, userLanguage, isLoading } = useGroupStudy();
+  const { rooms, isLoading } = useGroupStudy();
 
   const [activeRoomId, setActiveRoomId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');

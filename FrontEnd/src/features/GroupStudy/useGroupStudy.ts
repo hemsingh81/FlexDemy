@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { StudyGroupRoom } from '../../types';
 import * as groupStudyService from '../../services/groupStudyService';
-import { useDomain } from '../../context/DomainContext';
 
 export const useGroupStudy = () => {
-  const { user } = useDomain();
   const [rooms, setRooms] = useState<StudyGroupRoom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -20,5 +18,5 @@ export const useGroupStudy = () => {
     };
   }, []);
 
-  return { rooms, userLanguage: user?.language ?? 'en', isLoading };
+  return { rooms, isLoading };
 };

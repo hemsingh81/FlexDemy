@@ -31,14 +31,13 @@ const user: UserProfile = {
   name: 'Hem Singh',
   email: '',
   avatar: '',
-  role: 'student',
+  role: 'Student',
   streakDays: 4,
   totalPoints: 250,
   preferredVoice: '',
   ttsRate: 1,
   ttsPitch: 1,
   isDarkMode: false,
-  language: 'es',
   progress: {},
 };
 
@@ -57,11 +56,13 @@ describe('useProgressAndCertificate', () => {
       awardPoints: vi.fn(),
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
     vi.mocked(userService.getLeaderboard).mockResolvedValue(leaderboard);
   });
 
-  it('combines domain user/courses with the fetched leaderboard and derives userLanguage', async () => {
+  it('combines domain user/courses with the fetched leaderboard', async () => {
     const { result } = renderHook(() => useProgressAndCertificate());
 
     expect(result.current.isLoading).toBe(true);
@@ -71,7 +72,6 @@ describe('useProgressAndCertificate', () => {
     expect(result.current.user).toEqual(user);
     expect(result.current.courses).toEqual([course]);
     expect(result.current.leaderboard).toEqual(leaderboard);
-    expect(result.current.userLanguage).toBe('es');
   });
 
   it('stays loading while the domain context is still loading', () => {
@@ -84,11 +84,12 @@ describe('useProgressAndCertificate', () => {
       awardPoints: vi.fn(),
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
 
     const { result } = renderHook(() => useProgressAndCertificate());
 
     expect(result.current.isLoading).toBe(true);
-    expect(result.current.userLanguage).toBe('en');
   });
 });

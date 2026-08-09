@@ -23,7 +23,7 @@ const room: StudyGroupRoom = {
 
 describe('GroupStudyView', () => {
   beforeEach(() => {
-    vi.mocked(useGroupStudy).mockReturnValue({ rooms: [room], userLanguage: 'en', isLoading: false });
+    vi.mocked(useGroupStudy).mockReturnValue({ rooms: [room], isLoading: false });
   });
 
   it('renders the group study rooms heading', () => {
@@ -32,7 +32,7 @@ describe('GroupStudyView', () => {
   });
 
   it('renders nothing while loading', () => {
-    vi.mocked(useGroupStudy).mockReturnValue({ rooms: [], userLanguage: 'en', isLoading: true });
+    vi.mocked(useGroupStudy).mockReturnValue({ rooms: [], isLoading: true });
     const { container } = render(<GroupStudyView />);
     expect(container).toBeEmptyDOMElement();
   });

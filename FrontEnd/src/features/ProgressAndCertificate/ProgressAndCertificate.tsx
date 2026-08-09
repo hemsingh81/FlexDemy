@@ -14,7 +14,7 @@ import confetti from 'canvas-confetti';
 import { useProgressAndCertificate } from './useProgressAndCertificate';
 
 export const ProgressAndCertificate: React.FC = () => {
-  const { user, courses, leaderboard, userLanguage, isLoading } = useProgressAndCertificate();
+  const { user, courses, leaderboard, isLoading } = useProgressAndCertificate();
 
   const [selectedCourseId, setSelectedCourseId] = useState<string>(courses?.[0]?.id || '');
   const [forceUnlockedForDemo, setForceUnlockedForDemo] = useState<boolean>(false);

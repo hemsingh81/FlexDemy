@@ -15,7 +15,6 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { Course, SubjectCategory, DifficultyLevel } from '../../types';
-import { translate } from '../../lib/i18n';
 import { CourseReviewModal } from '../CourseOverview/CourseReviewModal';
 import { getReviewsForCourse } from '../../services/reviewsService';
 import { useCourseDiscover } from './useCourseDiscover';
@@ -29,7 +28,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
   onOpenCourse,
   initialSearchQuery = '',
 }) => {
-  const { courses, userLanguage, isLoading } = useCourseDiscover();
+  const { courses, isLoading } = useCourseDiscover();
 
   const [search, setSearch] = useState(initialSearchQuery);
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
@@ -38,8 +37,6 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
   const [reviewCourse, setReviewCourse] = useState<Course | null>(null);
 
   if (isLoading) return null;
-
-  const t = (key: string) => translate(key, userLanguage as any);
 
   // Enrolled / Running courses
   const runningCourses = courses.filter((c) => c.enrolledCount > 0 || c.id === 'course_quantum_101');
@@ -79,7 +76,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('search_courses_placeholder')}
+            placeholder="Search by topic, keyword, or concept..."
             className="w-full pl-12 pr-10 py-3.5 bg-white border border-[#E1DED4] rounded-2xl text-sm shadow-xs focus:ring-2 focus:ring-[#EC7B38] text-[#142030] placeholder-[#5E6A79]"
           />
           {search && (
@@ -347,7 +344,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
                       className="flex-1 py-2.5 bg-[#143358] hover:bg-[#143358]/90 text-white font-bold text-xs rounded-xl shadow-md shadow-[#143358]/20 flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
                     >
                       <Play className="w-3.5 h-3.5 fill-white" />
-                      <span>{t('enroll_now')}</span>
+                      <span>Enroll Now</span>
                     </button>
                   </div>
 

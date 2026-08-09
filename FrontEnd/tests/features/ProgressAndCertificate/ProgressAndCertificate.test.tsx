@@ -36,14 +36,13 @@ const user: UserProfile = {
   name: 'Hem Singh',
   email: '',
   avatar: '',
-  role: 'student',
+  role: 'Student',
   streakDays: 4,
   totalPoints: 250,
   preferredVoice: '',
   ttsRate: 1,
   ttsPitch: 1,
   isDarkMode: false,
-  language: 'en',
   progress: {},
 };
 
@@ -57,7 +56,6 @@ describe('ProgressAndCertificate', () => {
       user,
       courses: [course],
       leaderboard,
-      userLanguage: 'en',
       isLoading: false,
     });
   });
@@ -73,7 +71,6 @@ describe('ProgressAndCertificate', () => {
       user: null,
       courses: [],
       leaderboard: [],
-      userLanguage: 'en',
       isLoading: true,
     });
     const { container } = render(<ProgressAndCertificate />);

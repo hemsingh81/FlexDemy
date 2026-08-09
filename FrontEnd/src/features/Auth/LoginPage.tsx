@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, Lock, LogIn, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, LogIn, ArrowRight } from 'lucide-react';
 import { AuthLayout } from './AuthLayout';
 import { useAuth } from './useAuth';
 import { AuthError } from '../../services/authService';
+import { Button } from '../../ui/Button';
 
 interface LoginPageProps {
   onAuthenticated: () => void;
@@ -77,15 +78,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onAuthenticated, onGoToSig
 
         {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
 
-        <button
+        <Button
           type="submit"
-          disabled={isSubmitting}
-          className="w-full py-3 px-4 bg-[#143358] hover:bg-[#143358]/90 disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer"
+          fullWidth
+          isLoading={isSubmitting}
+          loadingText="Signing In..."
+          icon={<LogIn className="w-4 h-4" />}
+          trailingIcon={<ArrowRight className="w-4 h-4" />}
         >
-          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-          <span>{isSubmitting ? 'Signing In...' : 'Sign In'}</span>
-          {!isSubmitting && <ArrowRight className="w-4 h-4" />}
-        </button>
+          Sign In
+        </Button>
       </form>
 
       <p className="text-center text-xs text-[#5E6A79]">

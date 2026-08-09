@@ -16,6 +16,8 @@ describe('useDashboard', () => {
       awardPoints: vi.fn(),
       completeLesson: vi.fn(),
       addCourse: vi.fn(),
+      rolePermissions: null,
+      refreshRolePermissions: vi.fn(),
     });
 
     const { result } = renderHook(() => useDashboard());

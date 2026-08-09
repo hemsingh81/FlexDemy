@@ -23,5 +23,9 @@ public class CourseConfiguration : IEntityTypeConfiguration<Course>
         builder.Property(c => c.InstructorRole).HasMaxLength(255);
         builder.Property(c => c.Rating).HasPrecision(3, 2);
         builder.Property(c => c.BadgeIcon).HasMaxLength(64);
+
+        // Global soft-delete filter: no repository/service needs to remember to exclude
+        // deleted rows itself.
+        builder.HasQueryFilter(c => !c.IsDeleted);
     }
 }

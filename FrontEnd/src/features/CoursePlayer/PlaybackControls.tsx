@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Play,
   Pause,
@@ -12,6 +12,7 @@ import {
   ChevronUp,
   ChevronDown,
 } from 'lucide-react';
+import { Dropdown } from '../../ui/Dropdown';
 
 interface PlaybackControlsProps {
   isPlaying: boolean;
@@ -48,8 +49,6 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   currentSentenceIndex,
   totalSentences,
 }) => {
-  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
-
   return (
     <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 shadow-lg transition-all text-slate-800">
       <div className="w-full px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -149,16 +148,20 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
 
           {/* Voice Selector Trigger */}
           {voices.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setShowVoiceSettings(!showVoiceSettings)}
-                className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200"
-              >
-                <Gauge className="w-4 h-4" />
-              </button>
-
-              {showVoiceSettings && (
-                <div className="absolute right-0 bottom-12 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-50 space-y-2">
+            <Dropdown
+              align="right"
+              side="top"
+              menuClassName="w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 space-y-2"
+              trigger={({ toggle }) => (
+                <button
+                  onClick={toggle}
+                  className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200"
+                >
+                  <Gauge className="w-4 h-4" />
+                </button>
+              )}
+              menu={() => (
+                <>
                   <p className="text-xs font-bold text-slate-900">Select Speech Synthesis Voice</p>
                   <select
                     value={selectedVoiceName}
@@ -172,9 +175,9 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
                       </option>
                     ))}
                   </select>
-                </div>
+                </>
               )}
-            </div>
+            />
           )}
 
         </div>

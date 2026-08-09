@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sliders, Eye, Type, Keyboard, Volume2, Mic, Gauge, Play, Check } from 'lucide-react';
+import { X, Eye, Type, Keyboard, Volume2, Mic, Gauge, Play, Check } from 'lucide-react';
 import { ttsManager } from '../lib/tts';
 
 interface AccessibilityModalProps {
@@ -83,18 +83,13 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="p-2.5 rounded-xl bg-indigo-950/80 border border-indigo-800 text-indigo-400">
-            <Sliders className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              WCAG 2.1 Accessibility & Voice Settings
-            </h2>
-            <p className="text-xs text-gray-400">
-              Customize text sizing, color contrast, TTS narration voices, pitch, and speech rates.
-            </p>
-          </div>
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-white">
+            WCAG 2.1 Accessibility & Voice Settings
+          </h2>
+          <p className="text-xs text-gray-400">
+            Customize text sizing, color contrast, TTS narration voices, pitch, and speech rates.
+          </p>
         </div>
 
         <div className="space-y-6">

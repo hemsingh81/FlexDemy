@@ -1,4 +1,6 @@
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.Permissions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FlexDemy.Api.Controllers;
@@ -26,7 +28,11 @@ public class CoursesController(ICourseService courseService) : ControllerBase
         return Ok(course);
     }
 
+    // Policy-based auth (plan §3, Phase 4 proof point): backed by the FeatureKeys.CoursesCreate
+    // row in the role-permission matrix (default: Master, Tutor), enforced dynamically by
+    // FeatureAuthorizationHandler rather than a hardcoded Roles list.
     [HttpPost]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
     public async Task<ActionResult<CourseDto>> CreateCourse(CreateCourseRequest request, CancellationToken cancellationToken)
     {
         var course = await courseService.CreateCourseAsync(request, cancellationToken);

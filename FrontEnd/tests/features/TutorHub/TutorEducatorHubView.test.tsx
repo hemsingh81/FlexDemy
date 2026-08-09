@@ -10,14 +10,13 @@ const user: UserProfile = {
   name: 'Dr. Elena Rostova',
   email: '',
   avatar: '',
-  role: 'instructor',
+  role: 'Tutor',
   streakDays: 4,
   totalPoints: 250,
   preferredVoice: '',
   ttsRate: 1,
   ttsPitch: 1,
   isDarkMode: false,
-  language: 'en',
   progress: {},
 };
 
