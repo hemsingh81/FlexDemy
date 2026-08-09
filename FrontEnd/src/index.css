@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+@theme {
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-ink-navy: #143358;
+  --color-citrus-amber: #EC7B38;
+  --color-parchment: #FAF7EC;
+  --color-signal-green: #179765;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+
+  --shadow-lift: 0 1px 0 0 var(--border), 0 18px 40px -28px rgba(20, 51, 88, 0.55);
+  --shadow-glow: 0 0 0 1px var(--border), 0 20px 60px -30px rgba(236, 123, 56, 0.6);
+}
+
+:root {
+  --background: oklch(0.985 0.008 95); /* #FCFAF4 Page canvas */
+  --foreground: oklch(0.24 0.035 255); /* #142030 Body text / ink */
+  --card: oklch(1 0 0); /* #FFFFFF Card surface */
+  --primary: oklch(0.32 0.075 254); /* #143358 Ink Navy - Primary actions, nav */
+  --primary-foreground: oklch(0.985 0.01 95); /* #FCFAF3 Text on primary */
+  --secondary: oklch(0.955 0.014 95); /* #F3F0E6 Subtle surface */
+  --muted: oklch(0.955 0.012 95); /* #F2F0E7 Muted surface */
+  --muted-foreground: oklch(0.52 0.028 255); /* #5E6A79 Secondary text */
+  --accent: oklch(0.7 0.16 48); /* #EC7B38 Citrus Amber accent / CTA */
+  --accent-foreground: oklch(0.22 0.05 50); /* #2C1204 Text on accent */
+  --destructive: oklch(0.58 0.2 25); /* #D73337 Errors, destructive */
+  --success: oklch(0.6 0.13 160); /* #179765 Signal Green - Success */
+  --border: oklch(0.9 0.014 90); /* #E1DED4 Hairlines, dividers */
+  --ring: oklch(0.7 0.16 48); /* #EC7B38 Focus ring */
+  --parchment: oklch(0.975 0.014 92); /* #FAF7EC Sidebar / paper areas */
+  --highlight: oklch(0.975 0.014 92); /* #FAF7EC Soft narration highlight */
+  --highlight-foreground: oklch(0.24 0.035 255); /* #142030 Text on highlight */
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: oklch(0.19 0.03 258); /* #0B1421 Deep navy canvas */
+  --foreground: oklch(0.95 0.01 95); /* #F0EEE7 Body text */
+  --card: oklch(0.23 0.034 258); /* #131D2D Card surface */
+  --primary: oklch(0.92 0.02 95); /* #E8E5D6 Primary actions */
+  --primary-foreground: oklch(0.22 0.04 258); /* #0E1B2D Text on primary */
+  --secondary: oklch(0.28 0.035 258); /* #1E293A Subtle surface */
+  --muted: oklch(0.28 0.035 258); /* #1E293A Muted surface */
+  --muted-foreground: oklch(0.7 0.02 255); /* #969FAB Secondary text */
+  --accent: oklch(0.74 0.16 48); /* #FA8746 Brighter amber accent */
+  --accent-foreground: oklch(0.2 0.05 50); /* #270E01 Text on accent */
+  --destructive: oklch(0.68 0.18 25); /* #F3625D Errors */
+  --success: oklch(0.7 0.13 160); /* #44B782 Success */
+  --border: oklch(1 0 0 / 12%); /* #FFFFFF1F Hairlines (12% white) */
+  --ring: oklch(0.74 0.16 48); /* #FA8746 Focus ring */
+  --parchment: oklch(0.24 0.034 258); /* #15202F Sidebar */
+  --highlight: oklch(0.42 0.08 80); /* #64470E Narration highlight */
+  --highlight-foreground: oklch(0.95 0.02 95); /* #F2EFE0 Text on highlight */
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Accessibility Focus Ring Styling */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--muted);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* Lumen Style Guide Narration Highlight */
+.active-sentence-highlight {
+  position: relative;
+  background-color: #FAF7EC !important;
+  color: #142030 !important;
+  border-left: 5px solid #EC7B38 !important;
+  border-radius: 1.25rem;
+}
