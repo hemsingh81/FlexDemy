@@ -1,7 +1,7 @@
-# Backend Product Requirement Document (PRD) - LearnSphere API & Microservices Architecture
+# Backend Product Requirement Document (PRD) - FlexDemy API & Microservices Architecture
 
 ## 1. Executive Summary
-This document specifies the backend service architecture, relational database schema, REST API endpoints, WebSocket real-time event protocols, and AI microservice integrations required to support the LearnSphere learning platform, including TTS voice settings, weekly study goal persistence, and full course overview data aggregation.
+This document specifies the backend service architecture, relational database schema, REST API endpoints, WebSocket real-time event protocols, and AI microservice integrations required to support the FlexDemy learning platform, including TTS voice settings, weekly study goal persistence, and full course overview data aggregation.
 
 ---
 

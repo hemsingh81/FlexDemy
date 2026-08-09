@@ -3,7 +3,7 @@ import { Course, UserProfile, StudyGroupRoom, LeaderboardUser } from '../types';
 export const INITIAL_USER: UserProfile = {
   id: 'usr_101',
   name: 'Alex Rivera',
-  email: 'alex.rivera@learnsphere.edu',
+  email: 'alex.rivera@flexdemy.edu',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   role: 'student',
   streakDays: 14,
@@ -821,7 +821,7 @@ export const MOCK_PUBLIC_CLASSES = [
       { studentId: 'usr_99', studentName: 'Sophia Chen', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80' },
     ],
     status: 'upcoming' as const,
-    meetingUrl: 'https://meet.learnsphere.edu/quantum-grover-masterclass',
+    meetingUrl: 'https://meet.flexdemy.edu/quantum-grover-masterclass',
     subject: 'physics' as const,
   },
   {
@@ -840,7 +840,7 @@ export const MOCK_PUBLIC_CLASSES = [
       { studentId: 'usr_102', studentName: 'David Miller', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80' },
     ],
     status: 'upcoming' as const,
-    meetingUrl: 'https://meet.learnsphere.edu/transformer-attention-workshop',
+    meetingUrl: 'https://meet.flexdemy.edu/transformer-attention-workshop',
     subject: 'computer_science' as const,
   },
 ];

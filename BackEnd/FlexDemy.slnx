@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FlexDemy.Api/FlexDemy.Api.csproj" />
+    <Project Path="src/FlexDemy.Application/FlexDemy.Application.csproj" />
+    <Project Path="src/FlexDemy.Domain/FlexDemy.Domain.csproj" />
+    <Project Path="src/FlexDemy.Infrastructure/FlexDemy.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FlexDemy.Api.Tests/FlexDemy.Api.Tests.csproj" />
+    <Project Path="tests/FlexDemy.Application.Tests/FlexDemy.Application.Tests.csproj" />
+    <Project Path="tests/FlexDemy.Infrastructure.Tests/FlexDemy.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

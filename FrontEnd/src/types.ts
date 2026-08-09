@@ -133,6 +133,7 @@ export interface UserProgress {
   timeSpentSeconds: number;
   enrolledDate: string;
   isCertificateEarned?: boolean;
+  lastAccessedAt?: string;
 }
 
 export interface UserProfile {
@@ -149,6 +150,7 @@ export interface UserProfile {
   isDarkMode: boolean;
   language: 'en' | 'es' | 'fr' | 'de' | 'zh' | 'ja';
   progress: Record<string, UserProgress>; // courseId -> progress
+  weeklyGoalHours?: number;
 }
 
 export interface StudyGroupRoom {
@@ -223,6 +225,7 @@ export interface PublicLiveClass {
   status: 'upcoming' | 'live' | 'ended';
   meetingUrl?: string;
   subject: SubjectCategory;
+  isSubscribedByMe?: boolean;
 }
 
 export interface CourseUploadAsset {

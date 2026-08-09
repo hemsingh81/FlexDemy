@@ -11,7 +11,8 @@ export const LANGUAGE_NAMES: Record<LanguageCode, { name: string; flag: string }
 
 export const translations: Record<LanguageCode, Record<string, string>> = {
   en: {
-    app_title: 'LearnSphere',
+    app_title: 'FlexDemy',
+    tagline: 'My time. My academy.',
     nav_dashboard: 'Dashboard',
     nav_discover: 'Discover Courses',
     nav_groups: 'Group Study',
@@ -55,7 +56,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     mastery_points: 'Mastery Points',
   },
   es: {
-    app_title: 'LearnSphere',
+    app_title: 'FlexDemy',
     nav_dashboard: 'Panel Principal',
     nav_discover: 'Descubrir Cursos',
     nav_groups: 'Estudio en Grupo',
@@ -99,7 +100,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     mastery_points: 'Puntos de Dominio',
   },
   fr: {
-    app_title: 'LearnSphere',
+    app_title: 'FlexDemy',
     nav_dashboard: 'Tableau de bord',
     nav_discover: 'Découvrir',
     nav_groups: 'Étude en groupe',
@@ -143,7 +144,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     mastery_points: 'Points de Maîtrise',
   },
   de: {
-    app_title: 'LearnSphere',
+    app_title: 'FlexDemy',
     nav_dashboard: 'Dashboard',
     nav_discover: 'Kurse entdecken',
     nav_groups: 'Gruppenstudium',
@@ -187,7 +188,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     mastery_points: 'Meisterpunkte',
   },
   zh: {
-    app_title: 'LearnSphere',
+    app_title: 'FlexDemy',
     nav_dashboard: '控制面板',
     nav_discover: '探索课程',
     nav_groups: '小组学习',
@@ -231,7 +232,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     mastery_points: '精通积分',
   },
   ja: {
-    app_title: 'LearnSphere',
+    app_title: 'FlexDemy',
     nav_dashboard: 'ダッシュボード',
     nav_discover: 'コースを探す',
     nav_groups: 'グループ学習',

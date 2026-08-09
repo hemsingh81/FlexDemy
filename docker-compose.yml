@@ -1,0 +1,53 @@
+# Deploy everything, or just one side, via Docker Compose profiles:
+#   docker compose --profile all up          # frontend + backend + postgres
+#   docker compose --profile backend up      # postgres + api only
+#   docker compose --profile frontend up     # web only (static build, no live API)
+#   docker compose --profile backend --profile frontend up   # same as --profile all
+#
+# (ARCHITECTURE-SPINE.md AD-13, BackEnd architecture run)
+
+services:
+  postgres:
+    profiles: ["backend", "all"]
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: flexdemy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # postgres:18+ images use pg_ctlcluster-style version-specific subdirectories under
+      # /var/lib/postgresql itself -- mounting at .../data (the pre-18 convention) makes the
+      # image refuse to start.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flexdemy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    profiles: ["backend", "all"]
+    build:
+      context: ./BackEnd
+      dockerfile: src/FlexDemy.Api/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=flexdemy;Username=postgres;Password=postgres"
+      RUN_MIGRATIONS_ON_STARTUP: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    profiles: ["frontend", "all"]
+    build:
+      context: ./FrontEnd
+    ports:
+      - "3100:80"
+
+volumes:
+  pgdata:

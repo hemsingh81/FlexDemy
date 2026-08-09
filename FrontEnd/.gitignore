@@ -3,6 +3,15 @@ build/
 dist/
 coverage/
 .DS_Store
+Thumbs.db
 *.log
 .env*
 !.env.example
+
+# Vite / TypeScript build caches
+.vite/
+*.tsbuildinfo
+
+# Editors
+.vscode/
+.idea/

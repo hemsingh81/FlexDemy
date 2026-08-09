@@ -1,6 +1,6 @@
 import { UserProgress } from '../types';
 
-export const OFFLINE_PROGRESS_STORAGE_KEY = 'learnsphere_offline_progress_v1';
+export const OFFLINE_PROGRESS_STORAGE_KEY = 'flexdemy_offline_progress_v1';
 
 export const saveProgressOffline = (courseId: string, progress: Partial<UserProgress>) => {
   try {

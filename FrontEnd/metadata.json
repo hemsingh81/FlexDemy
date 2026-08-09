@@ -1,5 +1,5 @@
 {
-  "name": "LearnSphere - Interactive Learning Platform",
+  "name": "FlexDemy - Interactive Learning Platform",
   "description": "Learner-driven interactive education platform featuring auto-scroll course player, TTS narration, 5-level drilldowns, unlimited extra examples, group study rooms, assignments, and dark mode.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

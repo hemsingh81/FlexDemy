@@ -1,7 +1,7 @@
-# Frontend Product Requirement Document (PRD) - LearnSphere
+# Frontend Product Requirement Document (PRD) - FlexDemy
 
 ## 1. Executive Summary
-LearnSphere is a full-width, high-density AI-powered educational web application designed for interactive learning, synchronous peer study rooms, 5-level topic drilldowns, a comprehensive Course Overview & Preview system, and an interactive Tutor Hub. The frontend is built using React 18, TypeScript, Tailwind CSS, Recharts, and Web Speech API, optimized for responsive displays ranging from mobile devices to ultra-wide 4K monitors.
+FlexDemy is a full-width, high-density AI-powered educational web application designed for interactive learning, synchronous peer study rooms, 5-level topic drilldowns, a comprehensive Course Overview & Preview system, and an interactive Tutor Hub. The frontend is built using React 18, TypeScript, Tailwind CSS, Recharts, and Web Speech API, optimized for responsive displays ranging from mobile devices to ultra-wide 4K monitors.
 
 ---
 
