@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Spinner } from './ui/Spinner';
 import { Navbar } from './ui/Navbar';
-import { AccessibilityModal } from './ui/AccessibilityModal';
 import { LoginPage } from './features/Auth/LoginPage';
 import { SignUpPage } from './features/Auth/SignUpPage';
 import { ForgotPasswordPage } from './features/Auth/ForgotPasswordPage';
@@ -121,14 +120,6 @@ function AppShell() {
   // (updateUser is a no-op on a null user -- see below). Kept separate from `sessionCheck` so
   // the /auth/me call itself doesn't have to wait for that to be true first.
   const [pendingAuthUser, setPendingAuthUser] = useState<Awaited<ReturnType<typeof authService.getCurrentUser>>>(null);
-
-  // Modals
-  const [isAccessibilityOpen, setIsAccessibilityOpen] = useState(false);
-
-  // Theme & Accessibility Settings
-  const [highContrast, setHighContrast] = useState(false);
-  const [fontSize, setFontSize] = useState(16);
-  const [autoSpeakFocus, setAutoSpeakFocus] = useState(false);
 
   // Enforce Light Theme for smooth consistent learning experience
   useEffect(() => {
@@ -292,9 +283,7 @@ function AppShell() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col bg-slate-50 text-slate-800 transition-colors duration-200 ${
-      highContrast ? 'contrast-125' : ''
-    }`}>
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 transition-colors duration-200">
 
       {/* Keyboard Navigable Skip to Content Link */}
       <a
@@ -314,7 +303,6 @@ function AppShell() {
         activeAdminSubTab={activeAdminSubTab}
         onSelectAdminSubTab={handleSelectAdminSubTab}
         onSignOut={handleSignOut}
-        onOpenAccessibility={() => setIsAccessibilityOpen(true)}
         onToggleTheme={() => {}}
         isDarkMode={false}
         onSearchClick={() => setActiveTab('discover')}
@@ -355,8 +343,6 @@ function AppShell() {
               initialLessonId={activeLessonId}
               onBackToDashboard={() => setActiveTab('dashboard')}
               onOpenAssignment={(asgId) => setActiveTab('assignments')}
-              fontSize={fontSize}
-              highContrast={highContrast}
               onCompleteLesson={handleCompleteLesson}
             />
           )}
@@ -382,24 +368,6 @@ function AppShell() {
       </main>
 
       <Footer />
-
-      {/* Modals */}
-      <AccessibilityModal
-        isOpen={isAccessibilityOpen}
-        onClose={() => setIsAccessibilityOpen(false)}
-        highContrast={highContrast}
-        setHighContrast={setHighContrast}
-        fontSize={fontSize}
-        setFontSize={setFontSize}
-        autoSpeakFocus={autoSpeakFocus}
-        setAutoSpeakFocus={setAutoSpeakFocus}
-        preferredVoice={user.preferredVoice}
-        setPreferredVoice={(v) => updateUser({ preferredVoice: v })}
-        ttsRate={user.ttsRate}
-        setTtsRate={(r) => updateUser({ ttsRate: r })}
-        ttsPitch={user.ttsPitch}
-        setTtsPitch={(p) => updateUser({ ttsPitch: p })}
-      />
 
       {/* Real-time Session Countdown Toast Notification */}
       <AppointmentToast

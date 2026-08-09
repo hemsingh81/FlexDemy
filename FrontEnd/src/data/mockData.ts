@@ -8,9 +8,6 @@ export const INITIAL_USER: UserProfile = {
   role: 'Student',
   streakDays: 14,
   totalPoints: 2450,
-  preferredVoice: '',
-  ttsRate: 1.0,
-  ttsPitch: 1.0,
   isDarkMode: false,
   progress: {
     'course_quantum_101': {

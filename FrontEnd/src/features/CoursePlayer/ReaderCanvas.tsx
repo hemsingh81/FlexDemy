@@ -27,9 +27,12 @@ interface ReaderCanvasProps {
   onSelectSentence: (index: number) => void;
   onOpenDrilldown?: (topicKey: string) => void;
   onOpenScratchpadForParagraph?: (index: number) => void;
-  fontSize: number;
-  highContrast: boolean;
 }
+
+// Reader text size is a fixed, sensible default now that the old Accessibility modal's
+// user-configurable font-size control has been removed (see FlexDemy remove-accessibility-modal
+// change) -- 16px was the modal's own default.
+const READER_FONT_SIZE_PX = 16;
 
 interface LLMAssistantMessage {
   id: string;
@@ -44,8 +47,6 @@ export const ReaderCanvas: React.FC<ReaderCanvasProps> = ({
   activeSentenceIndex,
   onSelectSentence,
   onOpenScratchpadForParagraph,
-  fontSize,
-  highContrast,
 }) => {
   const activeSentenceRef = useRef<HTMLDivElement | null>(null);
 
@@ -208,10 +209,8 @@ export const ReaderCanvas: React.FC<ReaderCanvasProps> = ({
 
   return (
     <div
-      className={`space-y-6 transition-all ${
-        highContrast ? 'text-slate-900 font-bold' : 'text-slate-800'
-      }`}
-      style={{ fontSize: `${fontSize}px` }}
+      className="space-y-6 transition-all text-slate-800"
+      style={{ fontSize: `${READER_FONT_SIZE_PX}px` }}
     >
       {sentences.map((sentence, index) => {
         const isActive = index === activeSentenceIndex;
@@ -255,7 +254,7 @@ export const ReaderCanvas: React.FC<ReaderCanvasProps> = ({
             }`}
           >
             {/* Sentence Header & Action Badge at FAR RIGHT SIDE */}
-            <div className="flex items-center justify-between gap-3 mb-3 w-full">
+            <div className="flex items-center flex-wrap justify-between gap-3 mb-3 w-full">
               <div className="flex items-center space-x-2">
                 <span
                   className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md ${
@@ -477,7 +476,7 @@ export const ReaderCanvas: React.FC<ReaderCanvasProps> = ({
 
                     {/* Interactive Examples Section (KEEP 1 EXAMPLE EXPANDED BY DEFAULT) */}
                     <div className="pt-3 border-t border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center flex-wrap gap-2 justify-between">
                         <div className="flex items-center space-x-2">
                           <BookOpen className="w-4 h-4 text-indigo-600" />
                           <span className="text-xs font-extrabold text-slate-900">

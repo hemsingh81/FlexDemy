@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useId, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import * as adminUsersService from '../../services/adminUsersService';
 import { Spinner } from '../../ui/Spinner';
+import { Collapse } from '../../ui/Collapse';
 import { FormCard, FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
 import { useToast } from '../../context/ToastContext';
 
@@ -38,8 +39,9 @@ export const AdminUserStatusList: React.FC<AdminUserStatusListProps> = ({ fetchU
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  // Edit modal -- a small overlay (not an inline per-row expansion) given this list's simpler
-  // row shape compared to Master Data's table. Same FormCard chrome/validation either way.
+  // Inline per-row edit panel (Collapse + FormCard) -- same pattern as MasterDataTable.tsx's
+  // row-edit panel and this page's own Add-form reveal, rather than a modal overlay. `editingUser`
+  // still carries the full row (not just an id) since its fields prefill the form on open.
   const [editingUser, setEditingUser] = useState<adminUsersService.AdminUser | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [editFieldErrors, setEditFieldErrors] = useState<Record<string, boolean>>({});
@@ -166,62 +168,72 @@ export const AdminUserStatusList: React.FC<AdminUserStatusListProps> = ({ fetchU
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-t border-[#E1DED4]">
-                  <td className="px-4 py-2.5 text-[#142030] font-medium">
-                    {u.firstName} {u.lastName}
-                  </td>
-                  <td className="px-4 py-2.5 text-[#5E6A79]">{u.email}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleToggle(u)}
-                        disabled={togglingId === u.id}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50 ${
-                          u.isActive ? 'bg-[#179765]/15 text-[#179765]' : 'bg-red-100 text-red-600'
-                        }`}
-                      >
-                        {u.isActive ? 'Active' : 'Inactive'}
-                      </button>
-                      {editable && (
-                        <button
-                          type="button"
-                          onClick={() => openEdit(u)}
-                          aria-label={`Edit ${u.firstName} ${u.lastName}`}
-                          className="p-1.5 rounded-lg text-[#5E6A79] hover:text-[#143358] hover:bg-[#F3F0E6] transition-colors cursor-pointer"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {users.map((u) => {
+                const isEditingThisRow = editingUser?.id === u.id;
+                return (
+                  <React.Fragment key={u.id}>
+                    <tr className="border-t border-[#E1DED4]">
+                      <td className="px-4 py-2.5 text-[#142030] font-medium">
+                        {u.firstName} {u.lastName}
+                      </td>
+                      <td className="px-4 py-2.5 text-[#5E6A79]">{u.email}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleToggle(u)}
+                            disabled={togglingId === u.id}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50 ${
+                              u.isActive ? 'bg-[#179765]/15 text-[#179765]' : 'bg-red-100 text-red-600'
+                            }`}
+                          >
+                            {u.isActive ? 'Active' : 'Inactive'}
+                          </button>
+                          {editable && (
+                            <button
+                              type="button"
+                              onClick={() => (isEditingThisRow ? closeEdit() : openEdit(u))}
+                              aria-label={`Edit ${u.firstName} ${u.lastName}`}
+                              className="p-1.5 rounded-lg text-[#5E6A79] hover:text-[#143358] hover:bg-[#F3F0E6] transition-colors cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Kept mounted per-row (rather than `{isEditingThisRow && ...}`) so Collapse
+                        can animate the panel open/closed -- same pattern as
+                        MasterDataTable.tsx's row-edit panel and this page's own Add-form reveal,
+                        not a modal overlay. */}
+                    {editable && (
+                      <tr className={isEditingThisRow ? 'border-t border-[#E1DED4]' : ''}>
+                        <td colSpan={3}>
+                          <Collapse open={isEditingThisRow}>
+                            <FormCard
+                              title={`Edit ${u.firstName} ${u.lastName}`}
+                              onCancel={closeEdit}
+                              onSubmit={handleSaveEdit}
+                              isSaving={isSavingEdit}
+                              errorMessage={isEditingThisRow ? editFormError : undefined}
+                            >
+                              <FieldsGrid
+                                fields={EDIT_FIELDS}
+                                values={editValues}
+                                errors={editFieldErrors}
+                                idPrefix={`${idPrefix}-edit-${u.id}`}
+                                onChange={handleEditFieldChange}
+                              />
+                            </FormCard>
+                          </Collapse>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg">
-            <FormCard
-              title={`Edit ${editingUser.firstName} ${editingUser.lastName}`}
-              onCancel={closeEdit}
-              onSubmit={handleSaveEdit}
-              isSaving={isSavingEdit}
-              errorMessage={editFormError}
-            >
-              <FieldsGrid
-                fields={EDIT_FIELDS}
-                values={editValues}
-                errors={editFieldErrors}
-                idPrefix={`${idPrefix}-edit`}
-                onChange={handleEditFieldChange}
-              />
-            </FormCard>
-          </div>
         </div>
       )}
     </div>

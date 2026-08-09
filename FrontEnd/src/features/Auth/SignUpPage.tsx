@@ -49,7 +49,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthenticated, onGoToL
   return (
     <AuthLayout title="Create your account" subtitle="Join FlexDemy and start learning today">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="block text-xs font-semibold text-[#142030]">First Name</label>
             <div className="relative">
@@ -89,7 +89,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthenticated, onGoToL
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="block text-xs font-semibold text-[#142030]">Password</label>
             <div className="relative">

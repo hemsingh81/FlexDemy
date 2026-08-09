@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as masterDataService from '../../services/masterDataService';
 import type { Board, City, ClassLevel, Country, State, Subject } from '../../services/masterDataService';
 import { MasterDataTable, type MasterDataExtraField } from './MasterDataTable';
-import { MasterDataRelationGraph } from './MasterDataRelationGraph';
 import { MASTER_DATA_ENTITIES, MASTER_DATA_ENTITY_META, type MasterDataEntity } from './masterDataEntities';
 import { TypeaheadMultiSelect } from '../../ui/TypeaheadMultiSelect';
 
@@ -116,8 +115,6 @@ export const MasterDataManager: React.FC = () => {
       </nav>
 
       <div className="flex-1 min-w-0 w-full space-y-6">
-        <MasterDataRelationGraph activeEntity={activeEntity} onSelect={setActiveEntity} />
-
       {(activeEntity === 'state' || activeEntity === 'city' || activeEntity === 'board') && (
       <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-2xl border border-[#E1DED4] shadow-2xs">
         <span className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide">Location scope</span>
@@ -247,25 +244,25 @@ export const MasterDataManager: React.FC = () => {
         create={masterDataService.createClassLevel}
         update={masterDataService.updateClassLevel}
         deleteFn={masterDataService.deleteClassLevel}
-        columns={[
-          { key: 'name', label: 'Name' },
-          { key: 'sortOrder', label: 'Sort Order' },
-        ]}
-        fields={[
-          { key: 'name', label: 'Name', type: 'text' },
-          { key: 'sortOrder', label: 'Sort Order', type: 'number' },
-        ]}
-        defaultFormValues={{ name: '', sortOrder: '0' }}
+        columns={[{ key: 'name', label: 'Name' }]}
+        fields={[{ key: 'name', label: 'Name', type: 'text' }]}
+        defaultFormValues={{ name: '' }}
         extraFields={classLevelExtraFields}
         defaultExtraFormValues={{ subjectIds: [] }}
-        buildCreatePayload={(v, extra) => ({
+        // SortOrder is no longer a user-editable field (hidden from both the grid and the
+        // Add/Edit form per the admin request), but the backend's Create/UpdateClassLevelRequest
+        // still requires it -- send a silent default. New rows get `rowCount` (the number of
+        // ClassLevel rows already loaded, includeInactive=true) so they sort after every
+        // existing class level rather than all colliding at 0; edits simply echo the row's
+        // current sortOrder back unchanged since there's no field to have edited it.
+        buildCreatePayload={(v, extra, rowCount) => ({
           name: v.name,
-          sortOrder: Number(v.sortOrder) || 0,
+          sortOrder: rowCount,
           subjectIds: extra.subjectIds ?? [],
         })}
         buildUpdatePayload={(row, isActive, v, extra) => ({
           name: v.name,
-          sortOrder: Number(v.sortOrder) || 0,
+          sortOrder: row.sortOrder,
           isActive,
           subjectIds: extra.subjectIds ?? row.subjectIds,
         })}

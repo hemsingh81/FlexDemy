@@ -244,7 +244,7 @@ export const AssignmentsView: React.FC = () => {
           {/* Score Report Box */}
           {scoreReport && (
             <div className="p-6 rounded-2xl bg-[#143358] border border-white/10 text-white space-y-3 shadow-md">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <p className="text-xs uppercase font-extrabold text-amber-200">Automated Grade Report</p>
                   <h3 className="text-2xl font-extrabold font-display">Your Score: {scoreReport.percentage}%</h3>

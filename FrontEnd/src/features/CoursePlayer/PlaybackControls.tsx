@@ -102,7 +102,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
         </div>
 
         {/* Right Settings & Voice Multipliers */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
           
           {/* Speed Selector */}
           <div className="flex items-center space-x-1 bg-slate-100 border border-slate-200 p-1 rounded-xl">

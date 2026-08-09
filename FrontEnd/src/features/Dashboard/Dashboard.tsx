@@ -330,14 +330,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       key={course.id}
                       className="p-5 rounded-2xl bg-white border border-[#E1DED4] hover:border-[#EC7B38] shadow-xs hover:shadow-xl hover:shadow-[#143358]/10 hover:-translate-y-1.5 transition-all duration-300 ease-out flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group cursor-pointer"
                     >
-                      <div className="flex items-start space-x-4">
+                      <div className="flex items-start space-x-4 w-full sm:w-auto min-w-0">
                         <img
                           src={course.thumbnail}
                           alt={course.title}
                           className="w-16 h-16 rounded-xl object-cover border border-[#E1DED4] flex-shrink-0"
                         />
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center flex-wrap gap-2">
                             <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-[#143358]/10 text-[#143358] border border-[#143358]/20">
                               {course.subject.replace('_', ' ')}
                             </span>

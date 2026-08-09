@@ -322,7 +322,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
                           key={lesson.id}
                           className="p-4 rounded-2xl bg-[#FAF7EC]/80 border border-[#E1DED4] hover:border-[#EC7B38] flex items-center justify-between transition-all group"
                         >
-                          <div className="flex items-center space-x-3 truncate">
+                          <div className="flex items-center space-x-3 truncate min-w-0">
                             <div className={`p-2 rounded-xl border shrink-0 ${
                               isCompleted
                                 ? 'bg-[#179765] text-white border-[#179765]'
@@ -335,7 +335,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
                               )}
                             </div>
 
-                            <div className="truncate">
+                            <div className="truncate min-w-0 flex-1">
                               <h5 className="text-xs font-bold text-[#142030] group-hover:text-[#EC7B38] transition-colors truncate">
                                 {modIdx + 1}.{lIdx + 1} {lesson.title}
                               </h5>

@@ -37,8 +37,6 @@ interface CoursePlayerProps {
   initialLessonId?: string;
   onBackToDashboard: () => void;
   onOpenAssignment: (assignmentId: string) => void;
-  fontSize: number;
-  highContrast: boolean;
   onCompleteLesson: (courseId: string, lessonId: string) => void;
 }
 
@@ -47,8 +45,6 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   initialLessonId,
   onBackToDashboard,
   onOpenAssignment,
-  fontSize,
-  highContrast,
   onCompleteLesson,
 }) => {
   // Determine current lesson
@@ -230,15 +226,15 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
 
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-2xs">
-        <div className="flex items-center space-x-3">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center space-x-3 min-w-0">
           <button
             onClick={onBackToDashboard}
-            className="p-2 rounded-xl bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 transition-colors"
+            className="p-2 rounded-xl bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
+          <div className="min-w-0">
             <span className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">
               {course.title}
             </span>
@@ -248,11 +244,11 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto min-w-0">
           {/* Focus Session Timer Button */}
           <button
             onClick={() => setIsFocusTimerOpen(true)}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-[#FAF7EC] hover:bg-[#143358] text-[#143358] hover:text-white border border-[#E1DED4] transition-all cursor-pointer"
+            className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-[#FAF7EC] hover:bg-[#143358] text-[#143358] hover:text-white border border-[#E1DED4] transition-all cursor-pointer"
             title="Start Focus Session Timer with circular progress ring"
           >
             <Timer className="w-4 h-4 text-[#EC7B38]" />
@@ -262,7 +258,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
           {/* Rate & Review Course Button */}
           <button
             onClick={() => setIsReviewModalOpen(true)}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-[#FAF7EC] hover:bg-amber-500 text-amber-800 hover:text-white border border-amber-200/80 transition-all cursor-pointer"
+            className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-[#FAF7EC] hover:bg-amber-500 text-amber-800 hover:text-white border border-amber-200/80 transition-all cursor-pointer"
             title="Leave a 5-star rating & review for this course"
           >
             <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
@@ -275,7 +271,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
               setScratchpadParaIndex(currentSentenceIndex);
               setIsScratchpadOpen(!isScratchpadOpen);
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+            className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
               isScratchpadOpen
                 ? 'bg-[#143358] text-white shadow-md'
                 : 'bg-[#FAF7EC] hover:bg-[#143358] text-[#143358] hover:text-white border border-[#E1DED4]'
@@ -283,23 +279,23 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
             title="Open personal lesson scratchpad & notes panel"
           >
             <NotebookPen className="w-4 h-4 text-[#EC7B38]" />
-            <span>Scratchpad Notes</span>
+            <span className="hidden sm:inline">Scratchpad Notes</span>
           </button>
 
           {/* AI Flashcards Button */}
           <button
             onClick={() => setIsFlashcardsOpen(true)}
-            className="px-3 py-1.5 bg-[#FAF7EC] hover:bg-[#EC7B38] hover:text-white text-[#142030] font-bold text-xs rounded-xl border border-[#E1DED4] flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+            className="shrink-0 whitespace-nowrap px-3 py-1.5 bg-[#FAF7EC] hover:bg-[#EC7B38] hover:text-white text-[#142030] font-bold text-xs rounded-xl border border-[#E1DED4] flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
             title="Generate AI Interactive Flashcards from current lesson content"
           >
             <Sparkles className="w-4 h-4 text-[#EC7B38]" />
-            <span>Generate Flashcards</span>
+            <span className="hidden sm:inline">Generate Flashcards</span>
           </button>
 
           {/* Export Summary Button */}
           <button
             onClick={() => setIsExportModalOpen(true)}
-            className="px-3 py-1.5 bg-[#FAF7EC] hover:bg-[#143358] hover:text-white text-[#142030] border border-[#E1DED4] rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-2xs cursor-pointer"
+            className="shrink-0 whitespace-nowrap px-3 py-1.5 bg-[#FAF7EC] hover:bg-[#143358] hover:text-white text-[#142030] border border-[#E1DED4] rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-2xs cursor-pointer"
             title="Export full lesson summary notes including all drilldowns and examples"
           >
             <FileText className="w-4 h-4 text-[#143358]" />
@@ -309,7 +305,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
           {currentLesson.assignment && (
             <button
               onClick={() => onOpenAssignment(currentLesson.assignment!.id)}
-              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold flex items-center space-x-1 transition-all"
+              className="shrink-0 whitespace-nowrap px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold flex items-center space-x-1 transition-all"
             >
               <FileCheck2 className="w-4 h-4 text-amber-600" />
               <span>Take Quiz</span>
@@ -333,10 +329,11 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                 setCurrentSentenceIndex(0);
               }
             }}
-            className="px-4 py-2 bg-[#143358] hover:bg-[#143358]/90 text-white font-bold text-xs rounded-xl shadow-sm flex items-center space-x-1.5 transition-all cursor-pointer"
+            className="shrink-0 whitespace-nowrap px-4 py-2 bg-[#143358] hover:bg-[#143358]/90 text-white font-bold text-xs rounded-xl shadow-sm flex items-center space-x-1.5 transition-all cursor-pointer"
           >
             <CheckCircle2 className="w-4 h-4 text-[#179765]" />
-            <span>Mark Complete & Next</span>
+            <span className="hidden sm:inline">Mark Complete & Next</span>
+            <span className="sm:hidden">Complete</span>
           </button>
         </div>
       </header>
@@ -402,26 +399,26 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
         </aside>
 
         {/* Central Reader Canvas */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 w-[90%] mx-auto bg-slate-50">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-8 bg-slate-50">
 
-          <ReaderCanvas
-            sentences={sentences}
-            drilldowns={currentLesson.drilldowns}
-            activeSentenceIndex={currentSentenceIndex}
-            onSelectSentence={(index) => {
-              setCurrentSentenceIndex(index);
-              if (isPlaying) {
-                ttsManager.cancel();
-              }
-            }}
-            onOpenDrilldown={(topicKey) => setActiveDrillTopic(topicKey)}
-            onOpenScratchpadForParagraph={(index) => {
-              setScratchpadParaIndex(index);
-              setIsScratchpadOpen(true);
-            }}
-            fontSize={fontSize}
-            highContrast={highContrast}
-          />
+          <div className="w-full max-w-4xl mx-auto">
+            <ReaderCanvas
+              sentences={sentences}
+              drilldowns={currentLesson.drilldowns}
+              activeSentenceIndex={currentSentenceIndex}
+              onSelectSentence={(index) => {
+                setCurrentSentenceIndex(index);
+                if (isPlaying) {
+                  ttsManager.cancel();
+                }
+              }}
+              onOpenDrilldown={(topicKey) => setActiveDrillTopic(topicKey)}
+              onOpenScratchpadForParagraph={(index) => {
+                setScratchpadParaIndex(index);
+                setIsScratchpadOpen(true);
+              }}
+            />
+          </div>
 
         </main>
 

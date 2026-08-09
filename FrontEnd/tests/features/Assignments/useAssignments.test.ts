@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useAssignments } from '@/src/features/Assignments/useAssignments';
 import { useDomain } from '@/src/context/DomainContext';
@@ -56,9 +56,6 @@ const user: UserProfile = {
   role: 'Student',
   streakDays: 4,
   totalPoints: 250,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };

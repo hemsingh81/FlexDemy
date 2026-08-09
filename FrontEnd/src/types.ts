@@ -144,9 +144,6 @@ export interface UserProfile {
   role: 'Master' | 'Support' | 'Tutor' | 'Student' | 'Unassigned' | 'PendingTutor' | 'RejectedTutor';
   streakDays: number;
   totalPoints: number;
-  preferredVoice: string;
-  ttsRate: number;
-  ttsPitch: number;
   isDarkMode: boolean;
   progress: Record<string, UserProgress>; // courseId -> progress
   weeklyGoalHours?: number;

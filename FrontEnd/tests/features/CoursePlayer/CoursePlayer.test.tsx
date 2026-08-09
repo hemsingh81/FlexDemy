@@ -67,8 +67,6 @@ describe('CoursePlayer', () => {
         course={course}
         onBackToDashboard={vi.fn()}
         onOpenAssignment={vi.fn()}
-        fontSize={16}
-        highContrast={false}
         onCompleteLesson={vi.fn()}
       />
     );
@@ -86,8 +84,6 @@ describe('CoursePlayer', () => {
         course={course}
         onBackToDashboard={vi.fn()}
         onOpenAssignment={vi.fn()}
-        fontSize={16}
-        highContrast={false}
         onCompleteLesson={onCompleteLesson}
       />
     );
@@ -107,8 +103,6 @@ describe('CoursePlayer', () => {
         course={course}
         onBackToDashboard={vi.fn()}
         onOpenAssignment={vi.fn()}
-        fontSize={16}
-        highContrast={false}
         onCompleteLesson={vi.fn()}
       />
     );

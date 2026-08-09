@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -18,9 +18,6 @@ const user: UserProfile = {
   role: 'Unassigned',
   streakDays: 0,
   totalPoints: 0,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };

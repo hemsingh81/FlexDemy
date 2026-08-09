@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,9 +13,6 @@ const user: UserProfile = {
   role: 'Tutor',
   streakDays: 4,
   totalPoints: 250,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };

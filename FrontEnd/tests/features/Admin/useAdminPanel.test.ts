@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useAdminPanel } from '@/src/features/Admin/useAdminPanel';
 import { useDomain } from '@/src/context/DomainContext';
@@ -14,9 +14,6 @@ const baseUser: UserProfile = {
   role: 'Master',
   streakDays: 0,
   totalPoints: 0,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };

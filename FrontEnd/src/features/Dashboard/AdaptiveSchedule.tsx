@@ -118,14 +118,14 @@ export const AdaptiveSchedule: React.FC<AdaptiveScheduleProps> = ({
         </div>
 
         {/* Goal Sync Progress Card */}
-        <div className="p-4 rounded-2xl bg-[#FAF7EC] border border-[#E1DED4] flex items-center space-x-4 shrink-0">
-          <div className="space-y-1">
+        <div className="p-4 rounded-2xl bg-[#FAF7EC] border border-[#E1DED4] flex flex-col sm:flex-row sm:items-center gap-4 w-full md:w-auto md:shrink-0">
+          <div className="space-y-1 w-full sm:w-auto">
             <div className="flex items-center justify-between text-xs font-bold text-[#142030] gap-3">
               <span>Weekly Plan: {totalScheduledHours} / {weeklyGoalHours} hrs</span>
               <span className="text-[#179765]">{goalPercent}% Goal Met</span>
             </div>
 
-            <div className="w-48 h-2.5 bg-white rounded-full overflow-hidden border border-[#E1DED4]">
+            <div className="w-full sm:w-48 h-2.5 bg-white rounded-full overflow-hidden border border-[#E1DED4]">
               <div
                 className="h-full bg-[#179765] rounded-full transition-all duration-300"
                 style={{ width: `${goalPercent}%` }}
@@ -146,7 +146,7 @@ export const AdaptiveSchedule: React.FC<AdaptiveScheduleProps> = ({
               }
               setIsAddModalOpen(true);
             }}
-            className="px-4 py-2.5 bg-[#143358] hover:bg-[#143358]/90 text-white font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer transform hover:-translate-y-0.5"
+            className="w-full sm:w-auto shrink-0 justify-center px-4 py-2.5 bg-[#143358] hover:bg-[#143358]/90 text-white font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer transform hover:-translate-y-0.5"
           >
             <Plus className="w-4 h-4 text-[#EC7B38]" />
             <span>Schedule Lesson</span>

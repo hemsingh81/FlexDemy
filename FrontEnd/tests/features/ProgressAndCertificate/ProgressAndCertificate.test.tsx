@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ProgressAndCertificate } from '@/src/features/ProgressAndCertificate/ProgressAndCertificate';
@@ -39,9 +39,6 @@ const user: UserProfile = {
   role: 'Student',
   streakDays: 4,
   totalPoints: 250,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };

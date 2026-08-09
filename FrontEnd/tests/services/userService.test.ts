@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach } from 'vitest';
 import {
   ensureEnrolled,
   updateUser,
@@ -17,9 +17,6 @@ const baseUser: UserProfile = {
   role: 'Student',
   streakDays: 3,
   totalPoints: 100,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };

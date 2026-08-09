@@ -23,7 +23,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
   return (
     <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#FAF7EC]">
       {/* Left: brand + feature highlights */}
-      <div className="relative overflow-hidden lg:w-1/2 bg-[#143358] text-white flex flex-col justify-center px-8 sm:px-12 py-12 lg:py-0">
+      <div className="relative overflow-hidden lg:w-1/2 bg-[#143358] text-white flex flex-col justify-center px-8 sm:px-12 py-8 sm:py-12 lg:py-0">
         {/* Background graphics: soft blurred glows + a faint dot grid, low-opacity per Style Guide elevation rules */}
         <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#EC7B38]/20 blur-3xl" />
@@ -58,7 +58,11 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
             </p>
           </div>
 
-          <ul className="space-y-4">
+          {/* Hidden below lg: on a phone/tablet this panel stacks above the form (flex-col), and
+              a 4-item feature list here would push the actual Login/Sign Up fields below the
+              fold on first paint. The two-column split (and this list) only makes sense once
+              there's a side-by-side lg:flex-row layout to fill. */}
+          <ul className="hidden lg:block space-y-4">
             {FEATURES.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-start space-x-3">
                 <div className="p-2 rounded-xl bg-white/10 shrink-0">

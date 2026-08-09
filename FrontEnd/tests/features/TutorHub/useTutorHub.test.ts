@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useTutorHub } from '@/src/features/TutorHub/useTutorHub';
 import { useDomain } from '@/src/context/DomainContext';
@@ -18,9 +18,6 @@ const user: UserProfile = {
   role: 'Student',
   streakDays: 4,
   totalPoints: 250,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };

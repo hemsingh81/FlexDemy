@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -16,9 +16,6 @@ const user: UserProfile = {
   role: 'Student',
   streakDays: 1,
   totalPoints: 0,
-  preferredVoice: '',
-  ttsRate: 1,
-  ttsPitch: 1,
   isDarkMode: false,
   progress: {},
 };
@@ -44,7 +41,6 @@ const defaultProps = {
   activeAdminSubTab: 'masterdata' as AdminSubTab,
   onSelectAdminSubTab: vi.fn(),
   onSignOut: vi.fn(),
-  onOpenAccessibility: vi.fn(),
   onToggleTheme: vi.fn(),
   isDarkMode: false,
   onSearchClick: vi.fn(),
@@ -60,7 +56,7 @@ describe('Navbar', () => {
     expect(setActiveTab).toHaveBeenCalledWith('dashboard');
   });
 
-  it('calls onSignOut and onOpenAccessibility from their respective triggers', () => {
+  it('renders with the signed-in user context available', () => {
     render(<Navbar {...defaultProps} />);
     // Smoke check: the nav renders with the signed-in user's context available.
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);

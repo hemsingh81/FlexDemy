@@ -82,13 +82,17 @@ const VARIANT_ICON_CLASSES: Record<ToastVariant, string> = {
   info: 'text-[#5E6A79]',
 };
 
-// Fixed top-right -- the common toast convention, and deliberately the opposite corner from the
-// two existing toast-like components (ui/AppointmentToast.tsx, ui/OfflineProgressToast.tsx),
-// which both anchor bottom-right, so this stack never visually collides with either. z-[60] sits
-// one above those (z-50) and above Dropdown's menu (also z-50), so a fresh toast is never hidden
-// behind them.
+// Fixed bottom-right, hugging the corner the same way ui/AppointmentToast.tsx does (bottom-6
+// right-6) -- an earlier version pushed this stack up to bottom-48 to permanently dodge
+// AppointmentToast.tsx/OfflineProgressToast.tsx, but that read as a large, empty, unexplained gap
+// above every toast almost all the time (those two only render when an appointment is upcoming or
+// a connectivity transition just happened -- rare), which is worse than the toast it was trying
+// to avoid. z-[60] still sits one above both of those (z-50) and Dropdown's menu (also z-50), so
+// on the rare occasion they're visible at the same moment a toast fires, the toast still renders
+// on top rather than being hidden underneath -- an acceptable, uncommon minor overlap versus a
+// permanently oversized margin on every single toast.
 const STACK_CLASSNAME =
-  'fixed top-4 right-4 z-[60] flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none';
+  'fixed bottom-6 right-6 z-[60] flex flex-col gap-2 w-[calc(100%-3rem)] max-w-sm pointer-events-none';
 
 interface ToastItemProps {
   toast: ToastRecord;

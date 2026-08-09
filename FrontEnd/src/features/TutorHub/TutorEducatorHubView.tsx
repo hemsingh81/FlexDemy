@@ -644,7 +644,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
             </div>
 
             {/* Step Progress Bar */}
-            <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-bold text-slate-500">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[10px] font-bold text-slate-500">
               <div className={`p-2 rounded-xl ${wizardStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-slate-100'}`}>
                 1. Info & Grade Tag
               </div>

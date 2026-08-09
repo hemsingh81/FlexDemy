@@ -1,61 +1,103 @@
-import React, { useState } from 'react';
-import { AlertTriangle, Check, Copy, UserPlus } from 'lucide-react';
+import React, { useCallback, useId, useState } from 'react';
+import { AlertTriangle, Check, Copy, Plus, X } from 'lucide-react';
 import * as adminUsersService from '../../services/adminUsersService';
 import { AdminUserStatusList } from './AdminUserStatusList';
-import { Button } from '../../ui/Button';
+import { Collapse } from '../../ui/Collapse';
+import { FormCard, FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
 import { useToast } from '../../context/ToastContext';
 
-// Master-only Support account creation (plan §5 item 5). The temporary password is shown
-// exactly once, in the CreateSupportUserResponse -- Master must copy/relay it out-of-band
-// before navigating away; there is no way to retrieve it again afterwards.
+// Master-only Support account creation (plan §5 item 5), restructured to match the Master Data
+// screens' pattern exactly (see MasterDataTable.tsx: toolbar "Add {Entity}" button -> Collapse
+// -> FormCard above an always-visible grid) rather than the old "Create New"/"All Support Users"
+// tab toggle -- there is exactly one Support Users screen now.
 //
-// This screen has two views, toggled locally: "Create New" (the form below) and "All Support
-// Users" (every existing Support account, with an active/inactive toggle -- AdminUserStatusList).
-const inputClassName =
-  'w-full px-3 py-2.5 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#EC7B38]';
-const labelClassName = 'block text-xs font-semibold text-[#142030]';
-const viewToggleButtonClassName = (active: boolean) =>
-  `px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-    active ? 'bg-white text-[#142030] shadow-2xs' : 'text-[#5E6A79] hover:text-[#142030]'
-  }`;
+// The one-time temporary password (CreateSupportUserResponse.temporaryPassword) is still shown
+// exactly once and never retrievable again -- Master must copy/relay it out-of-band. It now
+// renders in place of the create form, inside the same Collapse, immediately after a successful
+// create; the panel only closes (and the value is discarded) when Master explicitly dismisses it,
+// rather than auto-collapsing the moment the account is created.
+const CREATE_FIELDS: FormField[] = [
+  { key: 'firstName', label: 'First Name', type: 'text' },
+  { key: 'lastName', label: 'Last Name', type: 'text' },
+  { key: 'identifier', label: 'Email or Phone Number', type: 'text' },
+];
+
+const DEFAULT_FORM_VALUES: Record<string, string> = { firstName: '', lastName: '', identifier: '' };
 
 export const SupportUserCreation: React.FC = () => {
   const { showToast } = useToast();
-  const [view, setView] = useState<'create' | 'all'>('create');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [identifier, setIdentifier] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, string>>(DEFAULT_FORM_VALUES);
+  const [formFieldErrors, setFormFieldErrors] = useState<Record<string, boolean>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  // Set on a successful create; cleared (along with the password itself) whenever the panel is
+  // dismissed. Not gated behind isFormOpen so it can render in place of the form -- see comment
+  // above.
   const [result, setResult] = useState<adminUsersService.CreateSupportUserResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const formIdPrefix = useId();
+  // Bumped after every successful create to force AdminUserStatusList to remount and refetch --
+  // it has no imperative refresh handle of its own, and its internal load() is keyed off a
+  // stable `fetchUsers` reference so it wouldn't otherwise notice the new row.
+  const [gridKey, setGridKey] = useState(0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const closeForm = useCallback(() => {
+    setIsFormOpen(false);
+    setFormValues(DEFAULT_FORM_VALUES);
+    setFormFieldErrors({});
+    setFormError('');
+    setResult(null);
+    setCopied(false);
+  }, []);
+
+  const openForm = () => {
+    setFormError('');
+    setIsFormOpen(true);
+  };
+
+  const handleFieldChange = (key: string, value: string) => {
+    setFormValues((prev) => ({ ...prev, [key]: value }));
+    // Clear this field's error the moment it's fixed, not just on the next submit attempt.
+    if (value.trim()) {
+      setFormFieldErrors((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || !identifier.trim()) {
-      setError('Please fill in every field.');
+    const requiredErrors = getRequiredFieldErrors(CREATE_FIELDS, formValues);
+    if (Object.keys(requiredErrors).length > 0) {
+      setFormFieldErrors(requiredErrors);
+      setFormError('Please fill in all required fields.');
       return;
     }
-    setError('');
-    setIsSubmitting(true);
+    setFormFieldErrors({});
+    setFormError('');
+    setIsSaving(true);
     try {
       const response = await adminUsersService.createSupportUser({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        identifier: identifier.trim(),
+        firstName: formValues.firstName.trim(),
+        lastName: formValues.lastName.trim(),
+        identifier: formValues.identifier.trim(),
       });
       setResult(response);
-      setFirstName('');
-      setLastName('');
-      setIdentifier('');
       setCopied(false);
+      setFormValues(DEFAULT_FORM_VALUES);
+      setFormFieldErrors({});
+      setGridKey((k) => k + 1);
       showToast({ message: 'Support account created.', variant: 'success' });
     } catch (err) {
-      setError(
+      setFormError(
         err instanceof adminUsersService.AdminUsersError ? err.message : 'Unable to create the account. Please try again.'
       );
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   };
 
@@ -70,103 +112,94 @@ export const SupportUserCreation: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="inline-flex items-center gap-1 p-1 bg-[#F3F0E6] rounded-xl">
-        <button type="button" onClick={() => setView('create')} className={viewToggleButtonClassName(view === 'create')}>
-          Create New
-        </button>
-        <button type="button" onClick={() => setView('all')} className={viewToggleButtonClassName(view === 'all')}>
-          All Support Users
-        </button>
-      </div>
-
-      {view === 'all' ? (
-        <AdminUserStatusList fetchUsers={adminUsersService.getSupportUsers} emptyLabel="No Support accounts yet." editable />
-      ) : (
-      <div className="max-w-xl space-y-6">
-      <form onSubmit={handleSubmit} className="bg-white border border-[#E1DED4] rounded-2xl shadow-2xs p-5 space-y-4">
-        <h3 className="text-sm font-bold text-[#142030] flex items-center gap-2">
-          <UserPlus className="w-4 h-4 text-[#EC7B38]" />
-          <span>Create a Support account</span>
-        </h3>
-
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label htmlFor="support-first-name" className={labelClassName}>
-              First Name
-            </label>
-            <input
-              id="support-first-name"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className={inputClassName}
-            />
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="support-last-name" className={labelClassName}>
-              Last Name
-            </label>
-            <input
-              id="support-last-name"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className={inputClassName}
-            />
-          </div>
+    <div className="space-y-4">
+      <div className="bg-white border border-[#E1DED4] rounded-2xl shadow-2xs overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-[#E1DED4]">
+          <h3 className="text-sm font-bold text-[#142030]">Support Users</h3>
+          <button
+            type="button"
+            onClick={() => (isFormOpen ? closeForm() : openForm())}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#EC7B38] text-white shadow-md shadow-[#EC7B38]/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isFormOpen ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+            <span>{isFormOpen ? 'Cancel' : 'Add Support User'}</span>
+          </button>
         </div>
 
-        <div className="space-y-1">
-          <label htmlFor="support-identifier" className={labelClassName}>
-            Email or Phone Number
-          </label>
-          <input
-            id="support-identifier"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            className={inputClassName}
-          />
-        </div>
-
-        {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
-
-        <Button
-          type="submit"
-          fullWidth
-          isLoading={isSubmitting}
-          loadingText="Creating..."
-          icon={<UserPlus className="w-4 h-4" />}
-        >
-          Create Support Account
-        </Button>
-      </form>
-
-      {result && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5 space-y-3">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-            <p className="text-xs font-semibold text-amber-800">
-              This temporary password is shown only once -- copy it now and relay it to {result.user.firstName}{' '}
-              {result.user.lastName} out-of-band. It won't be shown again.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <code className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-xl text-sm font-mono text-[#142030]">
-              {result.temporaryPassword}
-            </code>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#143358] text-white cursor-pointer"
+        {/* Kept mounted (rather than `{isFormOpen && ...}`) so Collapse can animate it open/closed
+            -- see docs/FRONTEND_TRANSITIONS.md. */}
+        <Collapse open={isFormOpen}>
+          {result ? (
+            <div className="border border-amber-300 rounded-2xl m-4 overflow-hidden bg-amber-50 shadow-2xs">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-amber-300">
+                <h4 className="text-sm font-bold text-[#142030] flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span>Support account created</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  aria-label="Close"
+                  className="p-1 rounded-lg text-[#5E6A79] hover:text-[#143358] hover:bg-white/60 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-xs font-semibold text-amber-800">
+                  This temporary password is shown only once -- copy it now and relay it to {result.user.firstName}{' '}
+                  {result.user.lastName} out-of-band. It won't be shown again.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 min-w-0 px-3 py-2 bg-white border border-amber-300 rounded-xl text-sm font-mono text-[#142030] break-all">
+                    {result.temporaryPassword}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#143358] text-white cursor-pointer"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-amber-300 bg-amber-100/50">
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-white border border-amber-300 text-[#142030] cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          ) : (
+            <FormCard
+              title="Add Support User"
+              onCancel={closeForm}
+              onSubmit={handleCreate}
+              isSaving={isSaving}
+              errorMessage={formError}
             >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
-            </button>
-          </div>
-        </div>
-      )}
+              <FieldsGrid
+                fields={CREATE_FIELDS}
+                values={formValues}
+                errors={formFieldErrors}
+                idPrefix={formIdPrefix}
+                onChange={handleFieldChange}
+              />
+            </FormCard>
+          )}
+        </Collapse>
       </div>
-      )}
+
+      <AdminUserStatusList
+        key={gridKey}
+        fetchUsers={adminUsersService.getSupportUsers}
+        emptyLabel="No Support accounts yet."
+        editable
+      />
     </div>
   );
 };

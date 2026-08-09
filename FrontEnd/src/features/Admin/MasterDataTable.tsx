@@ -46,7 +46,15 @@ interface MasterDataTableProps<T extends { id: string; isActive: boolean }, TCre
   columns: MasterDataColumn<T>[];
   fields: MasterDataFormField[];
   defaultFormValues: Record<string, string>;
-  buildCreatePayload: (values: Record<string, string>, extraValues: Record<string, string[]>) => TCreate;
+  // `rowCount` is the number of rows currently loaded in this table at the moment Add is
+  // submitted -- exposed so an entity whose backend DTO still requires a field the UI no
+  // longer surfaces (e.g. ClassLevel's SortOrder, see MasterDataManager.tsx) can derive a
+  // sensible silent default instead of hardcoding one.
+  buildCreatePayload: (
+    values: Record<string, string>,
+    extraValues: Record<string, string[]>,
+    rowCount: number
+  ) => TCreate;
   // `values` carries the edited base fields (Name/Code/SortOrder/etc, prefilled from the row
   // and editable in the Edit panel) -- NOT the stale original `row`, so an edit to e.g. a
   // Country's Name actually persists. The Active/Inactive quick-toggle passes the row's
@@ -232,7 +240,7 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
     setFormError('');
     setIsSaving(true);
     try {
-      const created = await create(buildCreatePayload(formValues, extraFormValues));
+      const created = await create(buildCreatePayload(formValues, extraFormValues, rows.length));
       // Append locally from the API's own response rather than calling load() (a full
       // fetchAll() + isLoading flip) -- that used to swap the whole table body out to a
       // "Loading..." row and back on every single Add, reading as a flicker.
@@ -391,7 +399,15 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
         </div>
       )}
 
-      <div className="overflow-auto max-h-[28rem]">
+      {/* Fills the available viewport space below the table (Navbar + page padding + this
+          table's own toolbar/AdminPanel chrome above it) instead of a flat 28rem cap that left a
+          large empty gap under short grids (State/Class Level/Subject etc, wherever this table is
+          the last thing on the page). 100dvh (not 100vh) so mobile browser chrome collapsing
+          doesn't leave a stale, too-tall value; min-h-64 is a floor so very short viewports never
+          get an unusably cramped scroll box; the table still scrolls internally past that point
+          rather than growing the whole page (Board's 34 rows, etc). Scales automatically with any
+          viewport height/resize -- no per-breakpoint tuning needed. */}
+      <div className="overflow-auto max-h-[calc(100dvh-22rem)] min-h-64">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[10px] font-bold uppercase tracking-wide text-[#5E6A79]">

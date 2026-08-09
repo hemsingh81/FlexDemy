@@ -8,7 +8,6 @@ import {
   Flame,
   Moon,
   Sun,
-  Sliders,
   LogOut,
   Search,
   GraduationCap,
@@ -37,7 +36,6 @@ interface NavbarProps {
   activeAdminSubTab: AdminSubTab;
   onSelectAdminSubTab: (tab: AdminSubTab) => void;
   onSignOut: () => void;
-  onOpenAccessibility: () => void;
   onToggleTheme: () => void;
   isDarkMode: boolean;
   onSearchClick: () => void;
@@ -52,7 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeAdminSubTab,
   onSelectAdminSubTab,
   onSignOut,
-  onOpenAccessibility,
   onToggleTheme,
   isDarkMode,
   onSearchClick,
@@ -237,17 +234,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               title={`${user.streakDays} Day Learning Streak`}
             >
               <Flame className="w-4 h-4 text-[#EC7B38] fill-[#EC7B38]" />
-              <span>{user.streakDays}d Streak</span>
+              <span>
+                {user.streakDays}d<span className="hidden sm:inline"> Streak</span>
+              </span>
             </div>
-
-            {/* Accessibility Modal Trigger */}
-            <button
-              onClick={onOpenAccessibility}
-              aria-label="Accessibility settings"
-              className="p-2 rounded-xl text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <Sliders className="w-4 h-4" />
-            </button>
 
             {/* User Profile Avatar / Menu */}
             <Dropdown
@@ -292,12 +282,28 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Mobile Navigation Sub-bar */}
-        <div className="flex lg:hidden items-center justify-around py-2 border-t border-white/10 text-xs font-medium text-slate-200 overflow-x-auto">
+        {/* Mobile Navigation Sub-bar -- mirrors the desktop <nav> above item-for-item (same
+            visibleTabs gates, same tabs) rather than a partial subset, so nothing here is only
+            reachable on a wide viewport. shrink-0 + whitespace-nowrap on every button keeps
+            labels on one line and lets the row's overflow-x-auto handle any width this doesn't
+            fit at, instead of flexbox's default shrink squeezing multi-word labels (e.g. "Tutor
+            Hub") into an awkward wrap. */}
+        <div className="flex lg:hidden items-center justify-around gap-1 py-2 border-t border-white/10 text-xs font-medium text-slate-200 overflow-x-auto">
+          {visibleTabs.discover && (
+            <button
+              onClick={() => setActiveTab('discover')}
+              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
+                activeTab === 'discover' ? 'text-white font-bold bg-white/15' : ''
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Home</span>
+            </button>
+          )}
           {visibleTabs.dashboard && (
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`px-2.5 py-1 rounded-lg flex items-center space-x-1 ${
+              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
                 activeTab === 'dashboard' ? 'text-white font-bold bg-white/15' : ''
               }`}
             >
@@ -308,7 +314,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {visibleTabs.tutor && (
             <button
               onClick={() => setActiveTab('tutor')}
-              className={`px-2.5 py-1 rounded-lg flex items-center space-x-1 ${
+              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
                 activeTab === 'tutor' ? 'text-amber-300 font-bold bg-white/15' : ''
               }`}
             >
@@ -319,7 +325,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {visibleTabs.groups && (
             <button
               onClick={() => setActiveTab('groups')}
-              className={`px-2.5 py-1 rounded-lg flex items-center space-x-1 ${
+              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
                 activeTab === 'groups' ? 'text-white font-bold bg-white/15' : ''
               }`}
             >
@@ -327,9 +333,35 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Groups</span>
             </button>
           )}
+          {visibleTabs.assignments && (
+            <button
+              onClick={() => setActiveTab('assignments')}
+              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
+                activeTab === 'assignments' ? 'text-white font-bold bg-white/15' : ''
+              }`}
+            >
+              <FileCheck2 className="w-3.5 h-3.5" />
+              <span>Assignments</span>
+            </button>
+          )}
+          {visibleTabs.certificates && (
+            <button
+              onClick={() => setActiveTab('certificates')}
+              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
+                activeTab === 'certificates' ? 'text-white font-bold bg-white/15' : ''
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Certificates</span>
+            </button>
+          )}
           {visibleTabs.admin && (
             <Dropdown
-              align="left"
+              // Right-aligned here (unlike the desktop copy above): Admin is the last item in
+              // this row, so its trigger sits near the right edge of a narrow viewport -- a
+              // left-aligned menu would hang off the right side of the screen. Anchoring the
+              // menu's right edge to the trigger keeps it on-screen instead.
+              align="right"
               menuProps={{ role: 'listbox' }}
               menuClassName="w-52 bg-[#143358] rounded-2xl shadow-2xl border border-white/15 py-1.5 text-slate-100"
               trigger={({ open, toggle }) => (
@@ -337,7 +369,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={toggle}
                   aria-haspopup="listbox"
                   aria-expanded={open}
-                  className={`px-2.5 py-1 rounded-lg flex items-center space-x-1 ${
+                  className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
                     activeTab === 'admin' ? 'text-white font-bold bg-white/15' : ''
                   }`}
                 >
