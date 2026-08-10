@@ -175,7 +175,7 @@ export const TutorApprovals: React.FC = () => {
                 onChange={(e) => setRejectionReason(e.target.value)}
                 rows={2}
                 placeholder="Explain what's missing so the applicant can improve and re-apply..."
-                className="w-full px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#EC7B38] resize-none"
+                className="w-full px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012] resize-none"
               />
               <div className="flex items-center gap-2">
                 <button

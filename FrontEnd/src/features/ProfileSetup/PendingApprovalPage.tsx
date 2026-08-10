@@ -15,14 +15,14 @@ export const PendingApprovalPage: React.FC<PendingApprovalPageProps> = ({ onSign
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#FAF7EC] px-6 py-12">
       <div className="w-full max-w-md bg-white border border-[#E1DED4] rounded-2xl shadow-md p-8 text-center space-y-5">
         <div className="flex items-center justify-center space-x-2">
-          <div className="w-9 h-9 rounded-xl bg-[#EC7B38] flex items-center justify-center shadow-md shadow-[#EC7B38]/30">
+          <div className="w-9 h-9 rounded-xl bg-[#BA5012] flex items-center justify-center shadow-md shadow-[#BA5012]/30">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span className="text-lg font-bold font-display text-[#142030]">FlexDemy</span>
         </div>
 
-        <div className="w-14 h-14 mx-auto rounded-full bg-[#EC7B38]/15 flex items-center justify-center">
-          <Clock3 className="w-7 h-7 text-[#EC7B38]" />
+        <div className="w-14 h-14 mx-auto rounded-full bg-[#BA5012]/15 flex items-center justify-center">
+          <Clock3 className="w-7 h-7 text-[#BA5012]" />
         </div>
 
         <div className="space-y-1.5">

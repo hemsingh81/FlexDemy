@@ -40,7 +40,7 @@ export const WeeklyGoalCard: React.FC<WeeklyGoalCardProps> = ({ currentHoursLear
   return (
     <div className="p-6 rounded-3xl bg-white border border-[#E1DED4] shadow-xs space-y-5 relative overflow-hidden">
       {/* Background Decorative Glow */}
-      <div className="absolute top-0 right-0 -mt-12 -mr-12 w-40 h-40 bg-[#EC7B38]/10 rounded-full blur-2xl pointer-events-none" />
+      <div className="absolute top-0 right-0 -mt-12 -mr-12 w-40 h-40 bg-[#BA5012]/10 rounded-full blur-2xl pointer-events-none" />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E1DED4] pb-4">
@@ -59,7 +59,7 @@ export const WeeklyGoalCard: React.FC<WeeklyGoalCardProps> = ({ currentHoursLear
                   <span>Goal Achieved!</span>
                 </span>
               ) : (
-                <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-[#EC7B38]/10 text-[#EC7B38] border border-[#EC7B38]/30">
+                <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-[#BA5012]/10 text-[#BA5012] border border-[#BA5012]/30">
                   In Progress
                 </span>
               )}
@@ -81,7 +81,7 @@ export const WeeklyGoalCard: React.FC<WeeklyGoalCardProps> = ({ currentHoursLear
               }}
               className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#FAF7EC] hover:bg-[#143358] text-[#143358] hover:text-white border border-[#E1DED4] flex items-center space-x-1.5 transition-all cursor-pointer"
             >
-              <Edit3 className="w-3.5 h-3.5 text-[#EC7B38]" />
+              <Edit3 className="w-3.5 h-3.5 text-[#BA5012]" />
               <span>Adjust Goal ({weeklyGoalHours}h)</span>
             </button>
           ) : (
@@ -136,7 +136,7 @@ export const WeeklyGoalCard: React.FC<WeeklyGoalCardProps> = ({ currentHoursLear
                 cy="55"
                 r={radius}
                 className={`transition-all duration-700 ease-out ${
-                  isGoalAchieved ? 'text-[#179765]' : 'text-[#EC7B38]'
+                  isGoalAchieved ? 'text-[#179765]' : 'text-[#BA5012]'
                 }`}
                 strokeWidth="8"
                 strokeDasharray={circumference}
@@ -165,7 +165,7 @@ export const WeeklyGoalCard: React.FC<WeeklyGoalCardProps> = ({ currentHoursLear
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3.5 rounded-2xl bg-[#FAF7EC] border border-[#E1DED4] space-y-1">
               <span className="text-[11px] text-[#5E6A79] font-medium flex items-center space-x-1">
-                <Clock className="w-3.5 h-3.5 text-[#EC7B38]" />
+                <Clock className="w-3.5 h-3.5 text-[#BA5012]" />
                 <span>Current Progress</span>
               </span>
               <p className="text-xl font-extrabold font-display text-[#142030]">
@@ -187,7 +187,7 @@ export const WeeklyGoalCard: React.FC<WeeklyGoalCardProps> = ({ currentHoursLear
           {/* Quick Target Presets */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#E1DED4]/60">
             <span className="text-xs text-[#5E6A79] font-bold flex items-center space-x-1">
-              <Sparkles className="w-3.5 h-3.5 text-[#EC7B38]" />
+              <Sparkles className="w-3.5 h-3.5 text-[#BA5012]" />
               <span>Quick Target Presets:</span>
             </span>
 
@@ -217,9 +217,9 @@ export const WeeklyGoalCard: React.FC<WeeklyGoalCardProps> = ({ currentHoursLear
             </div>
           ) : (
             <div className="p-3 bg-[#143358]/5 border border-[#143358]/15 rounded-2xl flex items-center space-x-2 text-xs text-[#143358] font-medium">
-              <Sparkles className="w-4 h-4 shrink-0 text-[#EC7B38]" />
+              <Sparkles className="w-4 h-4 shrink-0 text-[#BA5012]" />
               <span>
-                Log <span className="font-bold text-[#EC7B38]">{(Math.max(0, weeklyGoalHours - hoursFloat)).toFixed(1)} more hours</span> of lesson reading this week to hit your goal!
+                Log <span className="font-bold text-[#BA5012]">{(Math.max(0, weeklyGoalHours - hoursFloat)).toFixed(1)} more hours</span> of lesson reading this week to hit your goal!
               </span>
             </div>
           )}

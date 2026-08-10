@@ -5,7 +5,6 @@ import {
   Calendar,
   Clock,
   Video,
-  CheckCircle2,
   Users,
   Radio,
   Sparkles,
@@ -22,6 +21,9 @@ import {
   PublicLiveClass,
   UserProfile,
 } from '../../types';
+import { SidePanel } from '../../ui/SidePanel';
+import { Button } from '../../ui/Button';
+import { useToast } from '../../context/ToastContext';
 
 interface StudentTutorBookingViewProps {
   user: UserProfile;
@@ -46,11 +48,11 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
   tutorOnlineStatus = true,
   displayMode = 'auto',
 }) => {
+  const { showToast } = useToast();
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSlotForBooking, setSelectedSlotForBooking] = useState<TutorCalendarSlot | null>(null);
   const [bookingNotes, setBookingNotes] = useState<string>('');
-  const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string>('');
 
   // New Group Request Modal
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
@@ -74,10 +76,8 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
   const handleConfirmBooking = () => {
     if (!selectedSlotForBooking) return;
     onBookSlot(selectedSlotForBooking.id, bookingNotes || '1-on-1 Tutoring Session');
-    setBookingSuccessMsg(`Successfully booked session with ${selectedSlotForBooking.tutorName}!`);
     setSelectedSlotForBooking(null);
     setBookingNotes('');
-    setTimeout(() => setBookingSuccessMsg(''), 4000);
   };
 
   const handleCreateGroupReq = (e: React.FormEvent) => {
@@ -117,13 +117,6 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
           </div>
         </div>
       </div>
-
-      {bookingSuccessMsg && (
-        <div className="p-4 rounded-2xl bg-[#179765]/10 border border-[#179765]/30 text-[#179765] text-sm font-bold flex items-center space-x-2 animate-bounce">
-          <CheckCircle2 className="w-5 h-5 text-[#179765]" />
-          <span>{bookingSuccessMsg}</span>
-        </div>
-      )}
 
       {/* SECTION 1: My Booked Appointments */}
       {myBookedSlots.length > 0 && (
@@ -185,7 +178,7 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
                     </td>
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <button
-                        onClick={() => alert(`Launching virtual meeting room with ${slot.tutorName}...`)}
+                        onClick={() => showToast({ message: `Launching virtual meeting room with ${slot.tutorName}...`, variant: 'info' })}
                         className="px-3.5 py-1.5 bg-[#143358] hover:bg-[#143358]/90 text-white rounded-xl text-xs font-bold shadow-2xs inline-flex items-center space-x-1.5 transition-all cursor-pointer"
                       >
                         <Video className="w-3.5 h-3.5" />
@@ -240,7 +233,7 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
                 </div>
 
                 <button
-                  onClick={() => alert(`Launching virtual meeting room with ${slot.tutorName}...`)}
+                  onClick={() => showToast({ message: `Launching virtual meeting room with ${slot.tutorName}...`, variant: 'info' })}
                   className="w-full py-2.5 bg-[#143358] hover:bg-[#143358]/90 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
                 >
                   <Video className="w-4 h-4" />
@@ -273,7 +266,7 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search tutors or topics..."
-              className="w-full pl-9 pr-4 py-2 bg-white border border-[#E1DED4] rounded-xl text-xs text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#EC7B38] shadow-2xs"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-[#E1DED4] rounded-xl text-xs text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012] shadow-2xs"
             />
           </div>
         </div>
@@ -518,7 +511,7 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
                     {req.studentPool.length} / {req.maxParticipants} Students Joined
                   </span>
                   <button
-                    onClick={() => alert(`Joined group pool for ${req.topic}!`)}
+                    onClick={() => showToast({ message: `Joined group pool for ${req.topic}.`, variant: 'success' })}
                     className="px-3 py-1 bg-slate-900 hover:bg-indigo-600 text-white rounded-lg text-xs font-semibold transition-colors"
                   >
                     Join Pool
@@ -580,116 +573,101 @@ export const StudentTutorBookingView: React.FC<StudentTutorBookingViewProps> = (
 
       </div>
 
-      {/* Booking Modal */}
+      {/* Booking side panel */}
       {selectedSlotForBooking && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 border border-slate-200 shadow-2xl animate-scale-up">
-            <div className="space-y-1">
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-extrabold uppercase border border-indigo-200">
-                Confirm Tutoring Booking
-              </span>
-              <h3 className="text-lg font-bold text-slate-900">
-                Book Slot with {selectedSlotForBooking.tutorName}
-              </h3>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs text-slate-700">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Date:</span>
-                <span className="font-bold text-slate-900">{selectedSlotForBooking.date}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Time:</span>
-                <span className="font-bold text-slate-900">{selectedSlotForBooking.startTime} - {selectedSlotForBooking.endTime}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Duration:</span>
-                <span className="font-bold text-slate-900">{selectedSlotForBooking.durationMinutes} minutes</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-200 pt-2 font-bold text-slate-900 text-sm">
-                <span>Total Cost:</span>
-                <span className="text-indigo-600">${(selectedSlotForBooking.ratePerMinute * selectedSlotForBooking.durationMinutes).toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Topic / Notes for Tutor:</label>
-              <textarea
-                value={bookingNotes}
-                onChange={(e) => setBookingNotes(e.target.value)}
-                placeholder="E.g., I'm preparing for Class 12th board physics exam and need help deriving Bloch sphere state vectors..."
-                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                rows={3}
-              />
-            </div>
-
-            <div className="flex items-center justify-end space-x-3 pt-2">
-              <button
-                onClick={() => setSelectedSlotForBooking(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
-              >
+        <SidePanel
+          title={`Book Slot with ${selectedSlotForBooking.tutorName}`}
+          subtitle="Confirm Tutoring Booking"
+          onClose={() => setSelectedSlotForBooking(null)}
+          closeOnBackdropClick={false}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedSlotForBooking(null)}>
                 Cancel
-              </button>
-              <button
-                onClick={handleConfirmBooking}
-                className="px-5 py-2 bg-[#143358] hover:bg-[#143358]/90 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
-              >
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleConfirmBooking}>
                 Confirm & Pay
-              </button>
+              </Button>
+            </>
+          }
+        >
+            <div className="space-y-5">
+              <div className="p-4 rounded-2xl bg-[#FAF7EC] border border-[#E1DED4] space-y-2 text-xs text-[#142030]">
+                <div className="flex justify-between">
+                  <span className="text-[#5E6A79]">Date:</span>
+                  <span className="font-bold text-[#142030]">{selectedSlotForBooking.date}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#5E6A79]">Time:</span>
+                  <span className="font-bold text-[#142030]">{selectedSlotForBooking.startTime} - {selectedSlotForBooking.endTime}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#5E6A79]">Duration:</span>
+                  <span className="font-bold text-[#142030]">{selectedSlotForBooking.durationMinutes} minutes</span>
+                </div>
+                <div className="flex justify-between border-t border-[#E1DED4] pt-2 font-bold text-[#142030] text-sm">
+                  <span>Total Cost:</span>
+                  <span className="text-[#BA5012]">${(selectedSlotForBooking.ratePerMinute * selectedSlotForBooking.durationMinutes).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#142030]">Topic / Notes for Tutor:</label>
+                <textarea
+                  value={bookingNotes}
+                  onChange={(e) => setBookingNotes(e.target.value)}
+                  placeholder="E.g., I'm preparing for Class 12th board physics exam and need help deriving Bloch sphere state vectors..."
+                  className="w-full p-3 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
+                  rows={3}
+                />
+              </div>
             </div>
-          </div>
-        </div>
+        </SidePanel>
       )}
 
-      {/* Request Group Modal */}
+      {/* Request Group side panel */}
       {isGroupModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCreateGroupReq} className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-200 shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-900">Request New Student Group Pool</h3>
-
-            <div className="space-y-3 text-xs">
+        <SidePanel
+          title="Request New Student Group Pool"
+          onClose={() => setIsGroupModalOpen(false)}
+          closeOnBackdropClick={false}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" type="button" onClick={() => setIsGroupModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="secondary" size="sm" type="submit" form="request-group-form">
+                Publish Group Pool
+              </Button>
+            </>
+          }
+        >
+            <form id="request-group-form" onSubmit={handleCreateGroupReq} className="space-y-3 text-xs">
               <div>
-                <label className="font-bold text-slate-700">Course / Subject Title:</label>
+                <label className="font-bold text-[#142030]">Course / Subject Title:</label>
                 <input
                   type="text"
                   required
                   value={reqCourseTitle}
                   onChange={(e) => setReqCourseTitle(e.target.value)}
                   placeholder="E.g., Class 12th Physics - Electricity & Magnetism"
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 mt-1"
+                  className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] mt-1 focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-700">Specific Topic or Problem Set:</label>
+                <label className="font-bold text-[#142030]">Specific Topic or Problem Set:</label>
                 <input
                   type="text"
                   required
                   value={reqTopic}
                   onChange={(e) => setReqTopic(e.target.value)}
                   placeholder="E.g., Gauss Law Vector Proofs & Capacitor Circuits"
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 mt-1"
+                  className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] mt-1 focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                 />
               </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-3">
-              <button
-                type="button"
-                onClick={() => setIsGroupModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-[#143358] hover:bg-[#143358]/90 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
-              >
-                Publish Group Pool
-              </button>
-            </div>
-          </form>
-        </div>
+            </form>
+        </SidePanel>
       )}
 
     </div>

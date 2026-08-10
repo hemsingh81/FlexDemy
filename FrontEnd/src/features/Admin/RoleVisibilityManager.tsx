@@ -43,7 +43,7 @@ const TOP_LEVEL_KEYS = FEATURE_KEYS.filter((key) => key === 'admin' || !ADMIN_CH
 const rowKey = (role: string, featureKey: string) => `${role}|${featureKey}`;
 
 const checkboxClassName =
-  'w-4 h-4 rounded border-[#E1DED4] text-[#EC7B38] focus:ring-[#EC7B38] disabled:opacity-40 disabled:cursor-not-allowed';
+  'w-4 h-4 rounded border-[#E1DED4] text-[#BA5012] focus:ring-[#BA5012] disabled:opacity-40 disabled:cursor-not-allowed';
 
 export const RoleVisibilityManager: React.FC = () => {
   const { showToast } = useToast();

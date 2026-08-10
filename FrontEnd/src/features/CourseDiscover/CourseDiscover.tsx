@@ -77,7 +77,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by topic, keyword, or concept..."
-            className="w-full pl-12 pr-10 py-3.5 bg-white border border-[#E1DED4] rounded-2xl text-sm shadow-xs focus:ring-2 focus:ring-[#EC7B38] text-[#142030] placeholder-[#5E6A79]"
+            className="w-full pl-12 pr-10 py-3.5 bg-white border border-[#E1DED4] rounded-2xl text-sm shadow-xs focus:ring-2 focus:ring-[#BA5012] text-[#142030] placeholder-[#5E6A79]"
           />
           {search && (
             <button
@@ -130,7 +130,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
               onClick={() => setSelectedLevel(lvl)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
                 selectedLevel === lvl
-                  ? 'bg-[#EC7B38] text-white border-[#EC7B38] shadow-xs'
+                  ? 'bg-[#BA5012] text-white border-[#BA5012] shadow-xs'
                   : 'bg-white text-[#142030] border-[#E1DED4] hover:bg-[#FAF7EC]'
               }`}
             >
@@ -146,7 +146,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
         <div className="space-y-4 pt-4 border-t border-[#E1DED4]">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-extrabold text-[#142030] flex items-center space-x-2">
-              <Play className="w-5 h-5 text-[#EC7B38] fill-[#EC7B38]" />
+              <Play className="w-5 h-5 text-[#BA5012] fill-[#BA5012]" />
               <span>My Active & Running Courses ({runningCourses.length})</span>
             </h2>
             <span className="text-xs text-[#5E6A79] font-medium hidden sm:inline">
@@ -163,7 +163,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
               return (
                 <div
                   key={course.id}
-                  className="p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs hover:border-[#EC7B38] hover:-translate-y-1.5 hover:shadow-xl hover:shadow-[#143358]/10 transition-all duration-300 ease-out flex flex-col justify-between space-y-4 group cursor-pointer"
+                  className="p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs hover:border-[#BA5012] hover:-translate-y-1.5 hover:shadow-xl hover:shadow-[#143358]/10 transition-all duration-300 ease-out flex flex-col justify-between space-y-4 group cursor-pointer"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center space-x-3">
@@ -178,7 +178,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
                             {course.targetGradeTag || 'Active'}
                           </span>
                           <span className="text-[10px] font-bold text-[#5E6A79] flex items-center space-x-1 bg-[#FAF7EC] px-1.5 py-0.5 rounded-md border border-[#E1DED4]">
-                            <Clock className="w-3 h-3 text-[#EC7B38]" />
+                            <Clock className="w-3 h-3 text-[#BA5012]" />
                             <span>Est: ~{course.modules.reduce((acc, m) => acc + m.lessons.reduce((lAcc, l) => lAcc + (l.durationMinutes || 12), 0), 0)} mins</span>
                           </span>
                         </div>
@@ -195,10 +195,10 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[11px] font-bold">
                         <span className="text-[#5E6A79]">Lesson Progress:</span>
-                        <span className="text-[#EC7B38]">{progressPct}%</span>
+                        <span className="text-[#BA5012]">{progressPct}%</span>
                       </div>
                       <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                        <div className="bg-[#EC7B38] h-2 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                        <div className="bg-[#BA5012] h-2 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                       </div>
                     </div>
                   </div>
@@ -257,7 +257,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
               return (
                 <div
                   key={course.id}
-                  className="group rounded-3xl bg-white border border-[#E1DED4] shadow-xs hover:border-[#EC7B38] hover:-translate-y-1.5 hover:shadow-xl hover:shadow-[#143358]/10 transition-all duration-300 ease-out flex flex-col justify-between overflow-hidden cursor-pointer"
+                  className="group rounded-3xl bg-white border border-[#E1DED4] shadow-xs hover:border-[#BA5012] hover:-translate-y-1.5 hover:shadow-xl hover:shadow-[#143358]/10 transition-all duration-300 ease-out flex flex-col justify-between overflow-hidden cursor-pointer"
                 >
                   <div>
 
@@ -278,10 +278,10 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
                           e.stopPropagation();
                           setReviewCourse(course);
                         }}
-                        className="absolute bottom-3 left-3 text-xs font-bold text-white flex items-center space-x-1 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/20 hover:bg-[#EC7B38] transition-all cursor-pointer"
+                        className="absolute bottom-3 left-3 text-xs font-bold text-white flex items-center space-x-1 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/20 hover:bg-[#BA5012] transition-all cursor-pointer"
                         title="View and leave course reviews & 5-star ratings"
                       >
-                        <Star className="w-3.5 h-3.5 fill-[#EC7B38] text-[#EC7B38]" />
+                        <Star className="w-3.5 h-3.5 fill-[#BA5012] text-[#BA5012]" />
                         <span>{computedRating}</span>
                         <span className="text-slate-200 text-[10px]">({reviews.length > 0 ? `${reviews.length} reviews` : `${course.enrolledCount} learners`})</span>
                       </button>
@@ -290,9 +290,9 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
                     {/* Body Content */}
                     <div className="p-5 space-y-3">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-[#EC7B38]">{course.level}</span>
+                        <span className="font-bold text-[#BA5012]">{course.level}</span>
                         <span className="flex items-center space-x-1 text-[#143358] font-bold text-[11px] bg-[#FAF7EC] px-2 py-0.5 rounded-md border border-[#E1DED4]">
-                          <Clock className="w-3 h-3 text-[#EC7B38]" />
+                          <Clock className="w-3 h-3 text-[#BA5012]" />
                           <span>Est. Reading Time: ~{course.modules.reduce((acc, m) => acc + m.lessons.reduce((lAcc, l) => lAcc + (l.durationMinutes || 12), 0), 0)} mins</span>
                         </span>
                       </div>
@@ -321,9 +321,9 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
                         <button
                           type="button"
                           onClick={() => setReviewCourse(course)}
-                          className="text-[11px] font-extrabold text-[#143358] hover:text-[#EC7B38] flex items-center space-x-1 transition-colors cursor-pointer"
+                          className="text-[11px] font-extrabold text-[#143358] hover:text-[#BA5012] flex items-center space-x-1 transition-colors cursor-pointer"
                         >
-                          <MessageSquare className="w-3.5 h-3.5 text-[#EC7B38]" />
+                          <MessageSquare className="w-3.5 h-3.5 text-[#BA5012]" />
                           <span>Rate / Review</span>
                         </button>
                       </div>
@@ -410,7 +410,7 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs font-bold text-[#142030]">{mod.title}</p>
                           <span className="shrink-0 inline-flex items-center space-x-1 text-[10px] font-extrabold text-[#143358] bg-white px-2.5 py-0.5 rounded-md border border-[#E1DED4] shadow-2xs">
-                            <Clock className="w-3 h-3 text-[#EC7B38]" />
+                            <Clock className="w-3 h-3 text-[#BA5012]" />
                             <span>Estimated Reading Time: ~{modReadingTime} mins</span>
                           </span>
                         </div>

@@ -99,7 +99,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
           onClick={onBack}
           className="px-4 py-2.5 bg-white hover:bg-slate-100 text-[#142030] font-bold text-xs rounded-xl border border-[#E1DED4] flex items-center space-x-2 transition-all cursor-pointer shadow-xs"
         >
-          <ArrowLeft className="w-4 h-4 text-[#EC7B38]" />
+          <ArrowLeft className="w-4 h-4 text-[#BA5012]" />
           <span>Back to Courses</span>
         </button>
 
@@ -150,7 +150,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
               </span>
             )}
             <div className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-black/60 backdrop-blur-xs text-white text-xs font-bold flex items-center space-x-1 border border-white/20">
-              <Star className="w-3.5 h-3.5 fill-[#EC7B38] text-[#EC7B38]" />
+              <Star className="w-3.5 h-3.5 fill-[#BA5012] text-[#BA5012]" />
               <span>{avgRating} ({reviewsList.length} reviews)</span>
             </div>
           </div>
@@ -158,7 +158,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
           {/* Details & Actions */}
           <div className="md:col-span-2 lg:col-span-3 space-y-4">
             <div className="space-y-1">
-              <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-[#EC7B38]">
+              <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-[#BA5012]">
                 <span>{course.subject.replace('_', ' ')}</span>
                 <span>•</span>
                 <span>{course.level} Level</span>
@@ -197,7 +197,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
                   <span>{course.durationMinutes || 45} Mins</span>
                 </div>
                 <div className="flex items-center space-x-1.5">
-                  <GraduationCap className="w-4 h-4 text-[#EC7B38]" />
+                  <GraduationCap className="w-4 h-4 text-[#BA5012]" />
                   <span>{overallPercent}% Progress</span>
                 </div>
               </div>
@@ -266,7 +266,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
         <section id="section-chapters" className="scroll-mt-32 space-y-6">
           <div className="flex items-center justify-between border-b border-[#E1DED4] pb-3">
             <h3 className="text-xl font-bold font-display text-[#142030] flex items-center space-x-2">
-              <Layers className="w-5 h-5 text-[#EC7B38]" />
+              <Layers className="w-5 h-5 text-[#BA5012]" />
               <span>1. Course Syllabus ({course.modules.length} Modules)</span>
             </h3>
             <span className="text-xs text-[#5E6A79]">
@@ -320,7 +320,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
                       return (
                         <div
                           key={lesson.id}
-                          className="p-4 rounded-2xl bg-[#FAF7EC]/80 border border-[#E1DED4] hover:border-[#EC7B38] flex items-center justify-between transition-all group"
+                          className="p-4 rounded-2xl bg-[#FAF7EC]/80 border border-[#E1DED4] hover:border-[#BA5012] flex items-center justify-between transition-all group"
                         >
                           <div className="flex items-center space-x-3 truncate min-w-0">
                             <div className={`p-2 rounded-xl border shrink-0 ${
@@ -331,12 +331,12 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
                               {isCompleted ? (
                                 <CheckCircle className="w-4 h-4" />
                               ) : (
-                                <BookOpen className="w-4 h-4 text-[#EC7B38]" />
+                                <BookOpen className="w-4 h-4 text-[#BA5012]" />
                               )}
                             </div>
 
                             <div className="truncate min-w-0 flex-1">
-                              <h5 className="text-xs font-bold text-[#142030] group-hover:text-[#EC7B38] transition-colors truncate">
+                              <h5 className="text-xs font-bold text-[#142030] group-hover:text-[#BA5012] transition-colors truncate">
                                 {modIdx + 1}.{lIdx + 1} {lesson.title}
                               </h5>
                               <div className="flex items-center space-x-3 text-[10px] text-[#5E6A79] mt-0.5">
@@ -431,7 +431,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
           <div className="flex items-center justify-between border-b border-[#E1DED4] pb-4">
             <div>
               <h3 className="text-xl font-bold font-display text-[#142030] flex items-center space-x-2">
-                <NotebookPen className="w-5 h-5 text-[#EC7B38]" />
+                <NotebookPen className="w-5 h-5 text-[#BA5012]" />
                 <span>3. Course Study Notes</span>
               </h3>
               <p className="text-xs text-[#5E6A79]">Your personal scratchpad notes attached to this course.</p>
@@ -449,7 +449,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
               onChange={(e) => setNewNoteText(e.target.value)}
               placeholder="Jot down a key insight, formula, or reminder for this course..."
               rows={2}
-              className="w-full p-3.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#EC7B38]"
+              className="w-full p-3.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
             />
             <div className="flex justify-end">
               <button

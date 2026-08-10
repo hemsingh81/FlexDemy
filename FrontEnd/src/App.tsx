@@ -11,11 +11,10 @@ import { Dashboard } from './features/Dashboard/Dashboard';
 import { CourseDiscover } from './features/CourseDiscover/CourseDiscover';
 import { CourseOverviewScreen } from './features/CourseOverview/CourseOverviewScreen';
 import { CoursePlayer } from './features/CoursePlayer/CoursePlayer';
-import { AssignmentsView } from './features/Assignments/AssignmentsView';
 import { GroupStudyView } from './features/GroupStudy/GroupStudyView';
 import { ProgressAndCertificate } from './features/ProgressAndCertificate/ProgressAndCertificate';
-import { TutorHubView } from './features/TutorHub/TutorHubView';
-import { useTutorHub } from './features/TutorHub/useTutorHub';
+import { useTutorHub } from './features/Dashboard/useTutorHub';
+import { useAssignmentsHub } from './features/Dashboard/useAssignmentsHub';
 import { ProfileSetupPage } from './features/ProfileSetup/ProfileSetupPage';
 import { PendingApprovalPage } from './features/ProfileSetup/PendingApprovalPage';
 import { TutorRejectedPage } from './features/ProfileSetup/TutorRejectedPage';
@@ -39,9 +38,7 @@ const SESSION_CHECK_TIMEOUT_MS = 15000;
 const DEFAULT_VISIBLE_TABS: Record<string, boolean> = {
   dashboard: true,
   discover: true,
-  tutor: true,
   groups: true,
-  assignments: true,
   certificates: true,
   admin: false,
 };
@@ -60,10 +57,20 @@ function AppShell() {
   const { user, courses, isLoading, ensureEnrolled, updateUser, completeLesson, rolePermissions } = useDomain();
   const { showToast } = useToast();
 
-  // Owns tutor/booking data once here (rather than inside TutorHubView) so
+  // Owns tutor/booking data once here (rather than inside Dashboard) so
   // AppointmentToast can share the same fetched tutorSlots without a second,
   // un-synced copy of the same state.
   const tutorHub = useTutorHub();
+
+  // Owns assignments/submissions data once here (same reasoning as tutorHub) so it's ready
+  // before Dashboard needs it and so CoursePlayer's "Take Quiz" deep link (see
+  // pendingOpenAssignmentId below) can hand off into it without a second fetch.
+  const assignmentsHub = useAssignmentsHub();
+
+  // FR-16: set by CoursePlayer's "Take Quiz" button so the Dashboard's Assignments section
+  // opens that specific lesson's assignment directly (fixes the pre-existing bug where this ID
+  // used to be silently discarded). Consumed once by StudentAssignmentsSection.
+  const [pendingOpenAssignmentId, setPendingOpenAssignmentId] = useState<string | undefined>(undefined);
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<
@@ -71,9 +78,7 @@ function AppShell() {
     | 'discover'
     | 'player'
     | 'groups'
-    | 'assignments'
     | 'certificates'
-    | 'tutor'
     | 'course-overview'
     | 'admin'
   >('discover');
@@ -288,7 +293,7 @@ function AppShell() {
       {/* Keyboard Navigable Skip to Content Link */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2.5 focus:bg-[#EC7B38] focus:text-white focus:font-extrabold focus:text-xs focus:rounded-xl focus:shadow-2xl focus:outline-none focus:ring-2 focus:ring-white transition-all cursor-pointer"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2.5 focus:bg-[#BA5012] focus:text-white focus:font-extrabold focus:text-xs focus:rounded-xl focus:shadow-2xl focus:outline-none focus:ring-2 focus:ring-white transition-all cursor-pointer"
       >
         Skip to Content
       </a>
@@ -317,6 +322,10 @@ function AppShell() {
             <Dashboard
               onOpenCourse={handleOpenCourseOverview}
               onNavigateTab={(tab) => setActiveTab(tab)}
+              tutorHub={tutorHub}
+              assignmentsHub={assignmentsHub}
+              pendingOpenAssignmentId={pendingOpenAssignmentId}
+              onConsumePendingOpenAssignment={() => setPendingOpenAssignmentId(undefined)}
             />
           )}
 
@@ -335,19 +344,21 @@ function AppShell() {
             />
           )}
 
-          {activeTab === 'tutor' && <TutorHubView tutorHub={tutorHub} />}
-
           {activeTab === 'player' && activeCourse && (
             <CoursePlayer
               course={activeCourse}
               initialLessonId={activeLessonId}
               onBackToDashboard={() => setActiveTab('dashboard')}
-              onOpenAssignment={(asgId) => setActiveTab('assignments')}
+              onOpenAssignment={(asgId) => {
+                // FR-16: rewired into the Dashboard's Assignments section (the standalone tab
+                // is retired) and, fixing the pre-existing bug, actually passes the assignment
+                // ID through instead of discarding it.
+                setPendingOpenAssignmentId(asgId);
+                setActiveTab('dashboard');
+              }}
               onCompleteLesson={handleCompleteLesson}
             />
           )}
-
-          {activeTab === 'assignments' && <AssignmentsView />}
 
           {activeTab === 'groups' && <GroupStudyView />}
 

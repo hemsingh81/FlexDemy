@@ -37,7 +37,7 @@ export const ProgressAndCertificate: React.FC = () => {
       particleCount: 150,
       spread: 90,
       origin: { y: 0.5 },
-      colors: ['#143358', '#EC7B38', '#179765', '#F59E0B', '#3B82F6'],
+      colors: ['#143358', '#BA5012', '#179765', '#F59E0B', '#3B82F6'],
     });
 
     const printWindow = window.open('', '_blank');
@@ -63,7 +63,7 @@ export const ProgressAndCertificate: React.FC = () => {
               box-sizing: border-box;
             }
             .cert-container {
-              border: 8px double #EC7B38;
+              border: 8px double #BA5012;
               padding: 45px 60px;
               text-align: center;
               background: linear-gradient(180deg, #143358 0%, #0d223c 100%);
@@ -76,7 +76,7 @@ export const ProgressAndCertificate: React.FC = () => {
               font-size: 14px;
               letter-spacing: 4px;
               text-transform: uppercase;
-              color: #EC7B38;
+              color: #BA5012;
               font-weight: bold;
               margin-bottom: 12px;
             }
@@ -96,9 +96,9 @@ export const ProgressAndCertificate: React.FC = () => {
             .student-name {
               font-size: 38px;
               font-weight: bold;
-              color: #EC7B38;
+              color: #BA5012;
               margin: 15px 0;
-              border-bottom: 2px solid rgba(236,123,56,0.6);
+              border-bottom: 2px solid rgba(186,80,18,0.6);
               display: inline-block;
               padding-bottom: 8px;
             }
@@ -131,7 +131,7 @@ export const ProgressAndCertificate: React.FC = () => {
             .sig-line {
               font-family: 'Brush Script MT', cursive, sans-serif;
               font-size: 24px;
-              color: #EC7B38;
+              color: #BA5012;
             }
             .verify-badge {
               font-family: monospace;

@@ -7,7 +7,7 @@
   --font-mono: "JetBrains Mono", monospace;
 
   --color-ink-navy: #143358;
-  --color-citrus-amber: #EC7B38;
+  --color-citrus-amber: #BA5012;
   --color-parchment: #FAF7EC;
   --color-signal-green: #179765;
 
@@ -35,7 +35,7 @@
   --color-chart-5: var(--chart-5);
 
   --shadow-lift: 0 1px 0 0 var(--border), 0 18px 40px -28px rgba(20, 51, 88, 0.55);
-  --shadow-glow: 0 0 0 1px var(--border), 0 20px 60px -30px rgba(236, 123, 56, 0.6);
+  --shadow-glow: 0 0 0 1px var(--border), 0 20px 60px -30px rgba(186, 80, 18, 0.6);
 }
 
 :root {
@@ -47,19 +47,19 @@
   --secondary: oklch(0.955 0.014 95); /* #F3F0E6 Subtle surface */
   --muted: oklch(0.955 0.012 95); /* #F2F0E7 Muted surface */
   --muted-foreground: oklch(0.52 0.028 255); /* #5E6A79 Secondary text */
-  --accent: oklch(0.7 0.16 48); /* #EC7B38 Citrus Amber accent / CTA */
-  --accent-foreground: oklch(0.22 0.05 50); /* #2C1204 Text on accent */
+  --accent: oklch(0.56 0.15 45); /* #BA5012 Citrus Amber accent / CTA -- remediated from #EC7B38 for WCAG AA contrast with white text (~4.95:1) */
+  --accent-foreground: oklch(0.985 0.01 95); /* #FCFAF3 Text on accent -- amber is now dark enough that on-accent text is light, not dark */
   --destructive: oklch(0.58 0.2 25); /* #D73337 Errors, destructive */
   --success: oklch(0.6 0.13 160); /* #179765 Signal Green - Success */
   --border: oklch(0.9 0.014 90); /* #E1DED4 Hairlines, dividers */
-  --ring: oklch(0.7 0.16 48); /* #EC7B38 Focus ring */
+  --ring: oklch(0.56 0.15 45); /* #BA5012 Focus ring */
   --parchment: oklch(0.975 0.014 92); /* #FAF7EC Sidebar / paper areas */
   --highlight: oklch(0.92 0.11 95); /* #FBE48D Narration highlight (Style Guide 02) */
   --highlight-foreground: oklch(0.28 0.06 70); /* #3B2301 Text on highlight */
   --radius: 0.75rem;
 
   /* Style Guide 04 -- data-viz palette, hue-separated and safe on both themes */
-  --chart-1: #EC7B38;
+  --chart-1: #BA5012;
   --chart-2: #017E9A;
   --chart-3: #179765;
   --chart-4: #A07CDB;
@@ -147,6 +147,17 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* Side panel entrance (SidePanel.tsx) -- docked-right "blade" pattern, slides in from the
+   viewport edge instead of scaling up from center like fade-in-scale. */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
   }
 }
 

@@ -208,7 +208,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
       {/* Top Header */}
       <div className="p-4 bg-[#143358] text-white flex items-center justify-between border-b border-white/10">
         <div className="flex items-center space-x-2.5">
-          <div className="p-2 rounded-xl bg-[#EC7B38] text-white shadow-xs">
+          <div className="p-2 rounded-xl bg-[#BA5012] text-white shadow-xs">
             <NotebookPen className="w-5 h-5" />
           </div>
           <div>
@@ -235,7 +235,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
         <div className="p-3 rounded-2xl bg-white border border-[#E1DED4] shadow-2xs space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-[#142030]">
             <span className="flex items-center space-x-1.5 truncate">
-              <BookOpen className="w-3.5 h-3.5 text-[#EC7B38] shrink-0" />
+              <BookOpen className="w-3.5 h-3.5 text-[#BA5012] shrink-0" />
               <span className="truncate">{currentLesson.title}</span>
             </span>
             <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 bg-[#FAF7EC] text-[#143358] rounded-md border border-[#E1DED4]">
@@ -244,7 +244,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
           </div>
 
           {currentLesson.sentences[currentParagraphIndex] && (
-            <p className="text-[11px] text-[#5E6A79] line-clamp-2 italic border-l-2 border-[#EC7B38] pl-2 py-0.5">
+            <p className="text-[11px] text-[#5E6A79] line-clamp-2 italic border-l-2 border-[#BA5012] pl-2 py-0.5">
               "{currentLesson.sentences[currentParagraphIndex].text}"
             </p>
           )}
@@ -254,7 +254,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
         <form onSubmit={handleAddNote} className="p-4 rounded-2xl bg-white border border-[#E1DED4] shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-[#142030] flex items-center space-x-1.5">
-              <Plus className="w-4 h-4 text-[#EC7B38]" />
+              <Plus className="w-4 h-4 text-[#BA5012]" />
               <span>New Personal Note</span>
             </span>
 
@@ -264,7 +264,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
                 type="checkbox"
                 checked={attachToParagraph}
                 onChange={(e) => setAttachToParagraph(e.target.checked)}
-                className="rounded border-[#E1DED4] text-[#EC7B38] focus:ring-[#EC7B38] w-3.5 h-3.5 cursor-pointer"
+                className="rounded border-[#E1DED4] text-[#BA5012] focus:ring-[#BA5012] w-3.5 h-3.5 cursor-pointer"
               />
               <span>Link to Para #{selectedParagraph + 1}</span>
             </label>
@@ -275,7 +275,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
             onChange={(e) => setNoteText(e.target.value)}
             placeholder="Type your notes, takeaways, formulas, or key insights here..."
             rows={3}
-            className="w-full p-3 rounded-xl bg-[#FAF7EC]/80 border border-[#E1DED4] text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#EC7B38] resize-none"
+            className="w-full p-3 rounded-xl bg-[#FAF7EC]/80 border border-[#E1DED4] text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#BA5012] resize-none"
           />
 
           <div className="flex items-center justify-between pt-1">
@@ -298,7 +298,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
                   </>
                 ) : (
                   <>
-                    <Mic className="w-3.5 h-3.5 text-[#EC7B38]" />
+                    <Mic className="w-3.5 h-3.5 text-[#BA5012]" />
                     <span>Dictate Note</span>
                   </>
                 )}
@@ -314,7 +314,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
               disabled={!noteText.trim()}
               className="px-4 py-2 bg-[#143358] hover:bg-[#143358]/90 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
             >
-              <Bookmark className="w-3.5 h-3.5 text-[#EC7B38]" />
+              <Bookmark className="w-3.5 h-3.5 text-[#BA5012]" />
               <span>Save Note</span>
             </button>
           </div>
@@ -364,7 +364,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
               placeholder="Search saved notes..."
-              className="w-full pl-8 pr-3 py-1.5 bg-white border border-[#E1DED4] rounded-xl text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-1 focus:ring-[#EC7B38]"
+              className="w-full pl-8 pr-3 py-1.5 bg-white border border-[#E1DED4] rounded-xl text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-1 focus:ring-[#BA5012]"
             />
           </div>
 
@@ -434,7 +434,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
                   </div>
 
                   {note.paragraphText && (
-                    <p className="text-[11px] text-[#5E6A79] bg-[#FAF7EC] p-2 rounded-xl italic border-l-2 border-[#EC7B38] line-clamp-2">
+                    <p className="text-[11px] text-[#5E6A79] bg-[#FAF7EC] p-2 rounded-xl italic border-l-2 border-[#BA5012] line-clamp-2">
                       "{note.paragraphText}"
                     </p>
                   )}
@@ -444,7 +444,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
                       <textarea
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
-                        className="w-full p-2.5 rounded-xl border border-[#EC7B38] text-xs text-[#142030] focus:outline-none"
+                        className="w-full p-2.5 rounded-xl border border-[#BA5012] text-xs text-[#142030] focus:outline-none"
                         rows={3}
                       />
                       <div className="flex justify-end space-x-2">

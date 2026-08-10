@@ -124,7 +124,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
             particleCount: 40,
             spread: 50,
             origin: { y: 0.6 },
-            colors: ['#179765', '#EC7B38', '#143358'],
+            colors: ['#179765', '#BA5012', '#143358'],
           });
         }
         return { ...c, mastered: nextMastered };
@@ -160,7 +160,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
         {/* Header */}
         <div className="p-5 border-b border-[#E1DED4] bg-[#FAF7EC] flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-2xl bg-[#EC7B38]/10 text-[#EC7B38] border border-[#EC7B38]/30">
+            <div className="p-2.5 rounded-2xl bg-[#BA5012]/10 text-[#BA5012] border border-[#BA5012]/30">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
@@ -204,7 +204,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
         <div className="p-6 sm:p-8 flex-1 overflow-y-auto flex flex-col items-center justify-center min-h-[320px] bg-[#FAF7EC]/50">
           {isGenerating ? (
             <div className="text-center py-12 space-y-3">
-              <Sparkles className="w-8 h-8 text-[#EC7B38] animate-spin mx-auto" />
+              <Sparkles className="w-8 h-8 text-[#BA5012] animate-spin mx-auto" />
               <p className="text-xs font-bold text-[#142030]">Parsing lesson content & generating AI flashcards...</p>
             </div>
           ) : currentCard ? (
@@ -223,12 +223,12 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                   <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
                     isFlipped
                       ? 'bg-white/10 text-amber-300 border-white/20'
-                      : 'bg-[#FAF7EC] text-[#EC7B38] border-[#E1DED4]'
+                      : 'bg-[#FAF7EC] text-[#BA5012] border-[#E1DED4]'
                   }`}>
                     {currentCard.category}
                   </span>
 
-                  <span className={`text-[11px] font-bold ${isFlipped ? 'text-amber-300' : 'text-[#EC7B38]'}`}>
+                  <span className={`text-[11px] font-bold ${isFlipped ? 'text-amber-300' : 'text-[#BA5012]'}`}>
                     {isFlipped ? 'Answer View (Click to flip)' : 'Question View (Click to flip)'}
                   </span>
                 </div>
@@ -279,7 +279,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
 
                   <button
                     onClick={() => setIsFlipped(!isFlipped)}
-                    className="px-4 py-2.5 bg-[#EC7B38] hover:bg-[#EC7B38]/90 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                    className="px-4 py-2.5 bg-[#BA5012] hover:bg-[#BA5012]/90 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
                   >
                     <span>{isFlipped ? 'Show Question' : 'Flip Answer'}</span>
                   </button>

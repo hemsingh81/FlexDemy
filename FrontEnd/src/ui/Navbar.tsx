@@ -3,14 +3,12 @@ import {
   BookOpen,
   Compass,
   Users,
-  FileCheck2,
   Award,
   Flame,
   Moon,
   Sun,
   LogOut,
   Search,
-  GraduationCap,
   ShieldCheck,
   ChevronDown,
 } from 'lucide-react';
@@ -21,9 +19,9 @@ import { ADMIN_SUBTAB_META, AdminSubTab } from '../features/Admin/useAdminPanel'
 
 interface NavbarProps {
   user: UserProfile;
-  activeTab: 'dashboard' | 'discover' | 'player' | 'groups' | 'assignments' | 'certificates' | 'tutor' | 'admin';
+  activeTab: 'dashboard' | 'discover' | 'player' | 'groups' | 'certificates' | 'admin';
   setActiveTab: (
-    tab: 'dashboard' | 'discover' | 'player' | 'groups' | 'assignments' | 'certificates' | 'tutor' | 'admin'
+    tab: 'dashboard' | 'discover' | 'player' | 'groups' | 'certificates' | 'admin'
   ) => void;
   // Feature-key -> visible map for the caller's role (DomainContext.rolePermissions, plan §3).
   // Every nav button below is filtered through this -- not just the Admin one -- so a
@@ -91,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Logo & Brand Name */}
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('discover')}>
-            <div className="w-9 h-9 rounded-xl bg-[#EC7B38] flex items-center justify-center text-[#143358] shadow-md shadow-[#EC7B38]/30">
+            <div className="w-9 h-9 rounded-xl bg-[#BA5012] flex items-center justify-center text-[#143358] shadow-md shadow-[#BA5012]/30">
               <Logo className="w-5 h-5" />
             </div>
             <div>
@@ -111,7 +109,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => setActiveTab('discover')}
                 className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'discover'
-                    ? 'bg-[#EC7B38] text-white shadow-md shadow-[#EC7B38]/30'
+                    ? 'bg-[#BA5012] text-white shadow-md shadow-[#BA5012]/30'
                     : 'text-slate-200 hover:text-white hover:bg-white/10'
                 }`}
               >
@@ -134,20 +132,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {visibleTabs.tutor && (
-              <button
-                onClick={() => setActiveTab('tutor')}
-                className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === 'tutor'
-                    ? 'bg-white/15 text-white font-bold border border-white/20'
-                    : 'text-amber-300 hover:bg-white/10'
-                }`}
-              >
-                <GraduationCap className="w-4 h-4 text-[#EC7B38]" />
-                <span>Tutor Hub & Booking</span>
-              </button>
-            )}
-
             {visibleTabs.groups && (
               <button
                 onClick={() => setActiveTab('groups')}
@@ -159,20 +143,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Users className="w-4 h-4 opacity-90" />
                 <span>Group Study</span>
-              </button>
-            )}
-
-            {visibleTabs.assignments && (
-              <button
-                onClick={() => setActiveTab('assignments')}
-                className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                  activeTab === 'assignments'
-                    ? 'bg-white/15 text-white font-bold border border-white/20'
-                    : 'text-slate-200 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <FileCheck2 className="w-4 h-4 opacity-90" />
-                <span>Assignments</span>
               </button>
             )}
 
@@ -230,7 +200,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Streak Counter Badge */}
             <div
-              className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#EC7B38]/20 text-amber-300 border border-[#EC7B38]/40 text-xs font-semibold"
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#BA5012]/20 text-amber-300 border border-[#BA5012]/40 text-xs font-semibold"
               title={`${user.streakDays} Day Learning Streak`}
             >
               <Flame className="w-4 h-4 text-[#EC7B38] fill-[#EC7B38]" />
@@ -246,7 +216,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               trigger={({ toggle }) => (
                 <button
                   onClick={toggle}
-                  className="flex items-center space-x-2 p-0.5 rounded-full hover:ring-2 hover:ring-[#EC7B38] transition-all focus:outline-hidden"
+                  className="flex items-center space-x-2 p-0.5 rounded-full hover:ring-2 hover:ring-[#BA5012] transition-all focus:outline-hidden"
                 >
                   <img
                     src={user.avatar}
@@ -286,8 +256,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             visibleTabs gates, same tabs) rather than a partial subset, so nothing here is only
             reachable on a wide viewport. shrink-0 + whitespace-nowrap on every button keeps
             labels on one line and lets the row's overflow-x-auto handle any width this doesn't
-            fit at, instead of flexbox's default shrink squeezing multi-word labels (e.g. "Tutor
-            Hub") into an awkward wrap. */}
+            fit at, instead of flexbox's default shrink squeezing multi-word labels (e.g.
+            "Certificates") into an awkward wrap. */}
         <div className="flex lg:hidden items-center justify-around gap-1 py-2 border-t border-white/10 text-xs font-medium text-slate-200 overflow-x-auto">
           {visibleTabs.discover && (
             <button
@@ -311,17 +281,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Dashboard</span>
             </button>
           )}
-          {visibleTabs.tutor && (
-            <button
-              onClick={() => setActiveTab('tutor')}
-              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
-                activeTab === 'tutor' ? 'text-amber-300 font-bold bg-white/15' : ''
-              }`}
-            >
-              <GraduationCap className="w-3.5 h-3.5 text-[#EC7B38]" />
-              <span>Tutor Hub</span>
-            </button>
-          )}
           {visibleTabs.groups && (
             <button
               onClick={() => setActiveTab('groups')}
@@ -331,17 +290,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Users className="w-3.5 h-3.5" />
               <span>Groups</span>
-            </button>
-          )}
-          {visibleTabs.assignments && (
-            <button
-              onClick={() => setActiveTab('assignments')}
-              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ${
-                activeTab === 'assignments' ? 'text-white font-bold bg-white/15' : ''
-              }`}
-            >
-              <FileCheck2 className="w-3.5 h-3.5" />
-              <span>Assignments</span>
             </button>
           )}
           {visibleTabs.certificates && (

@@ -201,7 +201,7 @@ export const DrilldownPanel: React.FC<DrilldownPanelProps> = ({
             <button
               onClick={handleGenerateExample}
               disabled={isGenerating}
-              className="px-3.5 py-2 bg-[#EC7B38] hover:bg-[#EC7B38]/90 text-white rounded-xl text-xs font-bold shadow-md flex items-center space-x-1.5 transition-all cursor-pointer"
+              className="px-3.5 py-2 bg-[#BA5012] hover:bg-[#BA5012]/90 text-white rounded-xl text-xs font-bold shadow-md flex items-center space-x-1.5 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>{isGenerating ? 'Generating...' : 'Generate Example'}</span>

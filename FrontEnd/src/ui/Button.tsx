@@ -1,14 +1,16 @@
 import React from 'react';
 import { Spinner, SpinnerSize } from './Spinner';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 export type ButtonSize = 'sm' | 'md';
 
 interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
-  // 'primary' = #EC7B38 orange (ConfirmDialog's existing 'primary' convention -- CTAs like
+  // 'primary' = #BA5012 orange (ConfirmDialog's existing 'primary' convention -- CTAs like
   // MasterDataTable's "Add X"), 'secondary' = #143358 navy (the main form-submit CTA on every
   // Auth/ProfileSetup screen and most Admin "Save" buttons), 'danger' = red-600 (destructive /
-  // reject actions). Defaults to 'secondary' since that's the most common call site.
+  // reject actions), 'ghost' = neutral slate (Cancel/Back -- the low-emphasis counterpart next to
+  // a primary/secondary action in the same row, e.g. every SidePanel footer's "Cancel"). Defaults
+  // to 'secondary' since that's the most common call site.
   variant?: ButtonVariant;
   // 'md' (default) = the full-width Auth/ProfileSetup submit shape (py-3, text-sm, shadow-md).
   // 'sm' = the compact Admin-screen shape (px-4 py-2, text-xs).
@@ -27,9 +29,10 @@ interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: 'bg-[#EC7B38] hover:bg-[#EC7B38]/90 text-white shadow-[#EC7B38]/30',
+  primary: 'bg-[#BA5012] hover:bg-[#BA5012]/90 text-white shadow-[#BA5012]/30',
   secondary: 'bg-[#143358] hover:bg-[#143358]/90 text-white',
   danger: 'bg-red-600 hover:bg-red-600/90 text-white',
+  ghost: 'bg-slate-100 hover:bg-slate-200 text-slate-700',
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

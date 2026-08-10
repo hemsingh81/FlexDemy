@@ -8,7 +8,7 @@ export const Footer: React.FC = () => {
     <footer className="bg-[#143358] text-white border-t border-white/10 mt-auto">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-xl bg-[#EC7B38] flex items-center justify-center text-white shadow-md shadow-[#EC7B38]/30">
+          <div className="w-8 h-8 rounded-xl bg-[#BA5012] flex items-center justify-center text-white shadow-md shadow-[#BA5012]/30">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <div>

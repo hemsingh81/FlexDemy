@@ -841,3 +841,81 @@ export const MOCK_PUBLIC_CLASSES = [
   },
 ];
 
+// Assignments merged into Dashboard (PRD: prd-eLearning-Assignments-2026-08-10) --------------
+
+export const MOCK_TUTOR_ASSIGNMENTS = [
+  {
+    id: 'tasg_1',
+    title: 'Bloch Sphere Vector Proofs',
+    description: 'Five short proofs on Bloch Sphere state vector representations, assigned to Quantum Computing students.',
+    questions: [
+      {
+        id: 'tq_1_1',
+        question: 'Which pair of angles fully parameterizes a single-qubit pure state on the Bloch Sphere?',
+        options: ['(θ, φ)', '(x, y, z)', '(α, β) only', '(r, θ, φ) with r fixed at 1'],
+        correctAnswerIndex: 0,
+        explanation: 'A pure single-qubit state is fully specified by the polar angle θ and azimuthal angle φ, since the radius is fixed at 1 on the Bloch Sphere.',
+      },
+      {
+        id: 'tq_1_2',
+        question: 'What does the north pole of the Bloch Sphere conventionally represent?',
+        options: ['|1⟩', '|0⟩', '|+⟩', '|−⟩'],
+        correctAnswerIndex: 1,
+        explanation: 'By convention, the north pole represents the basis state |0⟩ and the south pole represents |1⟩.',
+      },
+    ],
+    source: 'tutor' as const,
+    courseId: 'course_quantum_101',
+    courseTitle: 'Quantum Computing & Superposition Foundations',
+    tutorId: 'tutor_elena',
+    tutorName: 'Dr. Elena Rostova',
+    status: 'published' as const,
+    visibilityMode: 'hold' as const,
+    createdAt: '2026-08-05',
+  },
+  {
+    id: 'tasg_2',
+    title: 'Open Physics Challenge: Superposition Speed Round',
+    description: 'A platform-wide open competition on core superposition concepts -- open to every student, not just those enrolled in a specific course.',
+    questions: [
+      {
+        id: 'tq_2_1',
+        question: 'Superposition allows a qubit to be in:',
+        options: ['Only |0⟩', 'Only |1⟩', 'A linear combination of |0⟩ and |1⟩', 'Neither state until measured twice'],
+        correctAnswerIndex: 2,
+        explanation: 'Superposition means the qubit exists in a linear combination (weighted sum) of the basis states |0⟩ and |1⟩ until measured.',
+      },
+    ],
+    source: 'competition' as const,
+    tutorId: 'tutor_elena',
+    tutorName: 'Dr. Elena Rostova',
+    status: 'published' as const,
+    visibilityMode: 'immediate' as const,
+    createdAt: '2026-08-06',
+  },
+  {
+    id: 'tasg_3',
+    title: 'Advanced Gate Decomposition (Draft)',
+    description: 'Draft assignment on decomposing multi-qubit gates -- not yet published.',
+    questions: [
+      {
+        id: 'tq_3_1',
+        question: 'A CNOT gate can be decomposed using which combination of single-qubit and two-qubit primitives?',
+        options: ['Hadamard + controlled-phase', 'Only Pauli-X', 'Only measurement', 'Toffoli alone'],
+        correctAnswerIndex: 0,
+        explanation: 'A CNOT can be built from a Hadamard and a controlled-phase gate, among other equivalent decompositions.',
+      },
+    ],
+    source: 'tutor' as const,
+    courseId: 'course_quantum_101',
+    courseTitle: 'Quantum Computing & Superposition Foundations',
+    tutorId: 'tutor_elena',
+    tutorName: 'Dr. Elena Rostova',
+    status: 'draft' as const,
+    visibilityMode: 'hold' as const,
+    createdAt: '2026-08-09',
+  },
+];
+
+export const MOCK_ASSIGNMENT_SUBMISSIONS = [];
+

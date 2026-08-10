@@ -251,7 +251,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
             className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-[#FAF7EC] hover:bg-[#143358] text-[#143358] hover:text-white border border-[#E1DED4] transition-all cursor-pointer"
             title="Start Focus Session Timer with circular progress ring"
           >
-            <Timer className="w-4 h-4 text-[#EC7B38]" />
+            <Timer className="w-4 h-4 text-[#BA5012]" />
             <span className="hidden md:inline">Focus Timer</span>
           </button>
 
@@ -278,17 +278,17 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
             }`}
             title="Open personal lesson scratchpad & notes panel"
           >
-            <NotebookPen className="w-4 h-4 text-[#EC7B38]" />
+            <NotebookPen className="w-4 h-4 text-[#BA5012]" />
             <span className="hidden sm:inline">Scratchpad Notes</span>
           </button>
 
           {/* AI Flashcards Button */}
           <button
             onClick={() => setIsFlashcardsOpen(true)}
-            className="shrink-0 whitespace-nowrap px-3 py-1.5 bg-[#FAF7EC] hover:bg-[#EC7B38] hover:text-white text-[#142030] font-bold text-xs rounded-xl border border-[#E1DED4] flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+            className="shrink-0 whitespace-nowrap px-3 py-1.5 bg-[#FAF7EC] hover:bg-[#BA5012] hover:text-white text-[#142030] font-bold text-xs rounded-xl border border-[#E1DED4] flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
             title="Generate AI Interactive Flashcards from current lesson content"
           >
-            <Sparkles className="w-4 h-4 text-[#EC7B38]" />
+            <Sparkles className="w-4 h-4 text-[#BA5012]" />
             <span className="hidden sm:inline">Generate Flashcards</span>
           </button>
 
@@ -319,7 +319,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                 particleCount: 65,
                 spread: 70,
                 origin: { y: 0.6 },
-                colors: ['#143358', '#EC7B38', '#179765', '#3B82F6', '#F59E0B'],
+                colors: ['#143358', '#BA5012', '#179765', '#3B82F6', '#F59E0B'],
               });
               onCompleteLesson(course.id, currentLesson.id);
               // Advance to next lesson if available

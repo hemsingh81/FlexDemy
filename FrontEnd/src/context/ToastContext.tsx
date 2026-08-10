@@ -66,33 +66,27 @@ const VARIANT_ICON: Record<ToastVariant, React.ElementType> = {
   info: Info,
 };
 
-// Mirrors ui/Alert.tsx's variant color convention where it overlaps ('error' here reads the same
-// as Alert's 'danger', 'info' is identical) plus a green/emerald 'success' state Alert doesn't
-// have -- #179765 is the same green already used for the "Active" status pills across Admin
-// (MasterDataTable.tsx, AdminUserStatusList.tsx), reused here rather than picking a new green.
+// 'success' uses citrus-amber (not signal-green) so the confirmation toast reads as clearly
+// visible/attention-grabbing against the mostly-white/cream page chrome -- an explicit choice
+// (over the DESIGN.md default of green-for-success) since the subtler white/green combo wasn't
+// visible enough in practice. 'error'/'info' are unchanged (red/neutral already read clearly).
 const VARIANT_CLASSES: Record<ToastVariant, string> = {
-  success: 'bg-white border-[#179765]/30 text-[#142030]',
+  success: 'bg-white border-[#BA5012]/40 text-[#142030]',
   error: 'bg-red-50 border-red-200 text-red-700',
   info: 'bg-[#FAF7EC] border-[#E1DED4] text-[#142030]',
 };
 
 const VARIANT_ICON_CLASSES: Record<ToastVariant, string> = {
-  success: 'text-[#179765]',
+  success: 'text-[#BA5012]',
   error: 'text-red-600',
   info: 'text-[#5E6A79]',
 };
 
-// Fixed bottom-right, hugging the corner the same way ui/AppointmentToast.tsx does (bottom-6
-// right-6) -- an earlier version pushed this stack up to bottom-48 to permanently dodge
-// AppointmentToast.tsx/OfflineProgressToast.tsx, but that read as a large, empty, unexplained gap
-// above every toast almost all the time (those two only render when an appointment is upcoming or
-// a connectivity transition just happened -- rare), which is worse than the toast it was trying
-// to avoid. z-[60] still sits one above both of those (z-50) and Dropdown's menu (also z-50), so
-// on the rare occasion they're visible at the same moment a toast fires, the toast still renders
-// on top rather than being hidden underneath -- an acceptable, uncommon minor overlap versus a
-// permanently oversized margin on every single toast.
+// Fixed bottom-left -- deliberately the opposite corner from ui/AppointmentToast.tsx and
+// ui/OfflineProgressToast.tsx (both bottom-right), so this general confirmation stack never
+// competes for the same corner as those two rarer, longer-lived notices.
 const STACK_CLASSNAME =
-  'fixed bottom-6 right-6 z-[60] flex flex-col gap-2 w-[calc(100%-3rem)] max-w-sm pointer-events-none';
+  'fixed bottom-6 left-6 z-[60] flex flex-col gap-2 w-[calc(100%-3rem)] max-w-sm pointer-events-none';
 
 interface ToastItemProps {
   toast: ToastRecord;
@@ -105,7 +99,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
     <div
       role="status"
       className={`pointer-events-auto flex items-start gap-2 px-3.5 py-3 rounded-xl border shadow-xl text-xs font-semibold transition-all duration-150 ease-out ${
-        toast.visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'
+        toast.visible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
       } ${VARIANT_CLASSES[toast.variant]}`}
     >
       <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${VARIANT_ICON_CLASSES[toast.variant]}`} />

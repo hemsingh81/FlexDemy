@@ -93,7 +93,7 @@ export const FocusSessionTimer: React.FC<FocusSessionTimerProps> = ({
       <div className="w-full max-w-md bg-white rounded-3xl border border-[#E1DED4] shadow-2xl p-6 space-y-6 relative overflow-hidden">
         
         {/* Background Decorative Glow */}
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-48 h-48 bg-[#EC7B38]/15 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-48 h-48 bg-[#BA5012]/15 rounded-full blur-2xl pointer-events-none" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-[#E1DED4] pb-4">
@@ -169,7 +169,7 @@ export const FocusSessionTimer: React.FC<FocusSessionTimerProps> = ({
                 cx="50"
                 cy="50"
                 r={radius}
-                className="text-[#EC7B38] transition-all duration-500 ease-out"
+                className="text-[#BA5012] transition-all duration-500 ease-out"
                 strokeWidth="7"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
@@ -185,7 +185,7 @@ export const FocusSessionTimer: React.FC<FocusSessionTimerProps> = ({
                 {formattedTime}
               </span>
               <span className="text-[11px] font-bold text-[#5E6A79] flex items-center space-x-1">
-                <Flame className="w-3.5 h-3.5 text-[#EC7B38] fill-[#EC7B38]" />
+                <Flame className="w-3.5 h-3.5 text-[#BA5012] fill-[#BA5012]" />
                 <span>{isActive ? 'Uninterrupted Focus' : 'Ready to Start'}</span>
               </span>
             </div>
@@ -196,7 +196,7 @@ export const FocusSessionTimer: React.FC<FocusSessionTimerProps> = ({
         {/* Earned Points Counter */}
         <div className="flex items-center justify-between p-3.5 bg-[#FAF7EC] rounded-2xl border border-[#E1DED4]">
           <div className="flex items-center space-x-2">
-            <Trophy className="w-4 h-4 text-[#EC7B38]" />
+            <Trophy className="w-4 h-4 text-[#BA5012]" />
             <span className="text-xs font-bold text-[#142030]">Session Points Earned:</span>
           </div>
           <span className="text-sm font-extrabold text-[#179765]">+{earnedPoints} XP</span>

@@ -350,7 +350,7 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
           type="button"
           onClick={() => (isFormOpen ? closeAddForm() : openAddForm())}
           disabled={disableCreate || (isBusy && !isFormOpen)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#EC7B38] text-white shadow-md shadow-[#EC7B38]/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#BA5012] text-white shadow-md shadow-[#BA5012]/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isFormOpen ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
           <span>{isFormOpen ? 'Cancel' : `Add ${entityLabel}`}</span>

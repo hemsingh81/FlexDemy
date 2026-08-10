@@ -26,9 +26,9 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
       <div className="relative overflow-hidden lg:w-1/2 bg-[#143358] text-white flex flex-col justify-center px-8 sm:px-12 py-8 sm:py-12 lg:py-0">
         {/* Background graphics: soft blurred glows + a faint dot grid, low-opacity per Style Guide elevation rules */}
         <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#EC7B38]/20 blur-3xl" />
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#BA5012]/20 blur-3xl" />
           <div className="absolute top-1/2 -left-32 w-80 h-80 rounded-full bg-[#179765]/10 blur-3xl" />
-          <div className="absolute -bottom-32 right-1/4 w-72 h-72 rounded-full bg-[#EC7B38]/10 blur-3xl" />
+          <div className="absolute -bottom-32 right-1/4 w-72 h-72 rounded-full bg-[#BA5012]/10 blur-3xl" />
           <div
             className="absolute inset-0 opacity-[0.07]"
             style={{
@@ -40,7 +40,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, childre
 
         <div className="relative z-10 max-w-md mx-auto lg:mx-0 space-y-8">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-[#EC7B38] flex items-center justify-center shadow-md shadow-[#EC7B38]/30">
+            <div className="w-10 h-10 rounded-xl bg-[#BA5012] flex items-center justify-center shadow-md shadow-[#BA5012]/30">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>

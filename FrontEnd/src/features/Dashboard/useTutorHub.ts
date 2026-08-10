@@ -3,9 +3,11 @@ import { GroupClassRequest, PublicLiveClass, TutorCalendarSlot } from '../../typ
 import * as tutorService from '../../services/tutorService';
 import * as groupStudyService from '../../services/groupStudyService';
 import { useDomain } from '../../context/DomainContext';
+import { useToast } from '../../context/ToastContext';
 
 export const useTutorHub = () => {
   const { user, courses, addCourse } = useDomain();
+  const { showToast } = useToast();
 
   const [tutorSlots, setTutorSlots] = useState<TutorCalendarSlot[]>([]);
   const [groupRequests, setGroupRequests] = useState<GroupClassRequest[]>([]);
@@ -33,14 +35,24 @@ export const useTutorHub = () => {
   const bookSlot = useCallback(
     (slotId: string, notes?: string) => {
       if (!user) return;
-      tutorService.bookSlot(slotId, user.id, user.name, notes).then(setTutorSlots);
+      const slot = tutorSlots.find((s) => s.id === slotId);
+      tutorService.bookSlot(slotId, user.id, user.name, notes).then((updated) => {
+        setTutorSlots(updated);
+        showToast({
+          message: slot ? `Session booked with ${slot.tutorName}.` : 'Session booked.',
+          variant: 'success',
+        });
+      });
     },
-    [user]
+    [user, tutorSlots, showToast]
   );
 
   const updateSlot = useCallback((updatedSlot: TutorCalendarSlot) => {
-    tutorService.upsertSlot(updatedSlot).then(setTutorSlots);
-  }, []);
+    tutorService.upsertSlot(updatedSlot).then((updated) => {
+      setTutorSlots(updated);
+      showToast({ message: 'Availability slot saved.', variant: 'success' });
+    });
+  }, [showToast]);
 
   const requestGroupClass = useCallback(
     (topic: string, courseTitle: string) => {
@@ -57,9 +69,12 @@ export const useTutorHub = () => {
           status: 'pending',
           studentPool: [{ studentId: user.id, studentName: user.name, avatar: user.avatar }],
         })
-        .then(setGroupRequests);
+        .then((updated) => {
+          setGroupRequests(updated);
+          showToast({ message: 'Group pool request published.', variant: 'success' });
+        });
     },
-    [user]
+    [user, showToast]
   );
 
   const subscribePublicClass = useCallback(
@@ -67,14 +82,20 @@ export const useTutorHub = () => {
       if (!user) return;
       groupStudyService
         .subscribePublicClass(classId, user.id, user.name, user.avatar)
-        .then(setPublicClasses);
+        .then((updated) => {
+          setPublicClasses(updated);
+          showToast({ message: 'Registered for masterclass.', variant: 'success' });
+        });
     },
-    [user]
+    [user, showToast]
   );
 
   const announcePublicClass = useCallback((newClass: PublicLiveClass) => {
-    groupStudyService.announcePublicClass(newClass).then(setPublicClasses);
-  }, []);
+    groupStudyService.announcePublicClass(newClass).then((updated) => {
+      setPublicClasses(updated);
+      showToast({ message: 'Public class saved.', variant: 'success' });
+    });
+  }, [showToast]);
 
   return {
     user,

@@ -42,7 +42,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onGoToLo
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="you@domain.com or +1 555 000 1234"
-                className="w-full pl-9 pr-4 py-2.5 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#EC7B38]"
+                className="w-full pl-9 pr-4 py-2.5 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
               />
             </div>
           </div>
@@ -60,7 +60,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onGoToLo
       )}
 
       <p className="text-center text-xs text-[#5E6A79]">
-        <button type="button" onClick={onGoToLogin} className="font-bold text-[#EC7B38] hover:underline">
+        <button type="button" onClick={onGoToLogin} className="font-bold text-[#BA5012] hover:underline">
           Return to Sign In
         </button>
       </p>

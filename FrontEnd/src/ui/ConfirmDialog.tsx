@@ -17,13 +17,13 @@ interface ConfirmDialogProps {
 const VARIANT_TEXT_CLASS: Record<NonNullable<ConfirmDialogProps['variant']>, string> = {
   danger: 'text-red-600',
   warning: 'text-amber-600',
-  primary: 'text-[#EC7B38]',
+  primary: 'text-[#BA5012]',
 };
 
 const VARIANT_BUTTON_CLASS: Record<NonNullable<ConfirmDialogProps['variant']>, string> = {
   danger: 'bg-red-600',
   warning: 'bg-amber-600',
-  primary: 'bg-[#EC7B38]',
+  primary: 'bg-[#BA5012]',
 };
 
 // Small inline "are you sure?" control (not a modal) -- swaps in for whatever action buttons it

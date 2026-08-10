@@ -69,7 +69,7 @@ export const CourseReviewModal: React.FC<CourseReviewModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#E1DED4] pb-4">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-2xl bg-[#EC7B38] text-white shadow-xs">
+            <div className="p-2.5 rounded-2xl bg-[#BA5012] text-white shadow-xs">
               <Star className="w-5 h-5 fill-white" />
             </div>
             <div>
@@ -127,7 +127,7 @@ export const CourseReviewModal: React.FC<CourseReviewModalProps> = ({
         {/* Submit Review Form */}
         <form onSubmit={handleSubmit} className="p-4 bg-white rounded-2xl border border-[#E1DED4] shadow-2xs space-y-4">
           <h4 className="text-xs font-extrabold text-[#142030] uppercase tracking-wider flex items-center space-x-1.5">
-            <MessageSquare className="w-4 h-4 text-[#EC7B38]" />
+            <MessageSquare className="w-4 h-4 text-[#BA5012]" />
             <span>Leave Your Review</span>
           </h4>
 
@@ -154,7 +154,7 @@ export const CourseReviewModal: React.FC<CourseReviewModalProps> = ({
                 </button>
               ))}
             </div>
-            <span className="text-xs font-extrabold text-[#EC7B38] ml-2">
+            <span className="text-xs font-extrabold text-[#BA5012] ml-2">
               {currentDisplayRating}/5
             </span>
           </div>
@@ -165,7 +165,7 @@ export const CourseReviewModal: React.FC<CourseReviewModalProps> = ({
             onChange={(e) => setReviewText(e.target.value)}
             placeholder="Share your experience, what you enjoyed about the lesson explanations, or tips for future students..."
             rows={3}
-            className="w-full p-3 rounded-xl bg-[#FAF7EC] border border-[#E1DED4] text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#EC7B38] resize-none"
+            className="w-full p-3 rounded-xl bg-[#FAF7EC] border border-[#E1DED4] text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#BA5012] resize-none"
           />
 
           <div className="flex justify-end">

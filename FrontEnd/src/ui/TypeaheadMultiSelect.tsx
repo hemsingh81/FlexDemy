@@ -52,13 +52,13 @@ export const TypeaheadMultiSelect: React.FC<TypeaheadMultiSelectProps> = ({
       <div
         onClick={() => !disabled && setIsOpen(true)}
         className={`min-h-10 w-full px-2 py-1.5 bg-white border border-[#E1DED4] rounded-xl flex flex-wrap items-center gap-1.5 transition-shadow ${
-          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-text focus-within:ring-2 focus-within:ring-[#EC7B38]'
+          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-text focus-within:ring-2 focus-within:ring-[#BA5012]'
         }`}
       >
         {selectedOptions.map((opt) => (
           <span
             key={opt.value}
-            className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-lg bg-[#FAF7EC] border border-[#EC7B38]/30 text-[11px] font-semibold text-[#142030]"
+            className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-lg bg-[#FAF7EC] border border-[#BA5012]/30 text-[11px] font-semibold text-[#142030]"
           >
             {opt.label}
             {!disabled && (
@@ -110,7 +110,7 @@ export const TypeaheadMultiSelect: React.FC<TypeaheadMultiSelectProps> = ({
                 aria-selected={isSelected}
                 onClick={() => toggleValue(opt.value)}
                 className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs text-left cursor-pointer transition-colors ${
-                  isSelected ? 'bg-[#FAF7EC] text-[#EC7B38] font-semibold' : 'text-[#142030] hover:bg-[#F3F0E6]'
+                  isSelected ? 'bg-[#FAF7EC] text-[#BA5012] font-semibold' : 'text-[#142030] hover:bg-[#F3F0E6]'
                 }`}
               >
                 <span>{opt.label}</span>

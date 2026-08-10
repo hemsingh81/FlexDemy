@@ -4,7 +4,7 @@
        is a standalone document (browser favicon chrome) with no access to the app's CSS
        custom properties, so the tokens can't be referenced directly and must be kept in
        sync by hand if the palette ever changes. -->
-  <rect width="32" height="32" rx="7" fill="#EC7B38"/>
+  <rect width="32" height="32" rx="7" fill="#BA5012"/>
   <g transform="translate(4,4)" fill="#143358">
     <path d="M11 19L4 16L3 7L11 4Z"/>
     <path d="M13 19L20 16L21 7L13 4Z"/>

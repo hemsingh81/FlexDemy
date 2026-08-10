@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   Calendar,
-  CheckCircle2,
   Upload,
   FileText,
   BarChart2,
@@ -17,7 +16,6 @@ import {
   Video,
   ArrowRight,
   BookOpen,
-  X,
   Edit,
 } from 'lucide-react';
 import {
@@ -40,6 +38,10 @@ import {
   SubjectCategory,
   DifficultyLevel,
 } from '../../types';
+import { useToast } from '../../context/ToastContext';
+import { SidePanel } from '../../ui/SidePanel';
+import { Button } from '../../ui/Button';
+import { ChoiceToggle } from './ChoiceToggle';
 
 interface TutorEducatorHubViewProps {
   user: UserProfile;
@@ -66,6 +68,8 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
   isOnline,
   onToggleOnlineStatus,
 }) => {
+  const { showToast } = useToast();
+
   // Wizard Modal State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
@@ -135,7 +139,6 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
   const [pcPricePerMinute, setPcPricePerMinute] = useState(0.50);
   const [pcMeetingUrl, setPcMeetingUrl] = useState('https://meet.flexdemy.edu/public-quantum-101');
   const [pcSessionType, setPcSessionType] = useState<'public_class' | 'one_on_one'>('public_class');
-  const [toastMessage, setToastMessage] = useState<string>('');
 
   const handleOpenPublicClassModalForSlot = (slot: TutorCalendarSlot) => {
     setSelectedSlotForEdit(slot);
@@ -270,9 +273,11 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
       onUpdateSlot(newSlot);
     }
 
-    setToastMessage(`Public Live Class "${newOrUpdatedClass.title}" ${editingPublicClass ? 'updated' : 'scheduled & broadcasted'} successfully!`);
+    showToast({
+      message: `Public Live Class "${newOrUpdatedClass.title}" ${editingPublicClass ? 'updated' : 'scheduled & broadcasted'} successfully.`,
+      variant: 'success',
+    });
     setIsPublicClassModalOpen(false);
-    setTimeout(() => setToastMessage(''), 4500);
   };
 
   const handlePublishCourse = () => {
@@ -318,11 +323,30 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
 
     onAddCourse(newCourse);
     setIsWizardOpen(false);
-    alert('Course published successfully! It is now live in the course discovery library.');
+    showToast({ message: 'Course published — now live in the course discovery library.', variant: 'success' });
   };
 
+  const wizardFooter = (
+    <>
+      {wizardStep > 1 && (
+        <Button variant="ghost" size="sm" className="mr-auto" onClick={() => setWizardStep((wizardStep - 1) as 1 | 2 | 3)}>
+          ← Back
+        </Button>
+      )}
+      {wizardStep < 4 ? (
+        <Button variant="secondary" size="sm" onClick={() => setWizardStep((wizardStep + 1) as 2 | 3 | 4)}>
+          {wizardStep === 1 ? 'Next: Asset Upload →' : wizardStep === 2 ? 'Next: Lesson Builder →' : 'Next: Review & Publish →'}
+        </Button>
+      ) : (
+        <Button variant="primary" size="sm" onClick={handlePublishCourse}>
+          🚀 Publish Course Now
+        </Button>
+      )}
+    </>
+  );
+
   return (
-    <div className="space-y-8 w-full max-w-7xl mx-auto">
+    <div id="availability-performance" className="scroll-mt-24 space-y-8 w-full">
 
       {/* Educator Studio Header & Online/Offline Status Switcher */}
       <div className="rounded-3xl bg-[#143358] border border-white/10 p-6 sm:p-8 text-white shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -367,7 +391,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs space-y-1">
           <p className="text-xs text-[#5E6A79] font-medium">Total Teaching Revenue</p>
-          <p className="text-2xl font-bold font-display text-[#EC7B38]">$4,650.00</p>
+          <p className="text-2xl font-bold font-display text-[#BA5012]">$4,650.00</p>
           <p className="text-[10px] text-[#179765] font-semibold">↑ +18% this month</p>
         </div>
 
@@ -383,7 +407,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
           <p className="text-[10px] text-[#179765] font-semibold">4.95 ★ Average Rating</p>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs space-y-1 flex flex-col justify-between">
+        <div id="course-publishing" className="scroll-mt-24 p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs space-y-1 flex flex-col justify-between">
           <p className="text-xs text-[#5E6A79] font-medium">Course Creation</p>
           <button
             onClick={() => {
@@ -424,7 +448,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
               />
               <Legend />
               <Bar dataKey="earnings" name="Monthly Revenue ($)" fill="#143358" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="hours" name="Teaching Hours" fill="#EC7B38" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="hours" name="Teaching Hours" fill="#BA5012" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -432,18 +456,6 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
 
       {/* SECTION 2: Calendar Slot Management & Public Live Classes */}
       <div className="p-6 rounded-3xl bg-white border border-[#E1DED4] shadow-xs space-y-6">
-        {toastMessage && (
-          <div className="p-4 rounded-2xl bg-[#179765]/10 border border-[#179765]/30 text-[#179765] text-xs font-bold flex items-center justify-between animate-fade-in">
-            <span className="flex items-center space-x-2">
-              <CheckCircle2 className="w-4 h-4 text-[#179765]" />
-              <span>{toastMessage}</span>
-            </span>
-            <button onClick={() => setToastMessage('')} className="text-[#179765] hover:opacity-80">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-bold font-display text-[#142030] flex items-center space-x-2">
@@ -458,7 +470,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
           <div className="flex items-center space-x-2">
             <button
               onClick={handleOpenNewPublicClassModal}
-              className="px-4 py-2 bg-[#EC7B38] hover:bg-[#EC7B38]/90 text-white rounded-xl text-xs font-bold shadow-md shadow-[#EC7B38]/20 flex items-center space-x-1.5 transition-all"
+              className="px-4 py-2 bg-[#BA5012] hover:bg-[#BA5012]/90 text-white rounded-xl text-xs font-bold shadow-md shadow-[#BA5012]/20 flex items-center space-x-1.5 transition-all"
             >
               <Radio className="w-4 h-4" />
               <span>+ Schedule Public Live Class</span>
@@ -491,7 +503,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                 onClick={() => handleOpenPublicClassModalForSlot(slot)}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5 space-y-3 relative group ${
                   isPublic
-                    ? 'bg-[#FAF7EC] border-[#EC7B38]/40 hover:border-[#EC7B38]'
+                    ? 'bg-[#FAF7EC] border-[#BA5012]/40 hover:border-[#BA5012]'
                     : slot.isBooked
                     ? 'bg-[#143358]/5 border-[#143358]/30 hover:border-[#143358]'
                     : 'bg-white border-[#E1DED4] hover:border-[#143358]'
@@ -506,7 +518,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                   <span
                     className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center space-x-1 ${
                       isPublic
-                        ? 'bg-[#EC7B38] text-white'
+                        ? 'bg-[#BA5012] text-white'
                         : slot.isBooked
                         ? 'bg-[#143358] text-white'
                         : 'bg-[#179765]/10 text-[#179765] border border-[#179765]/20'
@@ -542,12 +554,12 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                   )}
 
                   {isPublic && matchedPublicClass && (
-                    <div className="p-2 rounded-xl bg-[#EC7B38]/10 text-[#142030] text-[11px] font-semibold space-y-1 border border-[#EC7B38]/20">
+                    <div className="p-2 rounded-xl bg-[#BA5012]/10 text-[#142030] text-[11px] font-semibold space-y-1 border border-[#BA5012]/20">
                       <div className="flex items-center justify-between">
                         <span>Price: ${matchedPublicClass.flatPrice.toFixed(2)}</span>
                         <span>{matchedPublicClass.subscribers.length} Registered</span>
                       </div>
-                      <p className="text-[10px] text-[#EC7B38] truncate">{matchedPublicClass.meetingUrl}</p>
+                      <p className="text-[10px] text-[#BA5012] truncate">{matchedPublicClass.meetingUrl}</p>
                     </div>
                   )}
                 </div>
@@ -569,7 +581,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
         <div className="pt-4 border-t border-[#E1DED4] space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-extrabold font-display text-[#142030] flex items-center space-x-2">
-              <Radio className="w-4 h-4 text-[#EC7B38]" />
+              <Radio className="w-4 h-4 text-[#BA5012]" />
               <span>Broadcasting Roster: Active Public Masterclasses ({publicClasses.length})</span>
             </h4>
             <span className="text-xs text-[#5E6A79]">
@@ -581,11 +593,11 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
             {publicClasses.map((pClass) => (
               <div
                 key={pClass.id}
-                className="p-4 rounded-2xl border border-[#E1DED4] bg-white space-y-3 shadow-2xs hover:border-[#EC7B38] transition-all"
+                className="p-4 rounded-2xl border border-[#E1DED4] bg-white space-y-3 shadow-2xs hover:border-[#BA5012] transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FAF7EC] text-[#EC7B38] border border-[#EC7B38]/20 uppercase">
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FAF7EC] text-[#BA5012] border border-[#BA5012]/20 uppercase">
                       {pClass.subject} • {pClass.durationMinutes} MINS
                     </span>
                     <h5 className="font-bold font-display text-[#142030] text-sm mt-1">{pClass.title}</h5>
@@ -604,7 +616,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
 
                 <div className="flex items-center justify-between text-xs text-[#142030] pt-2 border-t border-[#E1DED4] font-semibold">
                   <span>📅 {pClass.scheduledDate} at {pClass.scheduledTime}</span>
-                  <span className="text-[#EC7B38] font-bold">${pClass.flatPrice.toFixed(2)} (${pClass.pricePerMinute.toFixed(2)}/min)</span>
+                  <span className="text-[#BA5012] font-bold">${pClass.flatPrice.toFixed(2)} (${pClass.pricePerMinute.toFixed(2)}/min)</span>
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] text-[#5E6A79] pt-1">
@@ -620,41 +632,29 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
         </div>
       </div>
 
-      {/* Course Creation Wizard Modal */}
+      {/* Course Creation Wizard side panel */}
       {isWizardOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 border border-slate-200 shadow-2xl overflow-y-auto max-h-[90vh]">
-
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-              <div>
-                <span className="text-[10px] font-extrabold text-indigo-600 uppercase">
-                  Step {wizardStep} of 4
-                </span>
-                <h3 className="text-xl font-extrabold text-slate-900">
-                  Course Creation Wizard
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsWizardOpen(false)}
-                className="text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+        <SidePanel
+          title="Course Creation Wizard"
+          subtitle={`Step ${wizardStep} of 4`}
+          onClose={() => setIsWizardOpen(false)}
+          closeOnBackdropClick={false}
+          width="lg"
+          footer={wizardFooter}
+        >
+          <div className="space-y-6">
             {/* Step Progress Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[10px] font-bold text-slate-500">
-              <div className={`p-2 rounded-xl ${wizardStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-slate-100'}`}>
+              <div className={`p-2 rounded-xl ${wizardStep >= 1 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
                 1. Info & Grade Tag
               </div>
-              <div className={`p-2 rounded-xl ${wizardStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-slate-100'}`}>
+              <div className={`p-2 rounded-xl ${wizardStep >= 2 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
                 2. Assets & Thumb
               </div>
-              <div className={`p-2 rounded-xl ${wizardStep >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100'}`}>
+              <div className={`p-2 rounded-xl ${wizardStep >= 3 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
                 3. Lesson Builder
               </div>
-              <div className={`p-2 rounded-xl ${wizardStep >= 4 ? 'bg-indigo-600 text-white' : 'bg-slate-100'}`}>
+              <div className={`p-2 rounded-xl ${wizardStep >= 4 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
                 4. Review & Publish
               </div>
             </div>
@@ -663,23 +663,23 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
             {wizardStep === 1 && (
               <div className="space-y-4 text-xs">
                 <div>
-                  <label className="font-bold text-slate-800">Course Title:</label>
+                  <label className="font-bold text-[#142030]">Course Title:</label>
                   <input
                     type="text"
                     value={cTitle}
                     onChange={(e) => setCTitle(e.target.value)}
                     placeholder="E.g., Class 12th Physics: Advanced Electromagnetic Waves"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="font-bold text-slate-800">Target Grade Tag:</label>
+                    <label className="font-bold text-[#142030]">Target Grade Tag:</label>
                     <select
                       value={cGradeTag}
                       onChange={(e) => setCGradeTag(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900"
+                      className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                     >
                       <option value="Class 10th">Class 10th</option>
                       <option value="Class 12th">Class 12th</option>
@@ -689,11 +689,11 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-800">Subject Category:</label>
+                    <label className="font-bold text-[#142030]">Subject Category:</label>
                     <select
                       value={cSubject}
                       onChange={(e) => setCSubject(e.target.value as SubjectCategory)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900"
+                      className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                     >
                       <option value="physics">Physics</option>
                       <option value="computer_science">Computer Science</option>
@@ -703,23 +703,14 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-800">Short Summary:</label>
+                  <label className="font-bold text-[#142030]">Short Summary:</label>
                   <textarea
                     value={cShortDesc}
                     onChange={(e) => setCShortDesc(e.target.value)}
                     placeholder="Brief description for discovery cards..."
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                     rows={2}
                   />
-                </div>
-
-                <div className="flex justify-end pt-4">
-                  <button
-                    onClick={() => setWizardStep(2)}
-                    className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold"
-                  >
-                    Next: Asset Upload →
-                  </button>
                 </div>
               </div>
             )}
@@ -728,34 +719,19 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
             {wizardStep === 2 && (
               <div className="space-y-4 text-xs">
                 <div>
-                  <label className="font-bold text-slate-800">Thumbnail Image URL:</label>
+                  <label className="font-bold text-[#142030]">Thumbnail Image URL:</label>
                   <input
                     type="text"
                     value={cThumbnail}
                     onChange={(e) => setCThumbnail(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   />
                 </div>
 
-                <div className="p-6 rounded-2xl border-2 border-dashed border-slate-300 text-center space-y-2">
-                  <Upload className="w-8 h-8 mx-auto text-indigo-600" />
-                  <p className="font-bold text-slate-800">Drag & Drop Syllabus PDF or Asset Files</p>
+                <div className="p-6 rounded-2xl border-2 border-dashed border-[#E1DED4] text-center space-y-2">
+                  <Upload className="w-8 h-8 mx-auto text-[#143358]" />
+                  <p className="font-bold text-[#142030]">Drag & Drop Syllabus PDF or Asset Files</p>
                   <p className="text-slate-500 text-[10px]">Supports .pdf, .docx, .py up to 50MB</p>
-                </div>
-
-                <div className="flex justify-between pt-4">
-                  <button
-                    onClick={() => setWizardStep(1)}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    onClick={() => setWizardStep(3)}
-                    className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold"
-                  >
-                    Next: Lesson Builder →
-                  </button>
                 </div>
               </div>
             )}
@@ -763,11 +739,11 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
             {/* STEP 3: Lessons */}
             {wizardStep === 3 && (
               <div className="space-y-4 text-xs">
-                <h4 className="font-bold text-slate-900">Module Lessons ({lessons.length})</h4>
+                <h4 className="font-bold text-[#142030]">Module Lessons ({lessons.length})</h4>
 
                 {lessons.map((les, idx) => (
-                  <div key={les.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                    <p className="font-bold text-indigo-700">Lesson {idx + 1}</p>
+                  <div key={les.id} className="p-4 rounded-2xl bg-[#FAF7EC] border border-[#E1DED4] space-y-2">
+                    <p className="font-bold text-[#143358]">Lesson {idx + 1}</p>
                     <input
                       type="text"
                       value={les.title}
@@ -776,7 +752,7 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                         updated[idx].title = e.target.value;
                         setLessons(updated);
                       }}
-                      className="w-full p-2 bg-white rounded-xl border border-slate-200 text-xs font-semibold text-slate-900"
+                      className="w-full p-2 bg-white rounded-xl border border-[#E1DED4] text-xs font-semibold text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                     />
                   </div>
                 ))}
@@ -794,119 +770,42 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                       },
                     ])
                   }
-                  className="w-full py-2 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-200"
+                  className="w-full py-2 bg-[#143358]/10 text-[#143358] hover:bg-[#143358]/20 font-bold rounded-xl border border-[#143358]/20"
                 >
                   + Add Lesson
                 </button>
-
-                <div className="flex justify-between pt-4">
-                  <button
-                    onClick={() => setWizardStep(2)}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    onClick={() => setWizardStep(4)}
-                    className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold"
-                  >
-                    Next: Review & Publish →
-                  </button>
-                </div>
               </div>
             )}
 
             {/* STEP 4: Review & Publish */}
             {wizardStep === 4 && (
               <div className="space-y-4 text-xs">
-                <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 space-y-2">
-                  <p className="font-bold text-indigo-900 text-sm">{cTitle || 'Untitled Course'}</p>
-                  <p className="text-slate-700">Target Grade Tag: <span className="font-bold">{cGradeTag}</span></p>
-                  <p className="text-slate-700">Subject: <span className="font-bold">{cSubject}</span></p>
-                  <p className="text-slate-700">Lessons Count: <span className="font-bold">{lessons.length}</span></p>
-                </div>
-
-                <div className="flex justify-between pt-4">
-                  <button
-                    onClick={() => setWizardStep(3)}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    onClick={handlePublishCourse}
-                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow-lg shadow-emerald-600/20"
-                  >
-                    🚀 Publish Course Now
-                  </button>
+                <div className="p-4 rounded-2xl bg-[#143358]/5 border border-[#143358]/20 space-y-2">
+                  <p className="font-bold text-[#143358] text-sm">{cTitle || 'Untitled Course'}</p>
+                  <p className="text-[#142030]">Target Grade Tag: <span className="font-bold">{cGradeTag}</span></p>
+                  <p className="text-[#142030]">Subject: <span className="font-bold">{cSubject}</span></p>
+                  <p className="text-[#142030]">Lessons Count: <span className="font-bold">{lessons.length}</span></p>
                 </div>
               </div>
             )}
-
           </div>
-        </div>
+        </SidePanel>
       )}
 
-      {/* Add Slot Modal */}
+      {/* Add Slot side panel */}
       {isSlotModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-200 shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-900">Add Teaching Calendar Slot</h3>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700">Date:</label>
-                <input
-                  type="date"
-                  value={slotDate}
-                  onChange={(e) => setSlotDate(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-bold text-slate-700">Start Time:</label>
-                  <input
-                    type="text"
-                    value={slotStart}
-                    onChange={(e) => setSlotStart(e.target.value)}
-                    placeholder="02:00 PM"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700">End Time:</label>
-                  <input
-                    type="text"
-                    value={slotEnd}
-                    onChange={(e) => setSlotEnd(e.target.value)}
-                    placeholder="03:00 PM"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 mt-1"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700">Topic / Agenda:</label>
-                <input
-                  type="text"
-                  value={slotTopic}
-                  onChange={(e) => setSlotTopic(e.target.value)}
-                  placeholder="E.g., Class 12th Board Exam Physics Derivations"
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 mt-1"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-3">
-              <button
-                onClick={() => setIsSlotModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold"
-              >
+        <SidePanel
+          title="Add Teaching Calendar Slot"
+          onClose={() => setIsSlotModalOpen(false)}
+          closeOnBackdropClick={false}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setIsSlotModalOpen(false)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   if (onUpdateSlot) {
                     onUpdateSlot({
@@ -924,110 +823,133 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                       topic: slotTopic,
                     });
                   }
-                  setToastMessage('New teaching calendar slot added!');
+                  showToast({ message: 'New teaching calendar slot added.', variant: 'success' });
                   setIsSlotModalOpen(false);
-                  setTimeout(() => setToastMessage(''), 4000);
                 }}
-                className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md"
               >
                 Save Slot
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </Button>
+            </>
+          }
+        >
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-[#142030]">Date:</label>
+                <input
+                  type="date"
+                  value={slotDate}
+                  onChange={(e) => setSlotDate(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] mt-1 focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
+                />
+              </div>
 
-      {/* Interactive Public Live Class & Calendar Slot Editor Modal */}
-      {isPublicClassModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 space-y-5 border border-slate-200 shadow-2xl overflow-y-auto max-h-[90vh]">
-
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
-                  <Radio className="w-5 h-5 animate-pulse" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-[#142030]">Start Time:</label>
+                  <input
+                    type="text"
+                    value={slotStart}
+                    onChange={(e) => setSlotStart(e.target.value)}
+                    placeholder="02:00 PM"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] mt-1 focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
+                  />
                 </div>
                 <div>
-                  <h3 className="text-lg font-extrabold text-slate-900">
-                    {editingPublicClass ? 'Modify Public Live Class Session' : 'Create & Schedule Public Live Class'}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    {selectedSlotForEdit
-                      ? `Linked to Calendar Slot: ${selectedSlotForEdit.date} (${selectedSlotForEdit.startTime})`
-                      : 'Broadcasting live session to all students on FlexDemy'}
-                  </p>
+                  <label className="font-bold text-[#142030]">End Time:</label>
+                  <input
+                    type="text"
+                    value={slotEnd}
+                    onChange={(e) => setSlotEnd(e.target.value)}
+                    placeholder="03:00 PM"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] mt-1 focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
+                  />
                 </div>
               </div>
 
-              <button
-                onClick={() => setIsPublicClassModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div>
+                <label className="font-bold text-[#142030]">Topic / Agenda:</label>
+                <input
+                  type="text"
+                  value={slotTopic}
+                  onChange={(e) => setSlotTopic(e.target.value)}
+                  placeholder="E.g., Class 12th Board Exam Physics Derivations"
+                  className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs text-[#142030] mt-1 focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
+                />
+              </div>
             </div>
+        </SidePanel>
+      )}
 
-            <form onSubmit={handleSavePublicClassModal} className="space-y-4 text-xs">
+      {/* Interactive Public Live Class & Calendar Slot Editor side panel */}
+      {isPublicClassModalOpen && (
+        <SidePanel
+          title={editingPublicClass ? 'Modify Public Live Class Session' : 'Create & Schedule Public Live Class'}
+          subtitle={
+            selectedSlotForEdit
+              ? `Linked to Calendar Slot: ${selectedSlotForEdit.date} (${selectedSlotForEdit.startTime})`
+              : 'Broadcasting live session to all students on FlexDemy'
+          }
+          onClose={() => setIsPublicClassModalOpen(false)}
+          closeOnBackdropClick={false}
+          width="lg"
+          footer={
+            <>
+              <Button variant="ghost" size="sm" type="button" onClick={() => setIsPublicClassModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" size="sm" type="submit" form="public-class-form" icon={<Sparkles className="w-4 h-4" />}>
+                {editingPublicClass ? 'Save Changes' : '🚀 Save & Broadcast Public Session'}
+              </Button>
+            </>
+          }
+        >
+            <form id="public-class-form" onSubmit={handleSavePublicClassModal} className="space-y-4 text-xs">
               {/* Session Type Toggle */}
               <div>
-                <label className="font-bold text-slate-800">Session Mode:</label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => setPcSessionType('public_class')}
-                    className={`p-3 rounded-2xl border text-left font-bold transition-all flex items-center space-x-2 ${
-                      pcSessionType === 'public_class'
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/20'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Radio className="w-4 h-4 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold">Public Live Class</p>
-                      <p className="text-[10px] font-normal opacity-90">Open broadcast for multiple students</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPcSessionType('one_on_one')}
-                    className={`p-3 rounded-2xl border text-left font-bold transition-all flex items-center space-x-2 ${
-                      pcSessionType === 'one_on_one'
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Users className="w-4 h-4 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold">1-on-1 Tutoring</p>
-                      <p className="text-[10px] font-normal opacity-90">Private single student booking</p>
-                    </div>
-                  </button>
-                </div>
+                <label className="font-bold text-[#142030]">Session Mode:</label>
+                <ChoiceToggle
+                  value={pcSessionType}
+                  onChange={setPcSessionType}
+                  options={[
+                    {
+                      value: 'public_class',
+                      label: 'Public Live Class',
+                      description: 'Open broadcast for multiple students',
+                      icon: Radio,
+                      selectedClassName: 'bg-[#143358] text-white border-[#143358]',
+                    },
+                    {
+                      value: 'one_on_one',
+                      label: '1-on-1 Tutoring',
+                      description: 'Private single student booking',
+                      icon: Users,
+                      selectedClassName: 'bg-[#BA5012] text-white border-[#BA5012]',
+                    },
+                  ]}
+                />
               </div>
 
               {/* Class Title */}
               <div>
-                <label className="font-bold text-slate-800">Live Masterclass Title:</label>
+                <label className="font-bold text-[#142030]">Live Masterclass Title:</label>
                 <input
                   type="text"
                   required
                   value={pcTitle}
                   onChange={(e) => setPcTitle(e.target.value)}
                   placeholder="E.g., Class 12th Quantum Grover Algorithm & Qiskit Live Proof"
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                  className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                 />
               </div>
 
               {/* Subject & Duration */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-800">Subject Category:</label>
+                  <label className="font-bold text-[#142030]">Subject Category:</label>
                   <select
                     value={pcSubject}
                     onChange={(e) => setPcSubject(e.target.value as SubjectCategory)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   >
                     <option value="physics">Physics</option>
                     <option value="computer_science">Computer Science</option>
@@ -1036,14 +958,14 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-800">Duration (Minutes):</label>
+                  <label className="font-bold text-[#142030]">Duration (Minutes):</label>
                   <input
                     type="number"
                     min="15"
                     max="180"
                     value={pcDuration}
                     onChange={(e) => setPcDuration(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   />
                 </div>
               </div>
@@ -1051,25 +973,25 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
               {/* Date & Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-800">Scheduled Date:</label>
+                  <label className="font-bold text-[#142030]">Scheduled Date:</label>
                   <input
                     type="date"
                     required
                     value={pcDate}
                     onChange={(e) => setPcDate(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   />
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-800">Start Time:</label>
+                  <label className="font-bold text-[#142030]">Start Time:</label>
                   <input
                     type="text"
                     required
                     value={pcTime}
                     onChange={(e) => setPcTime(e.target.value)}
                     placeholder="04:00 PM EST"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   />
                 </div>
               </div>
@@ -1077,74 +999,54 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
               {/* Pricing */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-800">Flat Admission Price ($):</label>
+                  <label className="font-bold text-[#142030]">Flat Admission Price ($):</label>
                   <input
                     type="number"
                     step="0.5"
                     value={pcFlatPrice}
                     onChange={(e) => setPcFlatPrice(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   />
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-800">Price Per Minute ($):</label>
+                  <label className="font-bold text-[#142030]">Price Per Minute ($):</label>
                   <input
                     type="number"
                     step="0.05"
                     value={pcPricePerMinute}
                     onChange={(e) => setPcPricePerMinute(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                   />
                 </div>
               </div>
 
               {/* Meeting Link */}
               <div>
-                <label className="font-bold text-slate-800">Virtual Room / Live Meeting URL:</label>
+                <label className="font-bold text-[#142030]">Virtual Room / Live Meeting URL:</label>
                 <input
                   type="text"
                   required
                   value={pcMeetingUrl}
                   onChange={(e) => setPcMeetingUrl(e.target.value)}
                   placeholder="https://meet.flexdemy.edu/public-room-101"
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                  className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                 />
               </div>
 
               {/* Description / Agenda */}
               <div>
-                <label className="font-bold text-slate-800">Short Description & Learning Agenda:</label>
+                <label className="font-bold text-[#142030]">Short Description & Learning Agenda:</label>
                 <textarea
                   rows={3}
                   value={pcDescription}
                   onChange={(e) => setPcDescription(e.target.value)}
                   placeholder="Describe key derivations, problem sets, or coding walkthroughs covered..."
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs mt-1 text-slate-900 font-medium"
+                  className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] font-medium focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                 />
               </div>
-
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsPublicClassModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-extrabold shadow-lg shadow-purple-600/30 flex items-center space-x-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>{editingPublicClass ? 'Save Changes' : '🚀 Save & Broadcast Public Session'}</span>
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
+        </SidePanel>
       )}
 
     </div>

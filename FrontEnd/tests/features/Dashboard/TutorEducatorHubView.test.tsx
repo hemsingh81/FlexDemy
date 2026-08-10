@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TutorEducatorHubView } from '@/src/features/TutorHub/TutorEducatorHubView';
+import { TutorEducatorHubView } from '@/src/features/Dashboard/TutorEducatorHubView';
 import { UserProfile } from '@/src/types';
 
 const user: UserProfile = {

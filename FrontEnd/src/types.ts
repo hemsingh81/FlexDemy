@@ -57,6 +57,47 @@ export interface TopicAssignment {
   maxPoints: number;
 }
 
+// Assignments merged into Dashboard (PRD: prd-eLearning-Assignments-2026-08-10) --------------
+
+export type AssignmentSource = 'course' | 'tutor' | 'competition';
+export type AssignmentStatus = 'draft' | 'published';
+export type VisibilityMode = 'immediate' | 'hold';
+export type SubmissionStatus = 'submitted' | 'reviewed';
+
+// A tutor-created assignment (Source = 'tutor' or 'competition'). Course-source assignments
+// stay represented by the existing Lesson.assignment (TopicAssignment) -- this type only covers
+// the new tutor-authored kind.
+export interface TutorAssignment {
+  id: string;
+  title: string;
+  description: string;
+  questions: QuizQuestion[];
+  source: 'tutor' | 'competition';
+  courseId?: string; // required when source === 'tutor'; absent for 'competition'
+  courseTitle?: string;
+  tutorId: string;
+  tutorName: string;
+  status: AssignmentStatus;
+  visibilityMode: VisibilityMode;
+  createdAt: string;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  assignmentSource: AssignmentSource;
+  assignmentTitle: string;
+  studentId: string;
+  studentName: string;
+  answers: Record<string, number>;
+  correctCount: number;
+  totalQuestions: number;
+  percentage: number;
+  status: SubmissionStatus;
+  submittedAt: string;
+  reviewedAt?: string;
+}
+
 export interface Lesson {
   id: string;
   title: string;

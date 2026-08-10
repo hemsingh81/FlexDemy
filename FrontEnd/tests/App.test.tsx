@@ -24,9 +24,7 @@ vi.mock('@/src/services/rolePermissionsService');
 const ALL_VISIBLE_PERMISSIONS: Record<string, boolean> = {
   dashboard: true,
   discover: true,
-  tutor: true,
   groups: true,
-  assignments: true,
   certificates: true,
   admin: true,
   'courses.create': true,

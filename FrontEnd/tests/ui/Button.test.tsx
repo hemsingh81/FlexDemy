@@ -21,7 +21,7 @@ describe('Button', () => {
 
   it('applies the primary (orange) and danger (red) variant classes', () => {
     const { rerender } = render(<Button variant="primary">Add</Button>);
-    expect(screen.getByRole('button', { name: 'Add' }).className).toContain('bg-[#EC7B38]');
+    expect(screen.getByRole('button', { name: 'Add' }).className).toContain('bg-[#BA5012]');
 
     rerender(<Button variant="danger">Delete</Button>);
     expect(screen.getByRole('button', { name: 'Delete' }).className).toContain('bg-red-600');

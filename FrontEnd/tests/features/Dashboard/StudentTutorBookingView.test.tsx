@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { StudentTutorBookingView } from '@/src/features/TutorHub/StudentTutorBookingView';
+import { StudentTutorBookingView } from '@/src/features/Dashboard/StudentTutorBookingView';
 import { TutorCalendarSlot, UserProfile } from '@/src/types';
 
 const user: UserProfile = {

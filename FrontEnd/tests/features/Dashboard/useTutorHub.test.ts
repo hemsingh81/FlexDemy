@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { useTutorHub } from '@/src/features/TutorHub/useTutorHub';
+import { useTutorHub } from '@/src/features/Dashboard/useTutorHub';
 import { useDomain } from '@/src/context/DomainContext';
 import * as tutorService from '@/src/services/tutorService';
 import * as groupStudyService from '@/src/services/groupStudyService';

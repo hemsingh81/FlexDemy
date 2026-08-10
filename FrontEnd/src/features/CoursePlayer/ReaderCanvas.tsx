@@ -249,7 +249,7 @@ export const ReaderCanvas: React.FC<ReaderCanvasProps> = ({
             }}
             className={`p-5 sm:p-6 rounded-3xl transition-all border ${
               isActive
-                ? 'bg-[#FAF7EC] border-[#EC7B38] shadow-md ring-2 ring-[#EC7B38]/30 active-sentence-highlight'
+                ? 'bg-[#FAF7EC] border-[#BA5012] shadow-md ring-2 ring-[#BA5012]/30 active-sentence-highlight'
                 : 'bg-white border-[#E1DED4] hover:bg-[#FCFAF4] hover:border-slate-300 shadow-2xs'
             }`}
           >
@@ -274,7 +274,7 @@ export const ReaderCanvas: React.FC<ReaderCanvasProps> = ({
                     className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-[#FAF7EC] hover:bg-[#143358] text-[#143358] hover:text-white border border-[#E1DED4] text-[10px] font-bold transition-all cursor-pointer"
                     title={`Add scratchpad note for Paragraph ${index + 1}`}
                   >
-                    <NotebookPen className="w-3 h-3 text-[#EC7B38]" />
+                    <NotebookPen className="w-3 h-3 text-[#BA5012]" />
                     <span>Note</span>
                   </button>
                 )}
@@ -292,7 +292,7 @@ export const ReaderCanvas: React.FC<ReaderCanvasProps> = ({
                     className={`inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-sm transition-all transform hover:scale-105 ${
                       isDrillExpanded
                         ? 'bg-[#143358] text-white ring-2 ring-[#143358]/30'
-                        : 'bg-[#EC7B38] hover:bg-[#EC7B38]/90 text-white'
+                        : 'bg-[#BA5012] hover:bg-[#BA5012]/90 text-white'
                     }`}
                   >
                     <Sparkles className="w-3.5 h-3.5" />

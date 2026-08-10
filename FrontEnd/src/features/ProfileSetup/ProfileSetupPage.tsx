@@ -29,10 +29,10 @@ export const ProfileSetupPage: React.FC<ProfileSetupPageProps> = ({ onSignOut })
           <button
             type="button"
             onClick={() => chooseRole('Student')}
-            className="text-left p-5 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#EC7B38] hover:shadow-md transition-all cursor-pointer space-y-3"
+            className="text-left p-5 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#BA5012] hover:shadow-md transition-all cursor-pointer space-y-3"
           >
-            <div className="w-10 h-10 rounded-xl bg-[#EC7B38]/15 flex items-center justify-center">
-              <BookOpen className="w-5 h-5 text-[#EC7B38]" />
+            <div className="w-10 h-10 rounded-xl bg-[#BA5012]/15 flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-[#BA5012]" />
             </div>
             <div>
               <p className="font-bold text-sm text-[#142030]">I'm a Student</p>
@@ -45,7 +45,7 @@ export const ProfileSetupPage: React.FC<ProfileSetupPageProps> = ({ onSignOut })
           <button
             type="button"
             onClick={() => chooseRole('Tutor')}
-            className="text-left p-5 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#EC7B38] hover:shadow-md transition-all cursor-pointer space-y-3"
+            className="text-left p-5 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#BA5012] hover:shadow-md transition-all cursor-pointer space-y-3"
           >
             <div className="w-10 h-10 rounded-xl bg-[#143358]/10 flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-[#143358]" />

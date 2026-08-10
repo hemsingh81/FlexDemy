@@ -164,7 +164,7 @@ export const GroupStudyView: React.FC = () => {
 
             {/* Live Synchronized Reader Status Bar - Matched to Lumen Ink Navy #143358 */}
             <div className="p-6 rounded-3xl bg-[#143358] text-white space-y-3 shadow-xl border border-white/10 relative overflow-hidden">
-              <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-[#EC7B38]/15 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-[#BA5012]/15 rounded-full blur-2xl pointer-events-none" />
 
               <div className="flex items-center justify-between text-xs relative z-10">
                 <span className="font-bold text-[#EC7B38] uppercase tracking-wider flex items-center space-x-1.5">
@@ -217,7 +217,7 @@ export const GroupStudyView: React.FC = () => {
                   value={whiteboardText}
                   onChange={(e) => setWhiteboardText(e.target.value)}
                   placeholder="Type formula or note for whiteboard..."
-                  className="flex-1 px-3.5 py-2.5 bg-[#FAF7EC] border border-[#E1DED4] rounded-xl text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#EC7B38]"
+                  className="flex-1 px-3.5 py-2.5 bg-[#FAF7EC] border border-[#E1DED4] rounded-xl text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
                 />
                 <button
                   onClick={handleAddWhiteboardNote}
@@ -284,7 +284,7 @@ export const GroupStudyView: React.FC = () => {
                 return (
                   <div key={msg.id} className="space-y-0.5">
                     <div className="flex items-center justify-between text-[10px] text-[#5E6A79]">
-                      <span className={`font-bold ${isUser ? 'text-[#EC7B38]' : 'text-[#142030]'}`}>
+                      <span className={`font-bold ${isUser ? 'text-[#BA5012]' : 'text-[#142030]'}`}>
                         {msg.sender}
                       </span>
                       <span>{msg.timestamp}</span>
@@ -308,7 +308,7 @@ export const GroupStudyView: React.FC = () => {
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Share a tip or ask peers..."
-                className="flex-1 px-3 py-2 bg-[#FAF7EC] border border-[#E1DED4] rounded-xl text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#EC7B38]"
+                className="flex-1 px-3 py-2 bg-[#FAF7EC] border border-[#E1DED4] rounded-xl text-xs text-[#142030] placeholder-[#5E6A79] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
               />
               <button
                 type="submit"

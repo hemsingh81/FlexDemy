@@ -38,7 +38,7 @@ export const TutorRejectedPage: React.FC<TutorRejectedPageProps> = ({ onSignOut 
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#FAF7EC] px-6 py-12">
       <div className="w-full max-w-xl bg-white border border-[#E1DED4] rounded-2xl shadow-md p-8 space-y-5">
         <div className="flex items-center justify-center space-x-2">
-          <div className="w-9 h-9 rounded-xl bg-[#EC7B38] flex items-center justify-center shadow-md shadow-[#EC7B38]/30">
+          <div className="w-9 h-9 rounded-xl bg-[#BA5012] flex items-center justify-center shadow-md shadow-[#BA5012]/30">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span className="text-lg font-bold font-display text-[#142030]">FlexDemy</span>
@@ -61,16 +61,16 @@ export const TutorRejectedPage: React.FC<TutorRejectedPageProps> = ({ onSignOut 
               <button
                 type="button"
                 onClick={() => setAction('reapply')}
-                className="p-4 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#EC7B38] hover:shadow-md transition-all cursor-pointer space-y-2 text-left"
+                className="p-4 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#BA5012] hover:shadow-md transition-all cursor-pointer space-y-2 text-left"
               >
-                <RotateCcw className="w-5 h-5 text-[#EC7B38]" />
+                <RotateCcw className="w-5 h-5 text-[#BA5012]" />
                 <p className="font-bold text-sm text-[#142030]">Re-apply as Tutor</p>
                 <p className="text-xs text-[#5E6A79]">Update your application and submit it for another review.</p>
               </button>
               <button
                 type="button"
                 onClick={() => setAction('switch')}
-                className="p-4 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#EC7B38] hover:shadow-md transition-all cursor-pointer space-y-2 text-left"
+                className="p-4 bg-white border border-[#E1DED4] rounded-2xl hover:border-[#BA5012] hover:shadow-md transition-all cursor-pointer space-y-2 text-left"
               >
                 <UserCog className="w-5 h-5 text-[#143358]" />
                 <p className="font-bold text-sm text-[#142030]">Continue as Student instead</p>

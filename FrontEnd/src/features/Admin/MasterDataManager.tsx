@@ -11,7 +11,7 @@ import { TypeaheadMultiSelect } from '../../ui/TypeaheadMultiSelect';
 // and every table's fetchAll always passes includeInactive=true -- this is the admin screen,
 // so Master/Support need to see (and reactivate) deactivated rows, not just active ones.
 const selectClassName =
-  'px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#EC7B38]';
+  'px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]';
 
 export const MasterDataManager: React.FC = () => {
   const [activeEntity, setActiveEntity] = useState<MasterDataEntity>('country');

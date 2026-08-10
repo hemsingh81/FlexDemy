@@ -23,9 +23,7 @@ const user: UserProfile = {
 const allVisible: Record<string, boolean> = {
   dashboard: true,
   discover: true,
-  tutor: true,
   groups: true,
-  assignments: true,
   certificates: true,
   admin: true,
 };

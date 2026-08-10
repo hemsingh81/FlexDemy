@@ -40,7 +40,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab: controlled
           this used to duplicate that with its own in-page dropdown here at the top-left of the
           page, which was redundant and is now just a static heading for orientation. */}
       <div className="flex items-center gap-2.5">
-        <ActiveIcon className="w-5 h-5 text-[#EC7B38]" />
+        <ActiveIcon className="w-5 h-5 text-[#BA5012]" />
         <h2 className="text-sm font-bold text-[#142030]">{activeMeta.label}</h2>
       </div>
 

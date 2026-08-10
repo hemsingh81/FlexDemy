@@ -71,7 +71,7 @@ import { Button } from '../../ui/Button';
 <Button
   type="submit"
   fullWidth
-  variant="secondary"                     // 'primary' (#EC7B38 orange) | 'secondary' (#143358 navy, default) | 'danger' (red-600)
+  variant="secondary"                     // 'primary' (#BA5012 orange) | 'secondary' (#143358 navy, default) | 'danger' (red-600)
   isLoading={isSubmitting}
   loadingText="Signing In..."             // optional: replaces children while loading
   icon={<LogIn className="w-4 h-4" />}    // leading icon; swapped for a Spinner while loading

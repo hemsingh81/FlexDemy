@@ -44,7 +44,7 @@ export const OfflineProgressToast: React.FC<OfflineProgressToastProps> = ({ isOf
           ? 'bg-[#142030] text-white border-[#143358]'
           : 'bg-[#179765] text-white border-[#179765]'
       }`}>
-        <div className={`p-2 rounded-xl ${isOffline ? 'bg-[#EC7B38]' : 'bg-white/20'}`}>
+        <div className={`p-2 rounded-xl ${isOffline ? 'bg-[#BA5012]' : 'bg-white/20'}`}>
           {isOffline ? (
             <WifiOff className="w-5 h-5 text-white" />
           ) : (
