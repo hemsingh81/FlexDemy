@@ -74,23 +74,19 @@ describe('AdminUserStatusList', () => {
       expect(screen.queryByLabelText('Edit Sam Support')).not.toBeInTheDocument();
     });
 
-    it('clicking Edit reveals an inline panel (Collapse + FormCard, not a modal) prefilled with the row\'s current FirstName/LastName/Email', async () => {
+    it('clicking Edit opens a docked-right side panel prefilled with the row\'s current FirstName/LastName/Email', async () => {
       const uiUser = userEvent.setup();
       render(<AdminUserStatusList fetchUsers={vi.fn().mockResolvedValue(users)} emptyLabel="No users." editable />);
 
       await screen.findByText('Sam Support');
       await uiUser.click(screen.getByLabelText('Edit Sam Support'));
 
-      // The edit panel is a sibling <tr> directly below the row it belongs to -- same shape as
-      // MasterDataTable.tsx's per-row edit panel -- so every row's panel is always in the DOM
-      // (Collapse-hidden when not the one being edited); scope queries to the right row's panel
-      // rather than the page-global screen, since e.g. "First Name" now exists in both rows'
-      // (hidden) panels simultaneously.
-      const editPanelRow = screen.getByText('Sam Support').closest('tr')!.nextElementSibling as HTMLElement;
-      expect(within(editPanelRow).getByText('Edit Sam Support')).toBeInTheDocument();
-      expect((within(editPanelRow).getByLabelText('First Name') as HTMLInputElement).value).toBe('Sam');
-      expect((within(editPanelRow).getByLabelText('Last Name') as HTMLInputElement).value).toBe('Support');
-      expect((within(editPanelRow).getByLabelText('Email') as HTMLInputElement).value).toBe('sam@flexdemy.com');
+      // The edit form now opens inside ui/SidePanel.tsx (role="dialog") rather than an inline
+      // <tr> under the row -- scope queries to the panel rather than the page-global screen.
+      const panel = screen.getByRole('dialog', { name: 'Edit Sam Support' });
+      expect((within(panel).getByLabelText('First Name') as HTMLInputElement).value).toBe('Sam');
+      expect((within(panel).getByLabelText('Last Name') as HTMLInputElement).value).toBe('Support');
+      expect((within(panel).getByLabelText('Email') as HTMLInputElement).value).toBe('sam@flexdemy.com');
     });
 
     it('submitting with a blank required field shows an error and does not call the service; correcting it and resubmitting succeeds', async () => {
@@ -103,16 +99,16 @@ describe('AdminUserStatusList', () => {
 
       await screen.findByText('Sam Support');
       await uiUser.click(screen.getByLabelText('Edit Sam Support'));
-      const editPanelRow = screen.getByText('Sam Support').closest('tr')!.nextElementSibling as HTMLElement;
+      const panel = screen.getByRole('dialog', { name: 'Edit Sam Support' });
 
-      await uiUser.clear(within(editPanelRow).getByLabelText('First Name'));
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      await uiUser.clear(within(panel).getByLabelText('First Name'));
+      await uiUser.click(within(panel).getByText('Save'));
 
-      expect(await within(editPanelRow).findByText('Please fill in all required fields.')).toBeInTheDocument();
+      expect(await within(panel).findByText('Please fill in all required fields.')).toBeInTheDocument();
       expect(updateSpy).not.toHaveBeenCalled();
 
-      await uiUser.type(within(editPanelRow).getByLabelText('First Name'), 'Samantha');
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      await uiUser.type(within(panel).getByLabelText('First Name'), 'Samantha');
+      await uiUser.click(within(panel).getByText('Save'));
 
       await waitFor(() =>
         expect(updateSpy).toHaveBeenCalledWith('usr_1', {
@@ -136,11 +132,12 @@ describe('AdminUserStatusList', () => {
 
       await screen.findByText('Sam Support');
       await uiUser.click(screen.getByLabelText('Edit Sam Support'));
-      const editPanelRow = screen.getByText('Sam Support').closest('tr')!.nextElementSibling as HTMLElement;
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      const panel = screen.getByRole('dialog', { name: 'Edit Sam Support' });
+      await uiUser.click(within(panel).getByText('Save'));
 
       await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
       updateSpy.mockRestore();
     });
@@ -154,13 +151,13 @@ describe('AdminUserStatusList', () => {
 
       await screen.findByText('Sam Support');
       await uiUser.click(screen.getByLabelText('Edit Sam Support'));
-      const editPanelRow = screen.getByText('Sam Support').closest('tr')!.nextElementSibling as HTMLElement;
-      await uiUser.clear(within(editPanelRow).getByLabelText('Email'));
-      await uiUser.type(within(editPanelRow).getByLabelText('Email'), 'taken@x.com');
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      const panel = screen.getByRole('dialog', { name: 'Edit Sam Support' });
+      await uiUser.clear(within(panel).getByLabelText('Email'));
+      await uiUser.type(within(panel).getByLabelText('Email'), 'taken@x.com');
+      await uiUser.click(within(panel).getByText('Save'));
 
-      expect(await within(editPanelRow).findByText("An account already exists for 'taken@x.com'.")).toBeInTheDocument();
-      expect(within(editPanelRow).getByText('Edit Sam Support')).toBeInTheDocument();
+      expect(await within(panel).findByText("An account already exists for 'taken@x.com'.")).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Edit Sam Support' })).toBeInTheDocument();
 
       updateSpy.mockRestore();
     });
@@ -172,13 +169,14 @@ describe('AdminUserStatusList', () => {
 
       await screen.findByText('Sam Support');
       await uiUser.click(screen.getByLabelText('Edit Sam Support'));
-      const editPanelRow = screen.getByText('Sam Support').closest('tr')!.nextElementSibling as HTMLElement;
-      await uiUser.click(within(editPanelRow).getByText('Cancel'));
+      await uiUser.click(screen.getByText('Cancel'));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-      // Clicking Edit again re-opens a freshly-reset panel -- if Cancel had left it "open" this
-      // would find the panel already showing stale state instead of a clean prefill.
+      // Clicking Edit again re-opens a freshly-reset panel -- if Cancel had left stale state
+      // behind, this would find the panel already showing something other than a clean prefill.
       await uiUser.click(screen.getByLabelText('Edit Sam Support'));
-      expect((within(editPanelRow).getByLabelText('First Name') as HTMLInputElement).value).toBe('Sam');
+      const panel = screen.getByRole('dialog', { name: 'Edit Sam Support' });
+      expect((within(panel).getByLabelText('First Name') as HTMLInputElement).value).toBe('Sam');
       expect(updateSpy).not.toHaveBeenCalled();
 
       updateSpy.mockRestore();

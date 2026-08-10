@@ -2,20 +2,22 @@ import React, { useCallback, useId, useState } from 'react';
 import { AlertTriangle, Check, Copy, Plus, X } from 'lucide-react';
 import * as adminUsersService from '../../services/adminUsersService';
 import { AdminUserStatusList } from './AdminUserStatusList';
-import { Collapse } from '../../ui/Collapse';
-import { FormCard, FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
+import { SidePanel } from '../../ui/SidePanel';
+import { Button } from '../../ui/Button';
+import { Alert } from '../../ui/Alert';
+import { FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
 import { useToast } from '../../context/ToastContext';
 
-// Master-only Support account creation (plan §5 item 5), restructured to match the Master Data
-// screens' pattern exactly (see MasterDataTable.tsx: toolbar "Add {Entity}" button -> Collapse
-// -> FormCard above an always-visible grid) rather than the old "Create New"/"All Support Users"
-// tab toggle -- there is exactly one Support Users screen now.
+// Master-only Support account creation (plan §5 item 5), matching the Master Data screens'
+// pattern (see MasterDataTable.tsx): toolbar "Add {Entity}" button opens a docked-right
+// SidePanel above an always-visible grid.
 //
 // The one-time temporary password (CreateSupportUserResponse.temporaryPassword) is still shown
 // exactly once and never retrievable again -- Master must copy/relay it out-of-band. It now
-// renders in place of the create form, inside the same Collapse, immediately after a successful
-// create; the panel only closes (and the value is discarded) when Master explicitly dismisses it,
-// rather than auto-collapsing the moment the account is created.
+// renders in place of the create form, inside the same SidePanel, immediately after a successful
+// create; the panel only closes (and the value is discarded) when Master explicitly dismisses it
+// via the Done button or the panel's own close X -- never via a stray backdrop click
+// (closeOnBackdropClick is false throughout, precisely so this can't be lost by accident).
 const CREATE_FIELDS: FormField[] = [
   { key: 'firstName', label: 'First Name', type: 'text' },
   { key: 'lastName', label: 'Last Name', type: 'text' },
@@ -118,70 +120,63 @@ export const SupportUserCreation: React.FC = () => {
           <h3 className="text-sm font-bold text-[#142030]">Support Users</h3>
           <button
             type="button"
-            onClick={() => (isFormOpen ? closeForm() : openForm())}
+            onClick={openForm}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#BA5012] text-white shadow-md shadow-[#BA5012]/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            {isFormOpen ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-            <span>{isFormOpen ? 'Cancel' : 'Add Support User'}</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Support User</span>
           </button>
         </div>
+      </div>
 
-        {/* Kept mounted (rather than `{isFormOpen && ...}`) so Collapse can animate it open/closed
-            -- see docs/FRONTEND_TRANSITIONS.md. */}
-        <Collapse open={isFormOpen}>
+      {isFormOpen && (
+        <SidePanel
+          title={result ? 'Support account created' : 'Add Support User'}
+          onClose={closeForm}
+          closeOnBackdropClick={false}
+          footer={
+            result ? (
+              <Button variant="secondary" size="sm" onClick={closeForm}>
+                Done
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" type="button" onClick={closeForm}>
+                  Cancel
+                </Button>
+                <Button variant="secondary" size="sm" type="submit" form={`${formIdPrefix}-create-form`} disabled={isSaving}>
+                  {isSaving ? 'Saving...' : 'Save'}
+                </Button>
+              </>
+            )
+          }
+        >
           {result ? (
-            <div className="border border-amber-300 rounded-2xl m-4 overflow-hidden bg-amber-50 shadow-2xs">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-amber-300">
-                <h4 className="text-sm font-bold text-[#142030] flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span>Support account created</span>
-                </h4>
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  aria-label="Close"
-                  className="p-1 rounded-lg text-[#5E6A79] hover:text-[#143358] hover:bg-white/60 transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-4 space-y-3">
-                <p className="text-xs font-semibold text-amber-800">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-amber-800 flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-300">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
                   This temporary password is shown only once -- copy it now and relay it to {result.user.firstName}{' '}
                   {result.user.lastName} out-of-band. It won't be shown again.
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 min-w-0 px-3 py-2 bg-white border border-amber-300 rounded-xl text-sm font-mono text-[#142030] break-all">
-                    {result.temporaryPassword}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#143358] text-white cursor-pointer"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copied ? 'Copied' : 'Copy'}</span>
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-amber-300 bg-amber-100/50">
+                </span>
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 min-w-0 px-3 py-2 bg-white border border-amber-300 rounded-xl text-sm font-mono text-[#142030] break-all">
+                  {result.temporaryPassword}
+                </code>
                 <button
                   type="button"
-                  onClick={closeForm}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-white border border-amber-300 text-[#142030] cursor-pointer"
+                  onClick={handleCopy}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#143358] text-white cursor-pointer"
                 >
-                  Done
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
             </div>
           ) : (
-            <FormCard
-              title="Add Support User"
-              onCancel={closeForm}
-              onSubmit={handleCreate}
-              isSaving={isSaving}
-              errorMessage={formError}
-            >
+            <form id={`${formIdPrefix}-create-form`} onSubmit={handleCreate} className="space-y-3">
+              {formError && <Alert variant="danger">{formError}</Alert>}
               <FieldsGrid
                 fields={CREATE_FIELDS}
                 values={formValues}
@@ -189,10 +184,10 @@ export const SupportUserCreation: React.FC = () => {
                 idPrefix={formIdPrefix}
                 onChange={handleFieldChange}
               />
-            </FormCard>
+            </form>
           )}
-        </Collapse>
-      </div>
+        </SidePanel>
+      )}
 
       <AdminUserStatusList
         key={gridKey}

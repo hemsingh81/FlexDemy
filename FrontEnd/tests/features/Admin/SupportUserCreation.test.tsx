@@ -19,9 +19,10 @@ describe('SupportUserCreation', () => {
     vi.mocked(adminUsersService.getSupportUsers).mockResolvedValue([]);
   });
 
-  // The toolbar's toggle button and the FormCard's own footer button both read "Cancel" while
-  // the form is open, so the toolbar button is looked up by scoping to its row (it's the one
-  // sitting alongside the "Support Users" heading) rather than by ambiguous global text/role.
+  // The toolbar button always reads "Add Support User" and only opens the panel -- closing goes
+  // through the panel's own X or footer Cancel (ui/SidePanel.tsx), not a second click on this
+  // button. Scoped to its row (alongside the "Support Users" heading) rather than global
+  // text/role since the panel's own Cancel button also reads "Cancel" once open.
   const getToolbarButton = () => {
     const toolbar = screen.getByText('Support Users').closest('div') as HTMLElement;
     return within(toolbar).getByRole('button');
@@ -58,21 +59,23 @@ describe('SupportUserCreation', () => {
     expect(screen.queryByText('All Support Users')).not.toBeInTheDocument();
   });
 
-  it('reveals the Add Support User form when the toolbar button is clicked, and toggles it back to Cancel', async () => {
+  it('reveals the Add Support User panel when the toolbar button is clicked, and its own Cancel closes it', async () => {
     const uiUser = userEvent.setup();
     render(<SupportUserCreation />);
 
     expect(getToolbarButton()).toHaveTextContent('Add Support User');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await openForm(uiUser);
 
-    expect(screen.getByLabelText('First Name')).toBeInTheDocument();
-    expect(screen.getByLabelText('Last Name')).toBeInTheDocument();
-    expect(screen.getByLabelText('Email or Phone Number')).toBeInTheDocument();
-    expect(getToolbarButton()).toHaveTextContent('Cancel');
+    const panel = screen.getByRole('dialog', { name: 'Add Support User' });
+    expect(within(panel).getByLabelText('First Name')).toBeInTheDocument();
+    expect(within(panel).getByLabelText('Last Name')).toBeInTheDocument();
+    expect(within(panel).getByLabelText('Email or Phone Number')).toBeInTheDocument();
 
-    await uiUser.click(getToolbarButton());
+    await uiUser.click(within(panel).getByText('Cancel'));
 
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(getToolbarButton()).toHaveTextContent('Add Support User');
   });
 

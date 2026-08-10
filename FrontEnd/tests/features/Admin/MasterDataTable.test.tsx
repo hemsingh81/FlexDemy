@@ -274,17 +274,17 @@ describe('MasterDataTable', () => {
       await screen.findByText('India');
       await uiUser.click(screen.getAllByLabelText('Edit Country')[0]);
 
-      const editPanelRow = screen.getByText('India').closest('tr')!.nextElementSibling as HTMLElement;
-      const nameInput = within(editPanelRow).getByLabelText('Name') as HTMLInputElement;
+      const panel = screen.getByRole('dialog', { name: 'Edit Country' });
+      const nameInput = within(panel).getByLabelText('Name') as HTMLInputElement;
       await uiUser.clear(nameInput);
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      await uiUser.click(within(panel).getByText('Save'));
 
-      expect(await screen.findByText('Please fill in all required fields.')).toBeInTheDocument();
+      expect(await within(panel).findByText('Please fill in all required fields.')).toBeInTheDocument();
       expect(update).not.toHaveBeenCalled();
 
       update.mockResolvedValue({ ...countries[0], name: 'Bharat' });
       await uiUser.type(nameInput, 'Bharat');
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      await uiUser.click(within(panel).getByText('Save'));
 
       await waitFor(() =>
         expect(update).toHaveBeenCalledWith('ctry_1', { name: 'Bharat', isoCode: 'IN', isActive: true })
@@ -554,18 +554,18 @@ describe('MasterDataTable', () => {
       await screen.findByText('Class 10');
       await uiUser.click(screen.getByLabelText('Edit Class Level'));
 
-      // Scoped to this row's Edit panel specifically -- the Add-form's copy of the same
-      // Subject multi-select is always mounted too (collapsed, for the open/close animation --
-      // see docs/FRONTEND_TRANSITIONS.md), and would otherwise be a second "Physics"/"Chemistry"
-      // match.
-      const editPanelRow = screen.getByText('Class 10').closest('tr')!.nextElementSibling as HTMLElement;
-      const physicsCheckbox = within(editPanelRow).getByLabelText('Physics') as HTMLInputElement;
-      const chemistryCheckbox = within(editPanelRow).getByLabelText('Chemistry') as HTMLInputElement;
+      // Scoped to the Edit panel specifically -- the Add-form's copy of the same Subject
+      // multi-select is only mounted while that panel is open (never simultaneously with Edit,
+      // ui/SidePanel.tsx renders one overlay at a time), but scoping still keeps the query
+      // unambiguous and matches this suite's existing style.
+      const panel = screen.getByRole('dialog', { name: 'Edit Class Level' });
+      const physicsCheckbox = within(panel).getByLabelText('Physics') as HTMLInputElement;
+      const chemistryCheckbox = within(panel).getByLabelText('Chemistry') as HTMLInputElement;
       expect(physicsCheckbox.checked).toBe(true);
       expect(chemistryCheckbox.checked).toBe(false);
 
       await uiUser.click(chemistryCheckbox);
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      await uiUser.click(within(panel).getByText('Save'));
 
       await waitFor(() =>
         expect(update).toHaveBeenCalledWith('cl_10', {
@@ -604,15 +604,16 @@ describe('MasterDataTable', () => {
 
       await uiUser.click(editButtons[0]);
 
-      // Scoped to India's Edit panel specifically -- the Add-form's Name input, and Nepal's
-      // (also always-mounted-but-collapsed) Edit panel, would otherwise be additional matches.
-      const editPanelRow = screen.getByText('India').closest('tr')!.nextElementSibling as HTMLElement;
-      const nameInput = within(editPanelRow).getByLabelText('Name') as HTMLInputElement;
+      // Scoped to the Edit panel specifically -- the Add form's own Name input would otherwise
+      // be an additional match if it were open too (it isn't; only one SidePanel renders at a
+      // time), but scoping keeps this unambiguous either way.
+      const panel = screen.getByRole('dialog', { name: 'Edit Country' });
+      const nameInput = within(panel).getByLabelText('Name') as HTMLInputElement;
       expect(nameInput.value).toBe('India');
 
       await uiUser.clear(nameInput);
       await uiUser.type(nameInput, 'Bharat');
-      await uiUser.click(within(editPanelRow).getByText('Save'));
+      await uiUser.click(within(panel).getByText('Save'));
 
       await waitFor(() =>
         expect(update).toHaveBeenCalledWith('ctry_1', { name: 'Bharat', isoCode: 'IN', isActive: true })

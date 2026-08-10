@@ -47,8 +47,12 @@ export interface FieldsGridProps {
   onChange: (key: string, value: string) => void;
 }
 
+// One field per row: every caller now renders this exclusively inside ui/SidePanel.tsx, a fixed
+// 480px (or 640px for width="lg") wide, docked-right blade -- not the full-page width this grid
+// was originally tuned for (its old grid-cols-3). A multi-column grid at that width still left
+// long labels like "Email or Phone Number" cramped, so each field gets the panel's full width.
 export const FieldsGrid: React.FC<FieldsGridProps> = ({ fields, values, errors, idPrefix, onChange }) => (
-  <div className="grid sm:grid-cols-3 gap-3 items-end">
+  <div className="grid grid-cols-1 gap-3 items-end">
     {fields.map((field) => {
       const fieldId = `${idPrefix}-${field.key}`;
       const hasError = Boolean(errors[field.key]);

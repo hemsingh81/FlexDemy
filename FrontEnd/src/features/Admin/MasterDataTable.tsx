@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useId, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { Collapse } from '../../ui/Collapse';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { ToggleSwitch } from '../../ui/ToggleSwitch';
 import { Alert } from '../../ui/Alert';
-import { FormCard, FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
+import { SidePanel } from '../../ui/SidePanel';
+import { Button } from '../../ui/Button';
+import { FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
 import { useToast } from '../../context/ToastContext';
 
 // Generic Master-data admin table (plan §5 item 5) -- reused once per entity from
@@ -113,6 +114,7 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
   const [rowActionError, setRowActionError] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const formIdPrefix = useId();
+  const editFormId = `${formIdPrefix}-edit-form`;
 
   // Per-row edit panel -- base fields (Name/Code/SortOrder/etc, every entity) plus any
   // entity-specific extra field (e.g. ClassLevel's Subject multi-select) plus the Active switch.
@@ -339,6 +341,8 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
     }
   };
 
+  const editingRow = rows.find((r) => r.id === editingRowId) ?? null;
+
   return (
     <div className="bg-white border border-[#E1DED4] rounded-2xl shadow-2xs overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-[#E1DED4]">
@@ -357,41 +361,50 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
         </button>
       </div>
 
-      {/* Kept mounted (rather than `{isFormOpen && ...}`) so Collapse can animate it open/closed
-          instead of an instant swap -- see docs/FRONTEND_TRANSITIONS.md. */}
-      <Collapse open={isFormOpen}>
-        <FormCard
+      {isFormOpen && (
+        <SidePanel
           title={`Add ${entityLabel}`}
-          onCancel={closeAddForm}
-          onSubmit={handleCreate}
-          isSaving={isSaving}
-          errorMessage={formError}
+          onClose={closeAddForm}
+          closeOnBackdropClick={false}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" type="button" onClick={closeAddForm}>
+                Cancel
+              </Button>
+              <Button variant="secondary" size="sm" type="submit" form={`${formIdPrefix}-add-form`} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          }
         >
-          <FieldsGrid
-            fields={fields}
-            values={formValues}
-            errors={formFieldErrors}
-            idPrefix={formIdPrefix}
-            onChange={handleFormFieldChange}
-          />
+          <form id={`${formIdPrefix}-add-form`} onSubmit={handleCreate} className="space-y-3">
+            {formError && <Alert variant="danger">{formError}</Alert>}
+            <FieldsGrid
+              fields={fields}
+              values={formValues}
+              errors={formFieldErrors}
+              idPrefix={formIdPrefix}
+              onChange={handleFormFieldChange}
+            />
 
-          {(extraFields ?? []).map((f) => (
-            <div key={f.key} className="space-y-1">
-              <label className="block text-xs font-semibold text-[#142030]">{f.label}</label>
-              {f.renderInput(extraFormValues[f.key] ?? [], (next) =>
-                setExtraFormValues((prev) => ({ ...prev, [f.key]: next }))
-              )}
-            </div>
-          ))}
+            {(extraFields ?? []).map((f) => (
+              <div key={f.key} className="space-y-1">
+                <label className="block text-xs font-semibold text-[#142030]">{f.label}</label>
+                {f.renderInput(extraFormValues[f.key] ?? [], (next) =>
+                  setExtraFormValues((prev) => ({ ...prev, [f.key]: next }))
+                )}
+              </div>
+            ))}
 
-          <ToggleSwitch
-            checked={formIsActive}
-            onChange={setFormIsActive}
-            id={`${formIdPrefix}-active`}
-            ariaLabel={`${entityLabel} status`}
-          />
-        </FormCard>
-      </Collapse>
+            <ToggleSwitch
+              checked={formIsActive}
+              onChange={setFormIsActive}
+              id={`${formIdPrefix}-active`}
+              ariaLabel={`${entityLabel} status`}
+            />
+          </form>
+        </SidePanel>
+      )}
 
       {rowActionError && (
         <div className="px-4 pt-3">
@@ -434,11 +447,9 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
-                const isEditingThisRow = editingRowId === row.id;
-                return (
-                <React.Fragment key={row.id}>
+              rows.map((row) => (
                   <tr
+                    key={row.id}
                     className={`border-t border-[#E1DED4] transition-all duration-200 ${
                       exitingIds.has(row.id) ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'
                     }`}
@@ -493,58 +504,63 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
                       )}
                     </td>
                   </tr>
-                  {/* Kept mounted per-row (rather than `{isEditingThisRow && ...}`) so Collapse
-                      can animate the panel open/closed -- see docs/FRONTEND_TRANSITIONS.md. The
-                      outer <tr>/<td> stay minimal (needed for valid table markup and for
-                      Collapse to work inside it) -- the bordered/margined FormCard supplies all
-                      of the actual visual treatment, same component the Add form uses above. */}
-                  <tr className={isEditingThisRow ? 'border-t border-[#E1DED4]' : ''}>
-                    <td colSpan={columns.length + 1}>
-                      <Collapse open={isEditingThisRow}>
-                        <FormCard
-                          title={`Edit ${entityLabel}`}
-                          onCancel={closeEdit}
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            handleSaveEdit(row);
-                          }}
-                          isSaving={isSavingEdit}
-                          errorMessage={isEditingThisRow ? editError : undefined}
-                        >
-                          <FieldsGrid
-                            fields={fields}
-                            values={editFieldValues}
-                            errors={editFieldErrors}
-                            idPrefix={`${formIdPrefix}-edit-${row.id}`}
-                            onChange={handleEditFieldChange}
-                          />
-
-                          {(extraFields ?? []).map((f) => (
-                            <div key={f.key} className="space-y-1">
-                              <label className="block text-xs font-semibold text-[#142030]">{f.label}</label>
-                              {f.renderInput(editExtraValues[f.key] ?? [], (next) =>
-                                setEditExtraValues((prev) => ({ ...prev, [f.key]: next }))
-                              )}
-                            </div>
-                          ))}
-
-                          <ToggleSwitch
-                            checked={editIsActive}
-                            onChange={setEditIsActive}
-                            id={`${formIdPrefix}-edit-${row.id}-active`}
-                            ariaLabel={`${entityLabel} status`}
-                          />
-                        </FormCard>
-                      </Collapse>
-                    </td>
-                  </tr>
-                </React.Fragment>
-                );
-              })
+              ))
             )}
           </tbody>
         </table>
       </div>
+
+      {editingRow && (
+        <SidePanel
+          title={`Edit ${entityLabel}`}
+          onClose={closeEdit}
+          closeOnBackdropClick={false}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" type="button" onClick={closeEdit}>
+                Cancel
+              </Button>
+              <Button variant="secondary" size="sm" type="submit" form={editFormId} disabled={isSavingEdit}>
+                {isSavingEdit ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          }
+        >
+          <form
+            id={editFormId}
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveEdit(editingRow);
+            }}
+            className="space-y-3"
+          >
+            {editError && <Alert variant="danger">{editError}</Alert>}
+            <FieldsGrid
+              fields={fields}
+              values={editFieldValues}
+              errors={editFieldErrors}
+              idPrefix={`${formIdPrefix}-edit`}
+              onChange={handleEditFieldChange}
+            />
+
+            {(extraFields ?? []).map((f) => (
+              <div key={f.key} className="space-y-1">
+                <label className="block text-xs font-semibold text-[#142030]">{f.label}</label>
+                {f.renderInput(editExtraValues[f.key] ?? [], (next) =>
+                  setEditExtraValues((prev) => ({ ...prev, [f.key]: next }))
+                )}
+              </div>
+            ))}
+
+            <ToggleSwitch
+              checked={editIsActive}
+              onChange={setEditIsActive}
+              id={`${formIdPrefix}-edit-active`}
+              ariaLabel={`${entityLabel} status`}
+            />
+          </form>
+        </SidePanel>
+      )}
     </div>
   );
 }

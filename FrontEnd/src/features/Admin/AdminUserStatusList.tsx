@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useId, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import * as adminUsersService from '../../services/adminUsersService';
 import { Spinner } from '../../ui/Spinner';
-import { Collapse } from '../../ui/Collapse';
-import { FormCard, FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
+import { SidePanel } from '../../ui/SidePanel';
+import { Button } from '../../ui/Button';
+import { Alert } from '../../ui/Alert';
+import { FieldsGrid, getRequiredFieldErrors, type FormField } from '../../ui/FormCard';
 import { useToast } from '../../context/ToastContext';
 
 interface AdminUserStatusListProps {
@@ -39,15 +41,16 @@ export const AdminUserStatusList: React.FC<AdminUserStatusListProps> = ({ fetchU
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  // Inline per-row edit panel (Collapse + FormCard) -- same pattern as MasterDataTable.tsx's
-  // row-edit panel and this page's own Add-form reveal, rather than a modal overlay. `editingUser`
-  // still carries the full row (not just an id) since its fields prefill the form on open.
+  // Docked-right SidePanel edit -- same pattern as MasterDataTable.tsx's row-edit panel.
+  // `editingUser` still carries the full row (not just an id) since its fields prefill the form
+  // on open.
   const [editingUser, setEditingUser] = useState<adminUsersService.AdminUser | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [editFieldErrors, setEditFieldErrors] = useState<Record<string, boolean>>({});
   const [editFormError, setEditFormError] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const idPrefix = useId();
+  const editFormId = `${idPrefix}-edit-form`;
 
   const load = useCallback(() => {
     setIsLoading(true);
@@ -168,11 +171,8 @@ export const AdminUserStatusList: React.FC<AdminUserStatusListProps> = ({ fetchU
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => {
-                const isEditingThisRow = editingUser?.id === u.id;
-                return (
-                  <React.Fragment key={u.id}>
-                    <tr className="border-t border-[#E1DED4]">
+              {users.map((u) => (
+                    <tr key={u.id} className="border-t border-[#E1DED4]">
                       <td className="px-4 py-2.5 text-[#142030] font-medium">
                         {u.firstName} {u.lastName}
                       </td>
@@ -192,7 +192,7 @@ export const AdminUserStatusList: React.FC<AdminUserStatusListProps> = ({ fetchU
                           {editable && (
                             <button
                               type="button"
-                              onClick={() => (isEditingThisRow ? closeEdit() : openEdit(u))}
+                              onClick={() => openEdit(u)}
                               aria-label={`Edit ${u.firstName} ${u.lastName}`}
                               className="p-1.5 rounded-lg text-[#5E6A79] hover:text-[#143358] hover:bg-[#F3F0E6] transition-colors cursor-pointer"
                             >
@@ -202,39 +202,39 @@ export const AdminUserStatusList: React.FC<AdminUserStatusListProps> = ({ fetchU
                         </div>
                       </td>
                     </tr>
-                    {/* Kept mounted per-row (rather than `{isEditingThisRow && ...}`) so Collapse
-                        can animate the panel open/closed -- same pattern as
-                        MasterDataTable.tsx's row-edit panel and this page's own Add-form reveal,
-                        not a modal overlay. */}
-                    {editable && (
-                      <tr className={isEditingThisRow ? 'border-t border-[#E1DED4]' : ''}>
-                        <td colSpan={3}>
-                          <Collapse open={isEditingThisRow}>
-                            <FormCard
-                              title={`Edit ${u.firstName} ${u.lastName}`}
-                              onCancel={closeEdit}
-                              onSubmit={handleSaveEdit}
-                              isSaving={isSavingEdit}
-                              errorMessage={isEditingThisRow ? editFormError : undefined}
-                            >
-                              <FieldsGrid
-                                fields={EDIT_FIELDS}
-                                values={editValues}
-                                errors={editFieldErrors}
-                                idPrefix={`${idPrefix}-edit-${u.id}`}
-                                onChange={handleEditFieldChange}
-                              />
-                            </FormCard>
-                          </Collapse>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {editable && editingUser && (
+        <SidePanel
+          title={`Edit ${editingUser.firstName} ${editingUser.lastName}`}
+          onClose={closeEdit}
+          closeOnBackdropClick={false}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" type="button" onClick={closeEdit}>
+                Cancel
+              </Button>
+              <Button variant="secondary" size="sm" type="submit" form={editFormId} disabled={isSavingEdit}>
+                {isSavingEdit ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          }
+        >
+          <form id={editFormId} onSubmit={handleSaveEdit} className="space-y-3">
+            {editFormError && <Alert variant="danger">{editFormError}</Alert>}
+            <FieldsGrid
+              fields={EDIT_FIELDS}
+              values={editValues}
+              errors={editFieldErrors}
+              idPrefix={`${idPrefix}-edit`}
+              onChange={handleEditFieldChange}
+            />
+          </form>
+        </SidePanel>
       )}
     </div>
   );

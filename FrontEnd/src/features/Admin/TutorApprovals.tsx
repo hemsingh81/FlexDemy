@@ -3,7 +3,9 @@ import { Check, GraduationCap, X } from 'lucide-react';
 import * as profileService from '../../services/profileService';
 import * as adminUsersService from '../../services/adminUsersService';
 import { AdminUserStatusList } from './AdminUserStatusList';
-import { Collapse } from '../../ui/Collapse';
+import { SidePanel } from '../../ui/SidePanel';
+import { Button } from '../../ui/Button';
+import { Alert } from '../../ui/Alert';
 import { Spinner } from '../../ui/Spinner';
 import { useToast } from '../../context/ToastContext';
 
@@ -103,7 +105,7 @@ export const TutorApprovals: React.FC = () => {
     </div>
   ) : (
     <div className="space-y-4">
-      {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
+      {error && !rejectingUserId && <Alert variant="danger">{error}</Alert>}
       {applications.map((app) => (
         <div key={app.userId} className="bg-white border border-[#E1DED4] rounded-2xl shadow-2xs p-5 space-y-3">
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -123,32 +125,30 @@ export const TutorApprovals: React.FC = () => {
               </div>
             </div>
 
-            {rejectingUserId !== app.userId && (
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleApprove(app.userId)}
-                  disabled={isBusy}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#179765] text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {processingUserId === app.userId ? (
-                    <Spinner size="sm" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                  <span>Approve</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openReject(app.userId)}
-                  disabled={isBusy}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Reject</span>
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleApprove(app.userId)}
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#179765] text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {processingUserId === app.userId ? (
+                  <Spinner size="sm" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>Approve</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openReject(app.userId)}
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reject</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3 text-xs text-[#5E6A79]">
@@ -161,45 +161,12 @@ export const TutorApprovals: React.FC = () => {
               {app.profile.qualifications}
             </p>
           </div>
-
-          {/* Kept mounted (rather than `{rejectingUserId === app.userId && ...}`) so Collapse
-              can animate it open/closed -- see docs/FRONTEND_TRANSITIONS.md. */}
-          <Collapse open={rejectingUserId === app.userId}>
-            <div className="border-t border-[#E1DED4] pt-3 space-y-2">
-              <label htmlFor={`tutor-rejection-reason-${app.userId}`} className="block text-xs font-semibold text-[#142030]">
-                Reason for rejection
-              </label>
-              <textarea
-                id={`tutor-rejection-reason-${app.userId}`}
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                rows={2}
-                placeholder="Explain what's missing so the applicant can improve and re-apply..."
-                className="w-full px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012] resize-none"
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => confirmReject(app.userId)}
-                  disabled={processingUserId === app.userId}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 text-white disabled:opacity-60 cursor-pointer"
-                >
-                  {processingUserId === app.userId ? 'Rejecting...' : 'Confirm Rejection'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRejectingUserId(null)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-[#5E6A79] hover:text-[#142030] cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </Collapse>
         </div>
       ))}
     </div>
   );
+
+  const rejectingApp = applications.find((a) => a.userId === rejectingUserId) ?? null;
 
   return (
     <div className="space-y-4">
@@ -216,6 +183,45 @@ export const TutorApprovals: React.FC = () => {
         <AdminUserStatusList fetchUsers={adminUsersService.getTutors} emptyLabel="No approved tutors yet." />
       ) : (
         pendingContent
+      )}
+
+      {rejectingApp && (
+        <SidePanel
+          title={`Reject ${rejectingApp.firstName} ${rejectingApp.lastName}`}
+          onClose={() => setRejectingUserId(null)}
+          closeOnBackdropClick={false}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" type="button" onClick={() => setRejectingUserId(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                type="button"
+                onClick={() => confirmReject(rejectingApp.userId)}
+                disabled={processingUserId === rejectingApp.userId}
+              >
+                {processingUserId === rejectingApp.userId ? 'Rejecting...' : 'Confirm Rejection'}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-2">
+            {error && <Alert variant="danger">{error}</Alert>}
+            <label htmlFor="tutor-rejection-reason" className="block text-xs font-semibold text-[#142030]">
+              Reason for rejection
+            </label>
+            <textarea
+              id="tutor-rejection-reason"
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              rows={4}
+              placeholder="Explain what's missing so the applicant can improve and re-apply..."
+              className="w-full px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012] resize-none"
+            />
+          </div>
+        </SidePanel>
       )}
     </div>
   );
