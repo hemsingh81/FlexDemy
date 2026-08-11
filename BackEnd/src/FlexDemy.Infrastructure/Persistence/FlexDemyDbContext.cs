@@ -1,7 +1,10 @@
+using FlexDemy.Domain.AiConfig;
+using FlexDemy.Domain.AiUsage;
 using FlexDemy.Domain.Courses;
 using FlexDemy.Domain.MasterData;
 using FlexDemy.Domain.Permissions;
 using FlexDemy.Domain.Profiles;
+using FlexDemy.Domain.Tags;
 using FlexDemy.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +26,13 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
     public DbSet<TutorProfile> TutorProfiles => Set<TutorProfile>();
 
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+
+    public DbSet<AiTaskConfig> AiTaskConfigs => Set<AiTaskConfig>();
+    public DbSet<AiPromptVersion> AiPromptVersions => Set<AiPromptVersion>();
+    public DbSet<AiTaskUsage> AiTaskUsages => Set<AiTaskUsage>();
+    public DbSet<AiTaskBudget> AiTaskBudgets => Set<AiTaskBudget>();
+
+    public DbSet<Tag> Tags => Set<Tag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,0 +1,323 @@
+<title>FlexDemy — Publishing State, Course Content Editor (key screen mock)</title>
+<style>
+/*
+  KEY SCREEN 3 — Publishing (async batch) state, node-by-node checklist
+  Governing sections:
+  - EXPERIENCE.md > State Patterns > "Publishing (async batch)" — Course Content Editor, after Confirm Review -> Publish:
+    transient state while Drill-Down/Ways content generates for every confirmed node; NOT a spinner or single blended
+    bar; a node-by-node checklist ("12 of 34 confirmed nodes generated"); runs server-side, survives tab close;
+    aria-live="polite" region announcing meaningful increments and terminal states (complete/failure).
+  - EXPERIENCE.md > Component Patterns > "Course Content Editor" sticky header/footer area (Confirm and
+    Review-as-Student-class actions live in the sticky header/footer, not buried in scroll) — this checklist
+    is hosted in that same sticky-header/footer real estate per the task's instruction.
+  - DESIGN.md > Components > "Course Content Editor" (full-width surface, sticky header carries the
+    Draft->In Review->Review Confirmed->Published lifecycle indicator; current stage here is transitioning
+    Review Confirmed -> Published, i.e. the Publishing sub-state)
+  - DESIGN.md > Components > "Extraction status badge" / badge-pill reuse (navy = in progress, green = done,
+    red = failed) reapplied here to per-node generation status, not a new color language.
+  - DESIGN.md > Colors > signal-green = success/progress exclusively; citrus-amber = "click here" or celebration only.
+  - EXPERIENCE.md > Accessibility Floor > "Extraction status and Publishing progress announcements" (aria-live polite,
+    not silently visual-only) and > Motion (checklist's incremental-fill animation respects prefers-reduced-motion).
+  - Voice and Tone: specific counts ("12 of 34 confirmed nodes generated"), not vague hype ("AI is working its magic!").
+
+  NOTE: Fraunces and Outfit are not guaranteed available offline; system serif/sans fallbacks are declared in the font stacks below.
+  Inline CSS only, no JS, no network calls, renders fully offline. Animation states below are shown as static
+  snapshots (done/in-progress/pending) rather than actual CSS keyframe motion, since this is a non-interactive mock.
+*/
+
+:root{
+  --ink-navy:#143358;
+  --citrus-amber:#BA5012;
+  --signal-green:#179765;
+  --parchment:#FAF7EC;
+  --hairline:#E1DED4;
+  --ink:#142030;
+  --muted:#5E6A79;
+  --canvas:#FCFAF4;
+  --surface-secondary:#F3F0E6;
+  --error:#DC2626;
+  --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body:'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+*{box-sizing:border-box;}
+body{margin:0; background:#DCE3EA; font-family:var(--font-body); color:var(--ink); -webkit-font-smoothing:antialiased;}
+
+.browser-frame{
+  max-width:1360px; margin:24px auto; border-radius:14px; overflow:hidden;
+  box-shadow:0 30px 60px -20px rgba(20,32,48,0.35), 0 2px 8px rgba(20,32,48,0.12);
+  border:1px solid #C7CFD8; background:#fff;
+}
+.browser-chrome{background:#EEF1F5; border-bottom:1px solid #D6DBE2; padding:10px 14px; display:flex; align-items:center; gap:10px;}
+.dots{display:flex;gap:6px;}
+.dot{width:11px;height:11px;border-radius:50%;}
+.dot.red{background:#FF5F57;} .dot.amber{background:#FEBC2E;} .dot.green{background:#28C840;}
+.addr-bar{flex:1; background:#fff; border:1px solid #D6DBE2; border-radius:999px; padding:6px 14px; font-size:12px; color:var(--muted);}
+.browser-viewport{background:var(--canvas); min-height:900px; display:flex; flex-direction:column;}
+
+/* Sticky header with lifecycle indicator, current sub-state = Publishing */
+.editor-header{
+  position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid var(--hairline); padding:14px 32px;
+}
+.header-top{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
+.header-left{display:flex; flex-direction:column; gap:2px;}
+.eyebrow{font-size:0.625rem; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted);}
+.course-title{font-family:var(--font-display); font-size:1.5rem; font-weight:700; letter-spacing:-0.02em; color:var(--ink-navy); margin:0;}
+.header-actions{display:flex; gap:10px; align-items:center;}
+.btn{font-weight:700; font-size:0.8125rem; border-radius:0.75rem; padding:0.625rem 1.25rem; border:none; cursor:pointer;}
+.btn-secondary{background:var(--ink-navy); color:#fff;}
+.btn[disabled]{opacity:0.6; cursor:not-allowed;}
+
+.lifecycle{display:flex; align-items:center; gap:0; flex-wrap:wrap;}
+.stage{display:flex; align-items:center; gap:8px; padding:6px 14px 6px 6px; font-size:0.75rem; font-weight:700; color:var(--muted); position:relative;}
+.stage .num{width:22px; height:22px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:var(--surface-secondary); color:var(--muted); font-size:0.7rem; border:1px solid var(--hairline);}
+.stage.done{color:var(--signal-green);}
+.stage.done .num{background:var(--signal-green); color:#fff; border-color:var(--signal-green);}
+.stage.current{color:var(--ink-navy);}
+.stage.current .num{background:var(--ink-navy); color:#fff; border-color:var(--ink-navy);}
+.stage-connector{width:28px; height:2px; background:var(--hairline);}
+.stage-connector.filled{background:var(--signal-green);}
+
+/* Publishing banner directly under lifecycle row, in the sticky header area */
+.publishing-banner{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  background:var(--parchment);
+  border:1px solid var(--hairline);
+  border-radius:0.75rem;
+  padding:10px 16px;
+  flex-wrap:wrap;
+}
+.pb-left{display:flex; align-items:center; gap:10px;}
+.pb-spinner-icon{
+  width:16px; height:16px; border-radius:50%; border:2.5px solid var(--ink-navy); border-top-color:transparent;
+  display:inline-block;
+}
+.pb-text{font-size:0.8125rem; font-weight:700; color:var(--ink-navy);}
+.pb-sub{font-size:0.75rem; color:var(--muted); font-weight:400;}
+.pb-count{font-size:0.75rem; font-weight:800; color:var(--ink-navy); background:#fff; border:1px solid var(--hairline); border-radius:999px; padding:4px 12px;}
+
+.editor-body{padding:24px 32px; flex:1;}
+.section-label{font-family:var(--font-display); font-size:1.125rem; font-weight:700; color:var(--ink-navy); margin:0 0 4px;}
+.section-sub{font-size:0.8125rem; color:var(--muted); margin:0 0 16px;}
+
+/* Overall progress bar */
+.progress-track{
+  background:var(--surface-secondary);
+  border-radius:999px;
+  height:10px;
+  overflow:hidden;
+  margin-bottom:20px;
+  border:1px solid var(--hairline);
+}
+.progress-fill{
+  height:100%;
+  width:35%;
+  background:var(--signal-green);
+  border-radius:999px 0 0 999px;
+}
+
+/* Checklist */
+.checklist{display:flex; flex-direction:column; gap:8px;}
+.check-row{
+  display:flex; align-items:center; gap:12px;
+  background:#fff; border:1px solid var(--hairline); border-radius:0.75rem; padding:10px 14px;
+  font-size:0.8125rem;
+}
+.check-icon{
+  width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.7rem; font-weight:800; flex-shrink:0;
+}
+.check-icon.done{background:var(--signal-green); color:#fff;}
+.check-icon.progress{background:var(--ink-navy); color:#fff;}
+.check-icon.pending{background:var(--surface-secondary); color:var(--muted); border:1px solid var(--hairline);}
+.check-icon.failed{background:var(--error); color:#fff;}
+.check-node{flex:1; color:var(--ink);}
+.check-node .kind{font-size:0.6875rem; font-weight:800; text-transform:uppercase; letter-spacing:0.03em; color:var(--muted); margin-right:6px;}
+.check-status{font-size:0.6875rem; font-weight:700;}
+.check-status.done{color:var(--signal-green);}
+.check-status.progress{color:var(--ink-navy);}
+.check-status.pending{color:var(--muted);}
+.check-status.failed{color:var(--error);}
+.retry-inline{font-size:0.6875rem; font-weight:700; color:var(--error); text-decoration:underline; background:none; border:none; cursor:pointer; padding:0; margin-left:8px;}
+
+.checklist-scroll{
+  max-height:420px;
+  overflow-y:auto;
+  padding-right:4px;
+}
+
+/* Sticky footer hosting Confirm / Review actions area, per Course Content Editor's Component Pattern row */
+.editor-footer{
+  position:sticky; bottom:0; z-index:20;
+  background:#fff;
+  border-top:1px solid var(--hairline);
+  padding:14px 32px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+}
+.footer-left{font-size:0.75rem; color:var(--muted);}
+.footer-left b{color:var(--ink-navy);}
+.footer-actions{display:flex; gap:10px;}
+.btn-ghost{background:#fff; color:var(--ink-navy); border:1px solid var(--hairline);}
+
+.live-region-note{
+  font-size:0.6875rem; color:var(--muted); font-style:italic; margin-top:14px;
+}
+</style>
+
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <div class="dots"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span></div>
+    <div class="addr-bar">app.flexdemy.com/tutor/courses/chem-cbse10-acids-bases/editor</div>
+  </div>
+  <div class="browser-viewport">
+
+    <div class="editor-header">
+      <div class="header-top">
+        <div class="header-left">
+          <span class="eyebrow">Course Content Editor</span>
+          <h1 class="course-title">Acids, Bases &amp; Salts — CBSE Class 10 Chemistry</h1>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" disabled aria-disabled="true" title="Publishing in progress">Publishing…</button>
+        </div>
+      </div>
+
+      <nav class="lifecycle" aria-label="Course publishing lifecycle" style="margin-bottom:12px;">
+        <div class="stage done"><span class="num">✓</span>Draft</div>
+        <div class="stage-connector filled"></div>
+        <div class="stage done"><span class="num">✓</span>In Review</div>
+        <div class="stage-connector filled"></div>
+        <div class="stage done"><span class="num">✓</span>Review Confirmed</div>
+        <div class="stage-connector"></div>
+        <div class="stage current" aria-current="true"><span class="num">●</span>Published</div>
+      </nav>
+
+      <div class="publishing-banner" role="status" aria-live="polite">
+        <div class="pb-left">
+          <span class="pb-spinner-icon" aria-hidden="true"></span>
+          <span class="pb-text">Publishing — generating Drill-Down &amp; Ways content for every confirmed node<span class="pb-sub"> · safe to close this tab, it keeps running server-side</span></span>
+        </div>
+        <span class="pb-count">12 of 34 confirmed nodes generated</span>
+      </div>
+    </div>
+
+    <div class="editor-body">
+      <h2 class="section-label">Generation checklist</h2>
+      <p class="section-sub">Each confirmed node needs 5 Drill-Down levels and 5 Ways generated before this course goes live. Nodes finish independently — no need to wait on the slowest one.</p>
+
+      <div class="progress-track"><div class="progress-fill"></div></div>
+
+      <div class="checklist-scroll">
+        <div class="checklist">
+
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Chapter 1</span>Introduction to Chemical Reactions</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Topic 1.1</span>Physical vs. Chemical Change</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Topic 1.2</span>Signs of a Chemical Reaction</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Subtopic 1.2.1</span>Colour Change and Gas Evolution</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Subtopic 1.2.2</span>Precipitate Formation</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon failed">!</span>
+            <span class="check-node"><span class="kind">Topic 1.3</span>Balancing Simple Equations</span>
+            <span class="check-status failed">Generation failed — served on-demand for now<button class="retry-inline">Retry</button></span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Topic 1.4</span>Endothermic and Exothermic Reactions</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Chapter 2</span>Acids, Bases &amp; Salts</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Topic 2.1</span>Reaction of Acids with Metals</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Subtopic 2.1.1</span>Why Hydrogen Gas Is Released</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Subtopic 2.1.2</span>Testing With a Burning Splint</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon done">✓</span>
+            <span class="check-node"><span class="kind">Topic 2.2</span>Reaction of Bases with Metals</span>
+            <span class="check-status done">Done</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon progress">⋯</span>
+            <span class="check-node"><span class="kind">Topic 2.3</span>Reaction of Acids and Bases with Metal Carbonates</span>
+            <span class="check-status progress">Generating Way 3 of 5…</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon pending">·</span>
+            <span class="check-node"><span class="kind">Topic 2.4</span>Universal Indicator and pH Scale</span>
+            <span class="check-status pending">Queued</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon pending">·</span>
+            <span class="check-node"><span class="kind">Subtopic 2.4.1</span>pH of Common Substances</span>
+            <span class="check-status pending">Queued</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon pending">·</span>
+            <span class="check-node"><span class="kind">Topic 2.5</span>Importance of pH in Everyday Life</span>
+            <span class="check-status pending">Queued</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon pending">·</span>
+            <span class="check-node"><span class="kind">Chapter 3</span>Salts, pH and Everyday Applications</span>
+            <span class="check-status pending">Queued</span>
+          </div>
+          <div class="check-row">
+            <span class="check-icon pending">·</span>
+            <span class="check-node"><span class="kind">Topic 3.1</span>Preparation of Sodium Chloride</span>
+            <span class="check-status pending">Queued</span>
+          </div>
+
+        </div>
+      </div>
+
+      <p class="live-region-note">Screen reader note: this checklist is an aria-live="polite" region announcing meaningful increments (e.g. "14 of 34 nodes generated") and terminal states — not a play-by-play of every one of the ~200+ underlying AI calls in this batch.</p>
+    </div>
+
+    <div class="editor-footer">
+      <div class="footer-left">Course stays in the <b>Publishing</b> state until all 34 nodes finish — reopening this course later resumes the same in-progress checklist, it does not restart the batch.</div>
+      <div class="footer-actions">
+        <button class="btn btn-ghost">View Course Content Editor</button>
+        <button class="btn btn-secondary" disabled aria-disabled="true">Course Live Once Published</button>
+      </div>
+    </div>
+
+  </div>
+</div>

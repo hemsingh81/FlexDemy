@@ -1,8 +1,13 @@
+using FlexDemy.Application.AiConfig;
+using FlexDemy.Application.AiGateway;
+using FlexDemy.Application.AiUsage;
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
 using FlexDemy.Application.Permissions;
 using FlexDemy.Application.Profiles;
+using FlexDemy.Application.Tags;
 using FlexDemy.Application.Users;
+using FlexDemy.Infrastructure.AiGateway;
 using FlexDemy.Infrastructure.IdGeneration;
 using FlexDemy.Infrastructure.Permissions;
 using FlexDemy.Infrastructure.Persistence;
@@ -12,6 +17,7 @@ using FlexDemy.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using MasterDataBoard = FlexDemy.Application.MasterData.Board;
 using MasterDataCity = FlexDemy.Application.MasterData.City;
 using MasterDataClassLevel = FlexDemy.Application.MasterData.ClassLevel;
@@ -59,6 +65,12 @@ public static class DependencyInjection
         services.AddScoped<MasterDataClassLevel.IClassLevelRepository, ClassLevelRepository>();
         services.AddScoped<MasterDataSubject.ISubjectRepository, SubjectRepository>();
 
+        services.AddScoped<IAiTaskConfigRepository, AiTaskConfigRepository>();
+        services.AddScoped<IAiTaskUsageRepository, AiTaskUsageRepository>();
+        services.AddScoped<IAiTaskBudgetRepository, AiTaskBudgetRepository>();
+
+        services.AddScoped<ITagRepository, TagRepository>();
+
         // Backs FeatureAuthorizationHandler's dynamic role-permission lookups (plan §3).
         // AddMemoryCache registers IMemoryCache as a singleton; RolePermissionCache itself is
         // Scoped because it depends on IRolePermissionRepository (needs the per-request
@@ -67,6 +79,19 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
         services.AddScoped<IRolePermissionCache, RolePermissionCache>();
+
+        // AD-14: typed-client registration -- BaseAddress is set here from AiGatewayOptions
+        // (already-bound options instance, not a second raw IConfiguration read). Timeout is set
+        // explicitly rather than left at HttpClient's 100s BCL default -- this is a hard
+        // dependency for several future features and shouldn't tie up a request thread that long
+        // on a hung upstream connection (review finding, 2026-08-11 review).
+        services.Configure<AiGatewayOptions>(configuration.GetSection(AiGatewayOptions.SectionName));
+        services.AddHttpClient<IAiGateway, PortkeyAiGateway>((sp, client) =>
+        {
+            var aiGatewayOptions = sp.GetRequiredService<IOptions<AiGatewayOptions>>().Value;
+            client.BaseAddress = new Uri(aiGatewayOptions.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
 
         return services;
     }

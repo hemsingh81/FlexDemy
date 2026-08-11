@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
-import { ClipboardCheck, LayoutGrid, ShieldCheck, UserPlus } from 'lucide-react';
+import { ClipboardCheck, Cpu, LayoutGrid, ShieldCheck, Tags, UserPlus } from 'lucide-react';
 import { useDomain } from '../../context/DomainContext';
 
-export type AdminSubTab = 'masterdata' | 'support-users' | 'role-visibility' | 'tutor-approvals';
+export type AdminSubTab =
+  | 'masterdata'
+  | 'support-users'
+  | 'role-visibility'
+  | 'tutor-approvals'
+  | 'ai-configuration'
+  | 'tag-management';
 
-const ALL_SUB_TABS: AdminSubTab[] = ['masterdata', 'support-users', 'role-visibility', 'tutor-approvals'];
+const ALL_SUB_TABS: AdminSubTab[] = [
+  'masterdata',
+  'support-users',
+  'role-visibility',
+  'tutor-approvals',
+  'ai-configuration',
+  'tag-management',
+];
 
 // Single source of truth for admin sub-tab label/icon metadata -- shared by AdminPanel's own
 // in-page dropdown AND Navbar's Admin entry-point dropdown (the two must never drift, since
@@ -15,6 +28,10 @@ export const ADMIN_SUBTAB_META: Record<AdminSubTab, { label: string; icon: Compo
   'support-users': { label: 'Support Users', icon: UserPlus },
   'role-visibility': { label: 'Role Visibility', icon: ShieldCheck },
   'tutor-approvals': { label: 'Tutor Approvals', icon: ClipboardCheck },
+  // Master-only (New Course Wizard PRD FR-27/FR-28/FR-29) -- not added to Support's subset below.
+  'ai-configuration': { label: 'AI Configuration & Usage', icon: Cpu },
+  // Master AND Support (FR-26) -- tag hygiene is routine vocabulary upkeep, not a cost lever.
+  'tag-management': { label: 'Tag Management', icon: Tags },
 };
 
 export interface ControlledAdminSubTab {
@@ -23,8 +40,8 @@ export interface ControlledAdminSubTab {
 }
 
 // Feature-local hook (AD-2) for features/Admin/ -- sub-tab availability is role-gated
-// client-side for UX (Master sees all 4 admin sections, Support sees Tutor Approvals only,
-// matching FeatureKeys.TutorApprove's default-visible-for roles in plan §3's table); the
+// client-side for UX (Master sees all 6 admin sections, Support sees Tutor Approvals and Tag
+// Management, matching FeatureKeys.TutorApprove's default-visible-for roles in plan §3's table); the
 // real safety net is every write endpoint's own [Authorize(Policy = ...)] on the backend.
 //
 // activeSubTab can be lifted and controlled from the outside by passing `controlled` -- App.tsx
@@ -36,7 +53,7 @@ export const useAdminPanel = (controlled?: ControlledAdminSubTab) => {
 
   const availableSubTabs = useMemo<AdminSubTab[]>(() => {
     if (user?.role === 'Master') return ALL_SUB_TABS;
-    if (user?.role === 'Support') return ['tutor-approvals'];
+    if (user?.role === 'Support') return ['tutor-approvals', 'tag-management'];
     return [];
   }, [user?.role]);
 

@@ -2,8 +2,10 @@
 
 Full rationale and the memlog behind every rule below lives in
 `_specs/planning-artifacts/architecture/architecture-eLearning-backend-2026-08-09/ARCHITECTURE-SPINE.md`
-(`AD-1` … `AD-13`). This file is the condensed, actionable version — read the spine when a rule
-here feels ambiguous or you need the "why."
+(`AD-1` … `AD-20`). This file is the condensed, actionable version — read the spine when a rule
+here feels ambiguous or you need the "why." `AD-14`–`AD-20` cover the AI Service Layer,
+async Hangfire jobs, and the course content tree — not condensed into the rules below yet,
+read them directly if you're touching any of that.
 
 ## The shape
 
@@ -94,7 +96,16 @@ implementation before writing a new one from scratch.
 
 ## What's deliberately not built yet
 
-WebSockets, Redis, the AI drilldown/grading pipeline, and real JWT/OAuth2 auth are all
-**Deferred** in the spine, not forgotten. Don't invent ad hoc versions of them while
-implementing something else — check the spine's Deferred section, and if you're the one
-finally scoping one of them, that's a spine **Update**, not a silent addition.
+WebSockets, Redis, and the AI drilldown/grading pipeline are **Deferred** in the spine,
+not forgotten. Don't invent ad hoc versions of them while implementing something else —
+check the spine's Deferred section, and if you're the one finally scoping one of them,
+that's a spine **Update**, not a silent addition.
+
+JWT auth is already built (`AuthController`, `JwtTokenService`,
+`FeatureAuthorizationHandler`) — this line used to list it as deferred; that was stale.
+Full OAuth2 (as opposed to this password-based JWT flow) is the only piece of "auth" still
+genuinely unbuilt, if that was meant literally.
+
+The AI drilldown pipeline above now has a real spine (`AD-14` through `AD-20`) — read
+those before touching anything AI-related; "deferred" here means the *original*
+Aug 9 pass punted it, not that it's still unscoped as of `updated: 2026-08-11`.

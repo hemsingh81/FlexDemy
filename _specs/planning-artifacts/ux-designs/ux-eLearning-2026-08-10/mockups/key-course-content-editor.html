@@ -1,0 +1,523 @@
+<title>FlexDemy — Course Content Editor (key screen mock)</title>
+<style>
+/*
+  KEY SCREEN 1 — Course Content Editor
+  Governing sections:
+  - DESIGN.md > Components > "Course Content Editor" (full-width surface, sticky header w/ lifecycle indicator)
+  - DESIGN.md > Components > "Content tree node" (edit/delete/reorder/confirm controls, confirmed = signal-green accent not color-alone)
+  - DESIGN.md > Components > "Extraction status badge" (badge-pill reuse: navy=in-progress, green=done, red=failed)
+  - DESIGN.md > Layout & Spacing (full-width, no max-w wrapper, 4px spacing rhythm, rounded scale)
+  - DESIGN.md > Typography (Fraunces display / Outfit body), Colors (ink-navy/citrus-amber/signal-green/hairline/parchment)
+  - EXPERIENCE.md > Component Patterns > "Course Content Editor — tree node" (expand/collapse, edit-in-place, delete,
+    drag-reorder, explicit per-node Confirm distinct from edit; cascading-delete via modal for Chapter/Topic)
+  - EXPERIENCE.md > Component Patterns > "Extraction status indicator" (Queued/Parsing/Extracting/Done/Failed, scoped retry)
+  - EXPERIENCE.md > State Patterns > "Node pending confirmation" (unconfirmed visually distinct, never color-alone)
+  - EXPERIENCE.md > Accessibility Floor > "Course Content Editor tree node" (keyboard-operable add/edit/delete/reorder/confirm,
+    confirmed state exposed to AT, not color-alone) and "lifecycle-stage orientation" (Draft->In Review->Review Confirmed->Published
+    in sticky header, aria-current)
+  - EXPERIENCE.md > Key Flows > New Course Wizard PRD UJ-1 (Meera's chemistry chapter: 3 chapters, 11 topics, chemistry notation,
+    one mis-split subtopic fixed by drag, one file failing to parse)
+  - Voice and Tone: "Extracting Chapter 3 of 5... 2 files complete." style status copy — specific counts, not vague hype.
+
+  NOTE: Fraunces and Outfit are not guaranteed available offline; system serif/sans fallbacks are declared in the font stacks below.
+  Inline CSS only, no JS, no network calls, renders fully offline.
+*/
+
+:root{
+  --ink-navy:#143358;
+  --citrus-amber:#BA5012;
+  --citrus-amber-on-dark:#EC7B38;
+  --signal-green:#179765;
+  --parchment:#FAF7EC;
+  --hairline:#E1DED4;
+  --ink:#142030;
+  --muted:#5E6A79;
+  --canvas:#FCFAF4;
+  --surface-secondary:#F3F0E6;
+  --error:#DC2626;
+  --error-surface:#FEF2F2;
+  --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body:'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:#DCE3EA;
+  font-family:var(--font-body);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---- Browser device frame ---- */
+.browser-frame{
+  max-width:1360px;
+  margin:24px auto;
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 30px 60px -20px rgba(20,32,48,0.35), 0 2px 8px rgba(20,32,48,0.12);
+  border:1px solid #C7CFD8;
+  background:#fff;
+}
+.browser-chrome{
+  background:#EEF1F5;
+  border-bottom:1px solid #D6DBE2;
+  padding:10px 14px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.dots{display:flex;gap:6px;}
+.dot{width:11px;height:11px;border-radius:50%;}
+.dot.red{background:#FF5F57;} .dot.amber{background:#FEBC2E;} .dot.green{background:#28C840;}
+.addr-bar{
+  flex:1;
+  background:#fff;
+  border:1px solid #D6DBE2;
+  border-radius:999px;
+  padding:6px 14px;
+  font-size:12px;
+  color:var(--muted);
+  font-family:var(--font-body);
+}
+.browser-viewport{
+  background:var(--canvas);
+  min-height:900px;
+}
+
+/* ---- Sticky lifecycle header ---- */
+.editor-header{
+  position:sticky; top:0; z-index:20;
+  background:#fff;
+  border-bottom:1px solid var(--hairline);
+  padding:14px 32px;
+}
+.header-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+}
+.header-left{display:flex; flex-direction:column; gap:2px;}
+.eyebrow{
+  font-family:var(--font-body);
+  font-size:0.625rem;
+  font-weight:800;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.course-title{
+  font-family:var(--font-display);
+  font-size:1.5rem;
+  font-weight:700;
+  line-height:1.2;
+  letter-spacing:-0.02em;
+  color:var(--ink-navy);
+  margin:0;
+}
+.header-actions{display:flex; gap:10px; align-items:center;}
+.btn{
+  font-family:var(--font-body);
+  font-weight:700;
+  font-size:0.8125rem;
+  border-radius:0.75rem;
+  padding:0.625rem 1.25rem;
+  border:none;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.btn-primary{background:var(--citrus-amber); color:#fff;}
+.btn-secondary{background:var(--ink-navy); color:#fff;}
+.btn-ghost{background:#fff; color:var(--ink-navy); border:1px solid var(--hairline);}
+.btn[disabled]{opacity:0.6; cursor:not-allowed;}
+
+/* Lifecycle stage indicator */
+.lifecycle{
+  display:flex;
+  align-items:center;
+  gap:0;
+  flex-wrap:wrap;
+}
+.stage{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 14px 6px 6px;
+  font-size:0.75rem;
+  font-weight:700;
+  font-family:var(--font-body);
+  color:var(--muted);
+  position:relative;
+}
+.stage .num{
+  width:22px; height:22px; border-radius:999px;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--surface-secondary);
+  color:var(--muted);
+  font-size:0.7rem;
+  border:1px solid var(--hairline);
+}
+.stage.current{color:var(--ink-navy);}
+.stage.current .num{background:var(--ink-navy); color:#fff; border-color:var(--ink-navy);}
+.stage.done{color:var(--signal-green);}
+.stage.done .num{background:var(--signal-green); color:#fff; border-color:var(--signal-green);}
+.stage-connector{width:28px; height:2px; background:var(--hairline);}
+
+/* ---- File extraction status strip ---- */
+.upload-strip{
+  padding:16px 32px;
+  background:var(--parchment);
+  border-bottom:1px solid var(--hairline);
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.file-chip{
+  background:#fff;
+  border:1px solid var(--hairline);
+  border-radius:0.75rem;
+  padding:10px 14px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:0.75rem;
+  min-width:260px;
+}
+.file-chip .fname{font-weight:700; color:var(--ink); flex:1;}
+.badge-pill{
+  border-radius:999px;
+  font-size:0.625rem;
+  font-weight:800;
+  letter-spacing:0.02em;
+  padding:0.25rem 0.75rem;
+  white-space:nowrap;
+  text-transform:uppercase;
+}
+.badge-navy{background:var(--ink-navy); color:#fff;}
+.badge-green{background:var(--signal-green); color:#fff;}
+.badge-red{background:var(--error); color:#fff;}
+.retry-link{font-size:0.6875rem; font-weight:700; color:var(--error); text-decoration:underline; cursor:pointer; background:none; border:none; padding:0;}
+
+/* ---- Main tree area (full width, no max-w wrapper) ---- */
+.editor-body{
+  padding:28px 32px 64px;
+}
+.tree-section-label{
+  font-family:var(--font-display);
+  font-size:1.25rem;
+  font-weight:700;
+  letter-spacing:-0.02em;
+  color:var(--ink-navy);
+  margin:0 0 4px;
+}
+.tree-section-sub{
+  font-size:0.8125rem;
+  color:var(--muted);
+  margin:0 0 20px;
+}
+
+.tree{display:flex; flex-direction:column; gap:12px;}
+
+/* Node card, indentation implies hierarchy */
+.node{
+  background:#fff;
+  border:1px solid var(--hairline);
+  border-radius:0.75rem;
+  padding:1rem;
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  position:relative;
+}
+.node.confirmed{ border-left:4px solid var(--signal-green); padding-left:calc(1rem - 3px); }
+.node.chapter{font-weight:700;}
+.node.topic{margin-left:32px;}
+.node.subtopic{margin-left:64px;}
+.node.content{margin-left:96px; background:var(--surface-secondary);}
+
+.node-drag{
+  color:var(--muted);
+  font-size:0.9rem;
+  padding-top:2px;
+  cursor:grab;
+  user-select:none;
+}
+.node-body{flex:1; min-width:0;}
+.node-kind{
+  font-size:0.625rem;
+  font-weight:800;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:2px;
+}
+.node-title{
+  font-family:var(--font-display);
+  font-weight:700;
+  font-size:1rem;
+  color:var(--ink);
+  margin:0 0 4px;
+}
+.node.topic .node-title{font-size:0.9375rem;}
+.node.subtopic .node-title{font-size:0.875rem; font-family:var(--font-body); font-weight:700;}
+.node.content .node-title{font-size:0.8125rem; font-family:var(--font-body); font-weight:600; color:var(--muted);}
+.node-meta{font-size:0.75rem; color:var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.status-dot{
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:0.6875rem; font-weight:700;
+}
+.status-dot.confirmed{color:var(--signal-green);}
+.status-dot.unconfirmed{color:var(--muted);}
+.status-dot .glyph{font-size:0.8rem;}
+
+.node-controls{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  opacity:1;
+}
+.icon-btn{
+  width:30px; height:30px;
+  border-radius:0.5rem;
+  border:1px solid var(--hairline);
+  background:#fff;
+  color:var(--ink-navy);
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.8rem;
+  cursor:pointer;
+}
+.icon-btn.confirm-btn{
+  background:var(--signal-green);
+  border-color:var(--signal-green);
+  color:#fff;
+  width:auto;
+  padding:0 12px;
+  gap:5px;
+  font-size:0.6875rem;
+  font-weight:800;
+  letter-spacing:0.01em;
+}
+.icon-btn.confirm-btn.done{
+  background:#fff;
+  color:var(--signal-green);
+  border-color:var(--signal-green);
+}
+.icon-btn.danger{color:var(--error);}
+
+.hover-hint{
+  font-size:0.625rem;
+  color:var(--muted);
+  font-style:italic;
+  margin-left:4px;
+}
+
+.chem-render{
+  margin-top:8px;
+  background:var(--surface-secondary);
+  border:1px solid var(--hairline);
+  border-radius:0.5rem;
+  padding:10px 14px;
+  font-family:'Cambria Math', Cambria, Georgia, serif;
+  font-size:0.9rem;
+  color:var(--ink);
+}
+
+.a11y-note{
+  margin-top:36px;
+  background:#fff;
+  border:1px dashed var(--hairline);
+  border-radius:0.75rem;
+  padding:16px 20px;
+  font-size:0.75rem;
+  color:var(--muted);
+}
+.a11y-note b{color:var(--ink-navy);}
+</style>
+
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <div class="dots"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span></div>
+    <div class="addr-bar">app.flexdemy.com/tutor/courses/chem-cbse10-acids-bases/editor</div>
+  </div>
+  <div class="browser-viewport">
+
+    <div class="editor-header">
+      <div class="header-top">
+        <div class="header-left">
+          <span class="eyebrow">Course Content Editor</span>
+          <h1 class="course-title">Acids, Bases &amp; Salts — CBSE Class 10 Chemistry</h1>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-ghost" disabled aria-disabled="true" title="All nodes must be confirmed first">Review as Student</button>
+          <button class="btn btn-primary">Confirm Node Changes</button>
+        </div>
+      </div>
+
+      <nav class="lifecycle" aria-label="Course publishing lifecycle">
+        <div class="stage current" aria-current="true"><span class="num">1</span>Draft</div>
+        <div class="stage-connector"></div>
+        <div class="stage"><span class="num">2</span>In Review</div>
+        <div class="stage-connector"></div>
+        <div class="stage"><span class="num">3</span>Review Confirmed</div>
+        <div class="stage-connector"></div>
+        <div class="stage"><span class="num">4</span>Published</div>
+      </nav>
+    </div>
+
+    <div class="upload-strip" aria-label="Uploaded source files and extraction status">
+      <div class="file-chip">
+        <span class="fname">Ch3_Acids_Bases_Salts_scan.pdf</span>
+        <span class="badge-pill badge-navy">Extracting Chapter 3 of 5… 2 files complete</span>
+      </div>
+      <div class="file-chip">
+        <span class="fname">Ch1_Intro_Reactions.pdf</span>
+        <span class="badge-pill badge-green">Done</span>
+      </div>
+      <div class="file-chip">
+        <span class="fname">Ch2_Indicators_Notes.docx</span>
+        <span class="badge-pill badge-green">Done</span>
+      </div>
+      <div class="file-chip">
+        <span class="fname">worksheet_p14_scan.jpg</span>
+        <span class="badge-pill badge-red">Failed — scan too low quality</span>
+        <button class="retry-link">Retry</button>
+      </div>
+    </div>
+
+    <div class="editor-body">
+      <h2 class="tree-section-label">Chapter → Topic → Subtopic → Content</h2>
+      <p class="tree-section-sub">3 chapters, 11 topics extracted from your uploads. Edit, reorder, or delete any node — confirm each one before Review as Student unlocks.</p>
+
+      <div class="tree">
+
+        <!-- Chapter 1 (confirmed) -->
+        <div class="node chapter confirmed">
+          <span class="node-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+          <div class="node-body">
+            <div class="node-kind">Chapter 1</div>
+            <h3 class="node-title">Introduction to Chemical Reactions</h3>
+            <div class="node-meta">
+              <span class="status-dot confirmed"><span class="glyph">✓</span> Confirmed</span>
+              <span>4 topics</span>
+            </div>
+          </div>
+          <div class="node-controls">
+            <button class="icon-btn" title="Edit">✎</button>
+            <button class="icon-btn" title="Move up">↑</button>
+            <button class="icon-btn" title="Move down">↓</button>
+            <button class="icon-btn danger" title="Delete (cascades to descendants)">🗑</button>
+          </div>
+        </div>
+
+        <!-- Chapter 2 (in progress, unconfirmed, extracting) -->
+        <div class="node chapter">
+          <span class="node-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+          <div class="node-body">
+            <div class="node-kind">Chapter 2</div>
+            <h3 class="node-title">Acids, Bases &amp; Salts <span class="badge-pill badge-navy" style="margin-left:8px;">Extracting</span></h3>
+            <div class="node-meta">
+              <span class="status-dot unconfirmed"><span class="glyph">○</span> Unconfirmed</span>
+              <span>5 topics so far</span>
+            </div>
+          </div>
+          <div class="node-controls">
+            <button class="icon-btn" title="Edit">✎</button>
+            <button class="icon-btn" title="Move up">↑</button>
+            <button class="icon-btn" title="Move down">↓</button>
+            <button class="icon-btn danger" title="Delete (cascades to descendants)">🗑</button>
+            <button class="icon-btn confirm-btn" title="Confirm this node">✓ Confirm</button>
+          </div>
+        </div>
+
+        <!-- Topic 2.1 under Chapter 2, confirmed, with chemistry rendering -->
+        <div class="node topic confirmed">
+          <span class="node-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+          <div class="node-body">
+            <div class="node-kind">Topic 2.1</div>
+            <h3 class="node-title">Reaction of Acids with Metals</h3>
+            <div class="node-meta">
+              <span class="status-dot confirmed"><span class="glyph">✓</span> Confirmed</span>
+              <span>2 subtopics</span>
+            </div>
+            <div class="chem-render">Zn(s) + 2HCl(aq) → ZnCl₂(aq) + H₂(g) ↑</div>
+          </div>
+          <div class="node-controls">
+            <button class="icon-btn" title="Edit">✎</button>
+            <button class="icon-btn" title="Move up">↑</button>
+            <button class="icon-btn" title="Move down">↓</button>
+            <button class="icon-btn danger" title="Delete (cascades to descendants)">🗑</button>
+          </div>
+        </div>
+
+        <!-- Subtopic under Topic 2.1, unconfirmed after structural edit, hover controls visible -->
+        <div class="node subtopic">
+          <span class="node-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+          <div class="node-body">
+            <div class="node-kind">Subtopic 2.1.1</div>
+            <h3 class="node-title">Why Hydrogen Gas Is Released — Testing With a Burning Splint</h3>
+            <div class="node-meta">
+              <span class="status-dot unconfirmed"><span class="glyph">○</span> Unconfirmed</span>
+              <span>Moved from Topic 2.3 — re-confirm required</span>
+            </div>
+          </div>
+          <div class="node-controls">
+            <button class="icon-btn" title="Edit">✎</button>
+            <button class="icon-btn" title="Move up">↑</button>
+            <button class="icon-btn" title="Move down">↓</button>
+            <button class="icon-btn danger" title="Delete">🗑</button>
+            <button class="icon-btn confirm-btn" title="Confirm this node">✓ Confirm</button>
+          </div>
+        </div>
+
+        <!-- Content block, leaf, confirmed -->
+        <div class="node content confirmed">
+          <span class="node-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+          <div class="node-body">
+            <div class="node-kind">Content Block</div>
+            <h3 class="node-title">Paragraph — OCR-extracted from p.14, edited for a garbled sentence</h3>
+            <div class="node-meta">
+              <span class="status-dot confirmed"><span class="glyph">✓</span> Confirmed</span>
+            </div>
+          </div>
+          <div class="node-controls">
+            <button class="icon-btn" title="Edit">✎</button>
+            <button class="icon-btn" title="Move up">↑</button>
+            <button class="icon-btn" title="Move down">↓</button>
+            <button class="icon-btn danger" title="Delete">🗑</button>
+          </div>
+        </div>
+
+        <!-- Chapter 3 (unconfirmed, plain, not yet reviewed) -->
+        <div class="node chapter">
+          <span class="node-drag" title="Drag to reorder" aria-hidden="true">⠿</span>
+          <div class="node-body">
+            <div class="node-kind">Chapter 3</div>
+            <h3 class="node-title">Salts, pH and Everyday Applications</h3>
+            <div class="node-meta">
+              <span class="status-dot unconfirmed"><span class="glyph">○</span> Unconfirmed</span>
+              <span>2 topics</span>
+            </div>
+          </div>
+          <div class="node-controls">
+            <button class="icon-btn" title="Edit">✎</button>
+            <button class="icon-btn" title="Move up">↑</button>
+            <button class="icon-btn" title="Move down">↓</button>
+            <button class="icon-btn danger" title="Delete (cascades to descendants)">🗑</button>
+            <button class="icon-btn confirm-btn" title="Confirm this node">✓ Confirm</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="a11y-note">
+        <b>Note on this mock:</b> edit/delete/reorder/confirm controls are shown always-visible here for legibility; in the live product they surface on hover/focus per node, remain independently keyboard-reachable (Tab order, not drag-only), and each node's confirmed/unconfirmed state is exposed to assistive tech via more than color (a ✓/○ glyph + text label pairs with the green accent, per Accessibility Floor).
+      </div>
+    </div>
+
+  </div>
+</div>

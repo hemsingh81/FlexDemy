@@ -60,6 +60,10 @@ public static class RolePermissionSeedData
         // admin.permissions.manage: Master only.
         seeds.Add(new RolePermissionSeed(UserRole.Master, FeatureKeys.AdminPermissionsManage, true));
 
+        // aiconfig.manage: Master only -- matches the ai-configuration admin sub-tab being
+        // Master-only since Story 1.1 (unlike tag-management, which Support also sees).
+        seeds.Add(new RolePermissionSeed(UserRole.Master, FeatureKeys.AiConfigManage, true));
+
         return seeds;
     }
 }

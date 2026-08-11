@@ -1,6 +1,9 @@
 using FlexDemy.Application.Common;
+using FlexDemy.Domain.AiConfig;
+using FlexDemy.Domain.AiUsage;
 using FlexDemy.Domain.MasterData;
 using FlexDemy.Domain.Permissions;
+using FlexDemy.Domain.Tags;
 using FlexDemy.Domain.Users;
 using FlexDemy.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +21,8 @@ public static class DatabaseSeeder
         await EnsureDefaultUsersAsync(db, idGenerator, hasher, ct);
         await EnsureMasterDataAsync(db, idGenerator, ct);
         await EnsureRolePermissionsAsync(db, idGenerator, ct);
+        await EnsureAiConfigAsync(db, idGenerator, ct);
+        await EnsureTagsAsync(db, idGenerator, ct);
     }
 
     // Dev-only seed: one default account per role so the RBAC model has something to sign
@@ -137,6 +142,77 @@ public static class DatabaseSeeder
                 Role = seed.Role,
                 FeatureKey = seed.FeatureKey,
                 IsVisible = seed.IsVisible,
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    // Dev-only AI Task config seed (Story 1.5, AD-19): one AiTaskConfig + one AiPromptVersion
+    // (version 1, active, empty placeholder text -- nothing edits prompt text yet) per AI Task,
+    // mirroring the frontend's prior mock values exactly (AC #3). Idempotent PER TASK (not
+    // "skip entirely if any row exists") -- so a partial prior run, or a future AiTaskIds entry
+    // added after the first seed, still gets seeded on the next startup instead of being
+    // silently skipped forever (review finding, 2026-08-11 review).
+    private static async Task EnsureAiConfigAsync(FlexDemyDbContext db, IIdGenerator idGenerator, CancellationToken ct)
+    {
+        var existingTaskIds = await db.AiTaskConfigs.Select(c => c.TaskId).ToListAsync(ct);
+        var missing = AiConfigSeedData.TaskConfigs.Where(seed => !existingTaskIds.Contains(seed.TaskId));
+
+        foreach (var seed in missing)
+        {
+            db.AiTaskConfigs.Add(new AiTaskConfig
+            {
+                Id = idGenerator.NewId(),
+                TaskId = seed.TaskId,
+                Provider = seed.Provider,
+                Model = seed.Model,
+                FallbackProvider = seed.FallbackProvider,
+                FallbackModel = seed.FallbackModel,
+                BudgetThreshold = seed.BudgetThreshold,
+                PricePerMillionInputTokens = seed.PricePerMillionInputTokens,
+                PricePerMillionOutputTokens = seed.PricePerMillionOutputTokens,
+                FallbackPricePerMillionInputTokens = seed.FallbackPricePerMillionInputTokens,
+                FallbackPricePerMillionOutputTokens = seed.FallbackPricePerMillionOutputTokens,
+            });
+
+            db.AiPromptVersions.Add(new AiPromptVersion
+            {
+                Id = idGenerator.NewId(),
+                TaskId = seed.TaskId,
+                Version = 1,
+                PromptText = string.Empty,
+                IsPromptActive = true,
+            });
+
+            db.AiTaskBudgets.Add(new AiTaskBudget
+            {
+                Id = idGenerator.NewId(),
+                TaskId = seed.TaskId,
+                Spent = 0m,
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    // Dev-only Tag seed (Story 1.9): mirrors the frontend's prior mock values (INITIAL_TAGS)
+    // exactly, so an admin sees identical values on first real load. Idempotent PER NAME (not
+    // "skip entirely if any row exists"), matching EnsureAiConfigAsync's established pattern --
+    // duplicate-name matching is case-insensitive (EF.Functions.ILike), same rule TagService
+    // enforces at write time.
+    private static async Task EnsureTagsAsync(FlexDemyDbContext db, IIdGenerator idGenerator, CancellationToken ct)
+    {
+        var existingNames = await db.Tags.Select(t => t.Name).ToListAsync(ct);
+        var missing = TagSeedData.Tags.Where(seed => !existingNames.Any(name => string.Equals(name, seed.Name, StringComparison.OrdinalIgnoreCase)));
+
+        foreach (var seed in missing)
+        {
+            db.Tags.Add(new Tag
+            {
+                Id = idGenerator.NewId(),
+                Name = seed.Name,
+                IsActive = seed.IsActive,
             });
         }
 

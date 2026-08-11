@@ -7,9 +7,9 @@ paradigm: 'Clean Architecture (Onion) — Domain at the center, Application/Infr
 scope: 'BackEnd/ — greenfield ASP.NET Web API (C#) service on PostgreSQL, Docker-deployed; project structure, layering rules, and coding conventions an AI assistant or new contributor can follow consistently'
 status: final
 created: '2026-08-09'
-updated: '2026-08-09'
+updated: '2026-08-11'
 binds: []
-sources: ['FrontEnd/docs/BACKEND_PRD.md']
+sources: ['FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md']
 companions: []
 ---
 
@@ -117,6 +117,62 @@ flowchart TB
 - **Prevents:** two engineers inventing different connection-string env var names, the API container starting before Postgres can accept connections, and the frontend/backend deploy paths silently diverging into two un-synced compose files
 - **Rule:** `docker-compose.yml` lives at the **repo root** (not `BackEnd/`), defining three services — `postgres`, `api` (build context `./BackEnd`, `src/FlexDemy.Api/Dockerfile`), `web` (build context `./FrontEnd`, its own `Dockerfile`, static Vite build served by nginx). Every service carries a Compose **profile** tag: `postgres`/`api` → `["backend", "all"]`, `web` → `["frontend", "all"]` — so `docker compose --profile backend up`, `--profile frontend up`, and `--profile all up` deploy backend-only, frontend-only, and everything together from the one file, per explicit user requirement. `FlexDemy.Api/Dockerfile` is a multi-stage build (`mcr.microsoft.com/dotnet/sdk:10.0` to restore+publish, `mcr.microsoft.com/dotnet/aspnet:10.0` to run); `FrontEnd/Dockerfile` is likewise multi-stage (`node:24-alpine` to build, `nginx:stable-alpine` to serve, with an SPA-fallback `nginx.conf`). `api` reads its connection string from `ConnectionStrings__Default` (ASP.NET's standard double-underscore env-var config convention — not a bespoke key); `postgres` uses a named volume mounted at `/var/lib/postgresql` (not `.../data` — the pg 18+ image refuses to start against the pre-18 mount convention, confirmed live) for persistence and a `pg_isready` healthcheck; `api`'s `depends_on` requires `postgres`'s `service_healthy` condition, not just container start.
 - **Known environment limitation (not a spine defect):** in this project's current dev machine, `docker compose --profile backend build` fails at `dotnet restore` inside the SDK image with `NU1301 UntrustedRoot` reaching `api.nuget.org` — a local network/corporate-proxy TLS-interception characteristic of that machine, reproduced twice, non-transient. `dotnet build`/`dotnet test` on the host (outside Docker) and the `web` image's Docker build both succeed cleanly, isolating the failure to that one container's outbound TLS trust chain. Typical fix is trusting the org's root CA inside the SDK build stage or pointing NuGet at an internal proxy — an environment fix, not a Dockerfile or code change.
+- **Hangfire note (AD-15):** Hangfire's server runs in-process inside the existing `api` container (`app.UseHangfireServer()` in `Program.cs`) against the existing Postgres instance. No new Docker Compose service and no Redis — the publish-job worker is not a separate deployable.
+- **Cost-review addition (2026-08-11) — three new services, all `["backend", "all"]` profile:** `ai-gateway` (self-hosted Portkey OSS gateway, AD-14 — a standalone lightweight proxy, not embeddable in-process, unlike Hangfire above), `docling` (OCR/document-parsing microservice, AD-21 — Python-native, wrapped as its own small HTTP service since Docling has no .NET binding), and `clamav` (ClamAV daemon, AD-22, official `clamav/clamav` image, connected to over its `clamd` TCP socket). `api` reaches all three over the Compose internal network by service name (`http://ai-gateway:8787`, `http://docling:PORT`, `clamav:3310`) — none are exposed externally. This grows the envelope from 3 services to 6; still one `docker-compose.yml`, same profile-tag discipline as the rule above.
+
+### AD-14 — AI Service Layer via `IAiGateway` [ASSUMPTION]
+
+- **Binds:** all AI-calling code (course extraction/authoring, drilldown, exercises, keyword/notation content)
+- **Prevents:** each feature (Courses, future Drilldown/Exercises) writing its own ad-hoc AI HTTP client, and AI-provider request/response specifics leaking into feature services
+- **Rule:** one fat `IAiGateway` interface — not per-task interfaces, matching the PRD's FR-1 framing of a single internal AI-service layer — lives in a new cross-cutting `Application/AiGateway/` folder, at the same tier as `Common/` (extending AD-6's feature-folder pattern to a shared, no-single-owner concern). One method per AI Task: `ExtractStructureAsync`, `ExplainTopicAsync`, `RewriteExplanationAsync`, `GenerateExerciseAsync`, `DefineKeywordAsync`, `DescribeNotationAsync`, plus an embeddings method. The HTTP-calling implementation lives in `Infrastructure/AiGateway/` and implements `IAiGateway`, targeting a **self-hosted Portkey OSS gateway** (`portkey-ai/gateway`, Apache-2.0, web-verified Aug 2026 — decided in cost review over a managed OpenRouter/Portkey-hosted tier specifically because self-hosting carries zero inference markup, not just for data residency) at `http://ai-gateway:8787` per AD-13's deployment note — this replaces the PRD's original managed-then-self-hosted phasing with one gateway from day one, so `Infrastructure/AiGateway/`'s implementation targets that one endpoint shape permanently, not a phase-1 and a phase-2 shape. DI registration follows AD-2 (wired in `Program.cs`/`AddInfrastructure()`, never new'd up directly by a feature service). `DescribeNotationAsync` runs inside the per-node extraction/authoring pipeline, not the publish-time batch job (AD-15) — alt-text is an authoring-time accessibility requirement (FR-16), not publish-gated content like Drill-Down/Ways. Per-task fallback (PRD FR-3) is implemented with **Polly 8.7.0** (BSD-3-Clause, App vNext — web-verified Aug 2026; no license-risk overlap with AD-3's concerns) as a fallback policy wrapping each `IAiGateway` method's primary-provider call, falling back to that task's configured secondary provider/model on failure; the fallback event is logged via the same usage-tracking path as AD-18's budget counter (PRD FR-4).
+
+### AD-15 — Async batch job execution via Hangfire [ADOPTED]
+
+- **Binds:** the course-publish workflow (course → `Publishing` sub-state, ~200+ AI calls per batch) **and** the file upload/parsing/extraction pipeline (FR-11–13) — both are the identical shape (per-item async work, independent status, independent retry), so both use the same job mechanism rather than two.
+- **Prevents:** a synchronous HTTP request blocking on many sequential AI/parsing calls, publish or extraction progress being lost if the initiating tab closes, and a second, differently-built async mechanism for extraction just because it was scoped in a separate PRD section
+- **Rule:** Hangfire Core + Hangfire.PostgreSql (LGPLv3; different author/company than MediatR/AutoMapper, so no license-risk overlap with AD-3's MediatR rejection) run both the publish batch and per-file extraction, using the existing Postgres instance as the job store — no new datastore, no Redis. One Hangfire job per content-node generation call (publish) or per uploaded file (extraction), not one job for the whole batch, so per-item status is tracked individually, the job survives tab-close (it runs server-side regardless of client connection), and a failed item is retryable on its own without re-running the whole batch. Chosen over a hand-rolled `BackgroundService` + Postgres jobs table (`SELECT ... FOR UPDATE SKIP LOCKED`) for its built-in retry/dashboard machinery at this batch size, and over Quartz.NET (cron/scheduler-centric, a heavier fit for recurring jobs than a one-off burst). **Status is a Domain-level contract, not a Hangfire-level one:** a single `JobItemStatus` enum (`Queued`, `InProgress`, `Done`, `Failed`) lives in `Domain/Jobs/`, set on the owning entity (a node's generation record, a file's extraction record) by the job handler itself as it progresses — never read by querying Hangfire's own `IMonitoringApi`/dashboard state from Application or Api (that would violate AD-1's data-access boundary). Hangfire's own job IDs and monitoring API stay entirely inside `Infrastructure/Jobs/`; nothing outside that folder references a Hangfire type.
+
+### AD-16 — Batch job-item commits are an AD-11 carve-out, and batch-completion is a claimed last-item [ASSUMPTION]
+
+- **Binds:** the publish use-case **and** the extraction use-case, and both's Hangfire job items (extends AD-11 and AD-15)
+- **Prevents:** reading AD-11's "one `SaveChangesAsync` per use-case" rule as forbidding either batch's many independent per-item commits (or, conversely, batch code buffering all items into one giant transaction just to satisfy AD-11's letter); and — the gap a fresh adversarial read exposed — leaving "when does the batch as a whole finish" undefined, so two engineers could each assume they own transitioning the course out of `Publishing` (or a file-set out of its extraction phase)
+- **Rule:** the use-case that triggers Publish (or a file-set's extraction) still obeys AD-11 as written — it calls `SaveChangesAsync` exactly once, transitioning the course to `Publishing` (or the file-set to its in-progress state). Each Hangfire job item, however, commits its own generated content independently as it completes; this is a different use-case shape (a fire-and-forget batch of many small independent units of work, not one synchronous unit of work) and is not a violation of AD-11's spirit. **Batch completion — the step that flips `Publishing → Published` and finalizes AD-17's version snapshot — is claimed by whichever job item's completion causes an atomic `UPDATE ... SET remaining = remaining - 1 WHERE batch_id = ... RETURNING remaining` (on a `PublishBatch`/`ExtractionBatch` row created alongside the batch) to return `0`.** Only that one item runs the finalize step; every other item's completion is a no-op past its own commit. This avoids a two-jobs-both-think-they're-last race without needing Hangfire Pro's (commercial) batch-continuation feature. Job/batch IDs follow AD-9 — `string` IDs via the existing `IIdGenerator`, same pattern as every other entity, no separate ID scheme for jobs.
+
+### AD-17 — FR-25 version storage is a deep-copy snapshot [ASSUMPTION]
+
+- **Binds:** course publish/versioning
+- **Prevents:** building a diff/audit-log or event-replay engine when FR-25 only asks for restorable versions
+- **Rule:** each publish deep-copies the entire confirmed content tree plus its cached Drill-Down/Way content into a versioned snapshot. Restoring a prior version swaps an active-version pointer to that snapshot — it is not a diff/replay engine. Chosen for simplicity and literal match to FR-25's wording over storage efficiency, accepting the storage cost at this stage.
+
+### AD-18 — Budget enforcement is a pre-flight atomic reserve against AD-19's threshold, not post-hoc recording [ASSUMPTION]
+
+- **Binds:** AI-task budget/spend tracking and enforcement (FR-29)
+- **Prevents:** a cached running total drifting from actual spend under concurrent AI calls; the added complexity of periodic reconciliation; and — the gap a fresh read exposed — recording spend only *after* a call, which fails FR-29's explicit requirement to block a request *before* it exceeds budget; and `AiTaskBudget` drifting from `AiTaskConfig.budget_threshold` (AD-19) if the threshold were duplicated onto the spend row instead of read from its one owning table
+- **Rule:** `AiTaskBudget` (in `Domain/AiUsage/`) holds only `spent`, never its own copy of the threshold. Before dispatching an `IAiGateway` call, the caller runs `UPDATE ai_task_budget SET spent = spent + cost WHERE task_id = ... AND spent + cost <= (SELECT budget_threshold FROM ai_task_config WHERE task_id = ai_task_budget.task_id) RETURNING spent` — a single atomic statement that reserves spend against AD-19's live threshold and blocks (zero rows returned) *before* the call happens, not a cached running total with periodic reconciliation. Right for this project's stated scale (single container, moderate volume); reconciliation's eventual-consistency complexity isn't earned yet.
+
+### AD-19 — AI task configuration is DB-backed, not static config files [ASSUMPTION]
+
+- **Binds:** per-task provider/model assignment, fallback assignment, budget thresholds, and prompt text/version (PRD FR-2, FR-5, FR-27, FR-28)
+- **Prevents:** the PRD's "no redeploy" guarantee (FR-2, FR-29) silently breaking once the gateway moves to a self-hosted phase-2 provider whose native config is a static file requiring a process restart to change; and Admin's read/write config UI (FR-27, FR-28) having no backing store to read from or write to
+- **Rule:** a new `Domain/AiConfig/` entity set (`AiTaskConfig` — one row per AI Task, holding active provider/model, fallback provider/model, budget threshold; `AiPromptVersion` — versioned prompt text per task, append-only per AD-11's Repository/UnitOfWork discipline) is the single source of truth for gateway behavior, read by `Infrastructure/AiGateway/`'s implementation at request time (not baked into `appsettings.json`). `Application/AiConfig/` exposes `IAiConfigService` (CRUD on task config, list/activate prompt versions) per AD-2/AD-10's DTO-boundary convention; `Api/Controllers/AiConfigController.cs` exposes it to Admin. A config or prompt-version change takes effect on the next `IAiGateway` call with no redeploy, because Infrastructure reads from the DB, never from a file loaded once at startup.
+
+### AD-20 — Course content tree is four explicit entity types, not a generic node table [ASSUMPTION]
+
+- **Binds:** `Domain/Courses/`, and every AD above that references "the confirmed content tree" (AD-14's `ExtractStructureAsync`, AD-16's batch-completion finalize, AD-17's deep-copy snapshot)
+- **Prevents:** the PRD's Chapter→Topic→Subtopic→Content-Block hierarchy going unmodeled (a gap a fresh review caught: nothing in this spine defined it, and the Structural Seed's `Domain/Courses/` line still named the superseded Dashboard-PRD `Module`/`Lesson` shape) — and, separately, two engineers each picking a different generic-vs-explicit representation (a single polymorphic `Node` table with a `NodeType` discriminator vs. four typed entities) with no rule to converge on
+- **Rule:** `Chapter`, `Topic`, `Subtopic`, and `ContentBlock` are four explicit entity types in `Domain/Courses/` (not a single generic/EAV-style `Node` table with a type discriminator) — each with its own parent-FK reference one level up the hierarchy (`Topic.ChapterId`, `Subtopic.TopicId`, `ContentBlock.SubtopicId` or `.TopicId` directly, since FR-3's Glossary allows a Content Block under either), matching Domain's existing "explicit entities, not a generic shape" pattern (AD-1's own framing). This supersedes the prior `Module`/`Lesson` entities entirely — the New Course Wizard PRD's own Document Purpose states it "replaces that flow end to end"; `Module`/`Lesson` are not kept as a parallel or legacy shape. `JobItemStatus` (AD-15) and confirmation state (per-node, tutor-set) are fields on these entities, not a separate tracking table. `CourseVersion` (AD-17) is a deep-copy snapshot of this same four-entity tree, not a structurally different representation.
+
+### AD-21 — Document parsing via a self-hosted Docling service [ASSUMPTION]
+
+- **Binds:** FR-12's parsing/OCR pre-step, ahead of `IAiGateway.ExtractStructureAsync` (AD-14)
+- **Prevents:** paying a per-page SaaS parsing fee (e.g. LlamaParse) that scales with upload volume, when a free, self-hosted, MIT-licensed option (Docling) covers the same job — decided in cost review, 2026-08-11
+- **Rule:** Docling (IBM, MIT, web-verified Aug 2026) runs as its own lightweight HTTP service (`docling`, AD-13) since it's Python-native with no .NET binding — `Infrastructure/Parsing/` gets a small HTTP client calling it, analogous in shape to `Infrastructure/AiGateway/`'s client. Docling's pluggable OCR backends (EasyOCR/Tesseract/RapidOCR, all free/permissive) handle FR-12's scanned-page case, not just clean digital-born PDFs. FR-12's existing confidence-threshold gate (routing low-confidence output to failed/retry rather than passing it through) is the accepted mitigation for Docling being less accurate than a paid alternative on heavily degraded scans — a product-level trade-off already made in the PRD, not re-opened here.
+
+### AD-22 — Malware scanning via a self-hosted ClamAV service [ASSUMPTION]
+
+- **Binds:** FR-11's upload-scanning requirement, ahead of AD-21's parsing step
+- **Prevents:** paying for a commercial scanning API when a free, actively-maintained, open-source scanner covers this small-scale, tutor-only upload surface — decided in cost review, 2026-08-11
+- **Rule:** ClamAV (Cisco-Talos, GPLv2, official `clamav/clamav` Docker image, web-verified Aug 2026) runs as its own service (`clamav`, AD-13), reached over its `clamd` TCP protocol — `Infrastructure/Scanning/` gets a client (e.g. an `nClam`-class .NET ClamAV client, `[ASSUMPTION: exact client library not yet chosen — confirm before build]`) implementing an `IFileScanner` interface defined in `Application/Common/`. A file failing the scan is rejected at FR-11's upload step with a specific reason, before ever reaching AD-21's parsing step. ClamAV's documented lower detection rate on novel/obfuscated malware (vs. commercial engines) is an accepted trade-off at this upload surface's scale and threat profile — supplementing with a free third-party signature feed (e.g. SaneSecurity) is a future hardening option, not required for launch.
 
 ## Consistency Conventions
 
@@ -143,6 +199,13 @@ flowchart TB
 | xUnit | latest stable (standard .NET test framework) |
 | NSubstitute | latest stable (BSD-3-Clause) |
 | Docker / Docker Compose | latest stable |
+| Hangfire (Core) | 1.8.24 (LGPLv3 — web-verified Aug 2026) |
+| Hangfire.PostgreSql | 1.21.1 (Postgres-backed job store, no Redis needed — web-verified Aug 2026) |
+| Polly | 8.7.0 (BSD-3-Clause, App vNext — web-verified Aug 2026; AD-14's per-task fallback) |
+| Portkey OSS gateway | `portkey-ai/gateway` (Apache-2.0 — web-verified Aug 2026; AD-14, self-hosted, zero inference markup) |
+| Docling | IBM, MIT (web-verified Aug 2026; AD-21, self-hosted OCR/parsing service) |
+| ClamAV | Cisco-Talos, GPLv2, `clamav/clamav` Docker image (web-verified Aug 2026; AD-22, self-hosted malware scanning) |
+| .NET ClamAV client | `[ASSUMPTION: exact package not yet chosen (e.g. an nClam-class library) — confirm before build]` |
 
 ## Structural Seed
 
@@ -157,11 +220,15 @@ flowchart TB
   BackEnd/
   src/
     FlexDemy.Domain/
-      Courses/            # Course, Module, Lesson entities + value objects
+      Courses/            # Course entity; Chapter/Topic/Subtopic/ContentBlock tree (AD-20, supersedes the old Module/Lesson shape); CourseVersion (deep-copy publish snapshot, AD-17)
       Tutoring/            # TutorSlot entity
       Notes/               # CourseNote entity
       Reviews/             # CourseReview entity
       Users/               # User entity
+      Jobs/                 # JobItemStatus enum (AD-15); PublishBatch, ExtractionBatch (AD-16's claimed-last-item finalize)
+      AiUsage/             # AiTaskUsage, AiTaskBudget entities (FR-29 spend tracking, AD-18)
+      AiConfig/             # AiTaskConfig, AiPromptVersion entities (AD-19)
+      Tags/                 # Tag entity (FR-26, net-new -- not part of the taxonomy/Master Data scaffold)
       FlexDemy.Domain.csproj
 
     FlexDemy.Application/
@@ -170,7 +237,10 @@ flowchart TB
       Notes/                # INoteService, NoteService, NoteMapper, NoteDto, ICourseNoteRepository
       Reviews/              # IReviewService, ReviewService, ReviewMapper, ReviewDto, ICourseReviewRepository
       Users/                # IUserService, UserService, UserMapper, UserDto, IUserRepository
-      Common/               # IUnitOfWork, IIdGenerator, AppException + subtypes, pagination/result wrappers
+      AiGateway/            # IAiGateway (one method per AI Task, AD-14) + request/response DTOs
+      AiConfig/              # IAiConfigService (AD-19): task provider/model/fallback/budget CRUD, prompt version list/activate
+      Tags/                  # ITagService, TagService, TagMapper, TagDto, ITagRepository (FR-26)
+      Common/               # IUnitOfWork, IIdGenerator, IFileScanner (AD-22), AppException + subtypes, pagination/result wrappers
       FlexDemy.Application.csproj
 
     FlexDemy.Infrastructure/
@@ -181,6 +251,10 @@ flowchart TB
         Configurations/      # one IEntityTypeConfiguration<T> per entity
       Repositories/           # CourseRepository, TutorSlotRepository, etc. — implement Application interfaces
       IdGeneration/            # UlidIdGenerator : IIdGenerator
+      AiGateway/               # HTTP client implementing IAiGateway, targets self-hosted Portkey OSS gateway (AD-14)
+      Parsing/                 # HTTP client calling the self-hosted Docling service (AD-21)
+      Scanning/                # ClamAV client implementing IFileScanner (AD-22)
+      Jobs/                    # Hangfire job classes, one per content-node generation call (AD-15)
       DependencyInjection.cs  # AddInfrastructure(this IServiceCollection, IConfiguration)
       FlexDemy.Infrastructure.csproj
 
@@ -191,9 +265,11 @@ flowchart TB
         NotesController.cs
         ReviewsController.cs
         UsersController.cs
+        AiConfigController.cs    # AD-19: Admin-facing task config/prompt-version/usage read+write
+        TagsController.cs        # FR-26
       Middleware/
         ExceptionHandlingMiddleware.cs   # maps AppException subtypes -> ProblemDetails
-      Program.cs               # composition root: AddApplication() + AddInfrastructure() + middleware pipeline + RUN_MIGRATIONS_ON_STARTUP check
+      Program.cs               # composition root: AddApplication() + AddInfrastructure() + middleware pipeline + RUN_MIGRATIONS_ON_STARTUP check + UseHangfireServer() (AD-15)
       appsettings.json
       appsettings.Development.json
       Dockerfile
@@ -211,20 +287,27 @@ flowchart TB
 flowchart LR
   subgraph "Docker Compose (repo root docker-compose.yml)"
     WEB["web [frontend, all]\n(FrontEnd/Dockerfile, nginx)"]
-    API["api [backend, all]\n(FlexDemy.Api container)\nConnectionStrings__Default"]
+    API["api [backend, all]\n(FlexDemy.Api container)\nConnectionStrings__Default\nHangfire server in-process (AD-15)"]
     DB[("postgres [backend, all]\npostgres:18-alpine\nvolume: pgdata\nhealthcheck: pg_isready")]
+    GW["ai-gateway [backend, all]\nself-hosted Portkey OSS (AD-14)"]
+    DOC["docling [backend, all]\nOCR/parsing service (AD-21)"]
+    AV["clamav [backend, all]\nmalware scanning daemon (AD-22)"]
   end
   Client -->|static assets| WEB
   Client -->|HTTP /api/v1| API
   API -->|Npgsql, after service_healthy| DB
+  API -->|HTTP, OpenAI-compatible| GW
+  API -->|HTTP| DOC
+  API -->|clamd TCP| AV
 ```
 
 ## Deferred
 
 - **WebSocket real-time protocols** (`BACKEND_PRD.md` §5: session countdown, synchronous study rooms) — not part of this structure-only scaffold. When implemented, ASP.NET Core's native `WebSocket`/SignalR support is the natural fit within the existing Api project; revisit then.
 - **Redis** (rate limiting, WebSocket session state per the PRD) — not provisioned in this pass. Add as a `docker-compose.yml` service + an Infrastructure-layer client when rate limiting or real-time state is actually implemented.
-- **AI microservice pipeline** (concept drilldown, auto-grading) — out of scope for this structural pass; likely its own Infrastructure-layer client calling an external AI API, or a separate service, decided when that feature is scoped.
-- **Auth implementation** (JWT + OAuth2 per the PRD) — the structure reserves `Users` feature folders for it, but the actual auth handler/middleware/token issuance is not wired up in this pass.
+- **Hangfire retry/backoff policy** — the exact per-item retry count and backoff interval for a failed publish job item is not decided in this pass (Hangfire ships default retry behavior out of the box); revisit once real failure-rate data from the AI gateway is available.
+- **Snapshot storage retention** — AD-17's deep-copy-per-version snapshot has no size-management/retention policy yet (how many versions to keep, whether/when to prune old ones); revisit once storage growth is observed in practice.
+- ~~**Auth implementation**~~ — **resolved outside this spine's own passes, not still deferred.** A fresh review caught this Deferred item and the project `CLAUDE.md` both contradicting the live code: `AuthController.cs`, `JwtTokenService.cs` (HMAC-signed JWTs, configurable signing key, dev-only fallback), and `FeatureAuthorizationHandler.cs` already implement login/register/`me` + role-claim-based authorization. Full OAuth2 (vs. this password-based JWT flow) remains genuinely unbuilt if the PRD's OAuth2 mention was meant literally — revisit only that narrower gap, not "auth" as a whole.
 - **NGINX reverse proxy on port 3000** (`BACKEND_PRD.md` §7) — not adopted in this pass; explicitly deferred rather than dropped. Revisit once actual deployment topology (cloud provider, TLS termination) is scoped.
 - **Production migration strategy** — AD-8's startup auto-migrate is a known anti-pattern at real production scale (concurrent instances racing to migrate); revisit before any production deployment.
 - **CI pipeline** — not set up in this pass; revisit once there's a remote to push to and a decision on where CI runs.

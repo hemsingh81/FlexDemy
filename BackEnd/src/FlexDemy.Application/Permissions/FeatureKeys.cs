@@ -24,10 +24,11 @@ public static class FeatureKeys
     public const string TutorApprove = "tutor.approve";
     public const string AdminUsersCreate = "admin.users.create";
     public const string AdminPermissionsManage = "admin.permissions.manage";
+    public const string AiConfigManage = "aiconfig.manage";
 
     public static readonly IReadOnlyList<string> AllKeys =
     [
         Dashboard, Discover, Tutor, Groups, Assignments, Certificates, Admin,
-        CoursesCreate, MasterDataManage, TutorApprove, AdminUsersCreate, AdminPermissionsManage,
+        CoursesCreate, MasterDataManage, TutorApprove, AdminUsersCreate, AdminPermissionsManage, AiConfigManage,
     ];
 }

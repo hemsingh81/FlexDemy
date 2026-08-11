@@ -1,0 +1,363 @@
+<title>FlexDemy — Course Player, Adaptive Learning (key screen mock)</title>
+<style>
+/*
+  KEY SCREEN 2 — Course Player, Topic mid-read with all four adaptive-learning affordances visible together
+  Governing sections:
+  - DESIGN.md > Components > "Adaptive Ways menu" (small white pill/tray, hairline border, rounded-DEFAULT,
+    secondary visual weight vs Drill-Down, anchored near "Explain more")
+  - DESIGN.md > Components > "Keyword definition popover" (white, hairline border, rounded-DEFAULT, shadow-md,
+    lightweight anchored popover at the clicked word)
+  - DESIGN.md > Components > "Exercise runner" (parchment-fill card, hairline border, rounded-lg, inline within
+    Course Player below the Topic/Subtopic content)
+  - DESIGN.md > Layout & Spacing note: Course Player's reading pane is max-w-4xl on its inner text column
+    (an intentional, explicitly-called-out exception to the full-width rule, distinct from a layout bug)
+  - EXPERIENCE.md > Component Patterns > "Drill-Down panel" (DrilldownPanel.tsx, right-docked, max-w-2xl,
+    level-gated reveal, one level at a time)
+  - EXPERIENCE.md > Component Patterns > "Adaptive Ways menu" (secondary to Drill-Down's primary action, Level 1
+    carries a visible textual nudge toward it, e.g. "Not clicking? Try a different explanation")
+  - EXPERIENCE.md > Component Patterns > "Exercise runner" (inline not modal, subject-appropriate input,
+    immediate feedback on submit)
+  - EXPERIENCE.md > Component Patterns > "Keyword definition popover" (real focusable control, Tab-reachable,
+    Enter/Space activation, dismiss on click-elsewhere/Escape, definition announced via aria-live without moving focus)
+  - EXPERIENCE.md > Interaction Primitives > Ways menu cycles freely in any order; Drill-Down levels stay
+    strictly sequential — two different interaction disciplines, not a shared "next" pattern
+  - EXPERIENCE.md > Key Flows > New Course Wizard PRD UJ-2 (Aarav: momentum topic, reads Level 1, doesn't click,
+    finds car-crash analogy via Ways, taps "inertia" keyword, attempts the optional exercise)
+  - Voice and Tone: specific/measurable copy, no vague hype, per the Do/Don't table.
+
+  NOTE: Fraunces and Outfit are not guaranteed available offline; system serif/sans fallbacks are declared in the font stacks below.
+  Inline CSS only, no JS, no network calls, renders fully offline. Popover/menu/exercise states below are rendered
+  statically "open" to show all four affordances simultaneously, as the task requires.
+*/
+
+:root{
+  --ink-navy:#143358;
+  --citrus-amber:#BA5012;
+  --citrus-amber-on-dark:#EC7B38;
+  --signal-green:#179765;
+  --parchment:#FAF7EC;
+  --hairline:#E1DED4;
+  --ink:#142030;
+  --muted:#5E6A79;
+  --canvas:#FCFAF4;
+  --surface-secondary:#F3F0E6;
+  --error:#DC2626;
+  --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body:'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+*{box-sizing:border-box;}
+body{margin:0; background:#DCE3EA; font-family:var(--font-body); color:var(--ink); -webkit-font-smoothing:antialiased;}
+
+.browser-frame{
+  max-width:1360px; margin:24px auto; border-radius:14px; overflow:hidden;
+  box-shadow:0 30px 60px -20px rgba(20,32,48,0.35), 0 2px 8px rgba(20,32,48,0.12);
+  border:1px solid #C7CFD8; background:#fff;
+}
+.browser-chrome{background:#EEF1F5; border-bottom:1px solid #D6DBE2; padding:10px 14px; display:flex; align-items:center; gap:10px;}
+.dots{display:flex;gap:6px;}
+.dot{width:11px;height:11px;border-radius:50%;}
+.dot.red{background:#FF5F57;} .dot.amber{background:#FEBC2E;} .dot.green{background:#28C840;}
+.addr-bar{flex:1; background:#fff; border:1px solid #D6DBE2; border-radius:999px; padding:6px 14px; font-size:12px; color:var(--muted);}
+.browser-viewport{background:var(--canvas); min-height:960px;}
+
+/* Top nav (navy chrome) */
+.topnav{
+  background:var(--ink-navy);
+  color:#fff;
+  padding:12px 32px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-size:0.8125rem;
+}
+.topnav .brand{font-family:var(--font-display); font-weight:800; font-size:1.05rem;}
+.topnav .crumbs{color:rgba(255,255,255,0.75); font-size:0.75rem;}
+
+.player-shell{
+  display:flex;
+  gap:0;
+  align-items:flex-start;
+}
+
+/* Reading pane: intentional max-w-4xl inner column per DESIGN.md exception note */
+.reading-pane{
+  flex:1;
+  padding:32px;
+  display:flex;
+  justify-content:flex-start;
+}
+.reading-inner{
+  max-width:56rem; /* max-w-4xl */
+  width:100%;
+}
+.topic-eyebrow{font-size:0.625rem; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted);}
+.topic-title{font-family:var(--font-display); font-size:1.5rem; font-weight:700; letter-spacing:-0.02em; color:var(--ink-navy); margin:4px 0 18px;}
+
+.level-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
+.level-tab{
+  font-size:0.75rem; font-weight:700; padding:6px 14px; border-radius:999px;
+  border:1px solid var(--hairline); background:#fff; color:var(--muted);
+}
+.level-tab.active{background:var(--ink-navy); color:#fff; border-color:var(--ink-navy);}
+.level-tab.locked{opacity:0.5;}
+
+.content-card{
+  background:#fff;
+  border:1px solid var(--hairline);
+  border-radius:1rem;
+  padding:1.5rem;
+  position:relative;
+}
+.content-card p{font-size:0.9375rem; line-height:1.65; margin:0 0 14px; color:var(--ink);}
+.content-card p:last-child{margin-bottom:0;}
+
+/* Keyword clickable control — real button-like element, not span onclick */
+.kw{
+  font-weight:700;
+  color:var(--ink-navy);
+  background:rgba(20,51,88,0.07);
+  border:none;
+  border-radius:0.25rem;
+  padding:0 3px;
+  cursor:pointer;
+  font-family:inherit;
+  font-size:inherit;
+  text-decoration:underline dotted rgba(20,51,88,0.4);
+  text-underline-offset:3px;
+  position:relative;
+}
+.kw.open{background:rgba(20,51,88,0.14);}
+
+/* Keyword popover — lightweight anchored, shadow-md, rounded-DEFAULT */
+.kw-popover{
+  position:absolute;
+  left:0;
+  top:100%;
+  margin-top:8px;
+  width:300px;
+  background:#fff;
+  border:1px solid var(--hairline);
+  border-radius:0.75rem;
+  box-shadow:0 10px 24px -8px rgba(20,32,48,0.25), 0 2px 6px rgba(20,32,48,0.08);
+  padding:14px 16px;
+  z-index:30;
+  font-size:0.8125rem;
+}
+.kw-popover .kw-term{font-family:var(--font-display); font-weight:700; color:var(--ink-navy); font-size:0.9375rem; margin-bottom:4px;}
+.kw-popover .kw-def{color:var(--ink); line-height:1.5;}
+.kw-popover .kw-close{
+  position:absolute; top:8px; right:10px; border:none; background:none; color:var(--muted); font-size:0.9rem; cursor:pointer;
+}
+
+/* Explain-more action + nudge toward Ways (secondary, small, not competing) */
+.explain-row{
+  margin-top:20px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.btn{
+  font-weight:700; font-size:0.8125rem; border-radius:0.75rem; padding:0.625rem 1.25rem; border:none; cursor:pointer;
+}
+.btn-secondary{background:var(--ink-navy); color:#fff;}
+.nudge{
+  font-size:0.75rem;
+  color:var(--muted);
+  font-style:italic;
+}
+.nudge button{
+  background:none; border:none; padding:0; color:var(--citrus-amber); font-weight:700; font-style:normal;
+  text-decoration:underline; cursor:pointer; font-size:0.75rem; font-family:inherit;
+}
+
+/* Ways menu — small pill/tray, secondary weight, distinct from Drill-Down panel */
+.ways-tray{
+  margin-top:14px;
+  background:#fff;
+  border:1px solid var(--hairline);
+  border-radius:0.75rem;
+  padding:14px 16px;
+  max-width:420px;
+}
+.ways-tray-head{
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
+}
+.ways-tray-label{font-size:0.6875rem; font-weight:800; letter-spacing:0.03em; text-transform:uppercase; color:var(--muted);}
+.ways-pills{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;}
+.way-pill{
+  font-size:0.6875rem; font-weight:700; padding:5px 11px; border-radius:999px; border:1px solid var(--hairline);
+  background:var(--surface-secondary); color:var(--muted);
+}
+.way-pill.active{background:var(--citrus-amber); color:#fff; border-color:var(--citrus-amber);}
+.ways-tray-body{font-size:0.8125rem; line-height:1.55; color:var(--ink);}
+.ways-tray-body .way-title{font-weight:700; color:var(--ink-navy); margin-bottom:4px; display:block;}
+.ways-example{
+  margin-top:8px;
+  background:var(--surface-secondary);
+  border-radius:0.5rem;
+  padding:8px 10px;
+  font-size:0.75rem;
+  color:var(--ink);
+}
+.ways-example b{color:var(--ink-navy);}
+
+/* Exercise runner — inline, parchment fill, rounded-lg, below content */
+.exercise-runner{
+  margin-top:28px;
+  background:var(--parchment);
+  border:1px solid var(--hairline);
+  border-radius:1rem;
+  padding:1.25rem;
+}
+.exercise-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+.exercise-eyebrow{font-size:0.625rem; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted);}
+.exercise-title{font-family:var(--font-display); font-size:1.0625rem; font-weight:700; color:var(--ink-navy); margin:2px 0 0;}
+.exercise-q{font-size:0.875rem; color:var(--ink); margin:0 0 14px; line-height:1.55;}
+.exercise-options{display:flex; flex-direction:column; gap:8px; margin-bottom:14px;}
+.exercise-option{
+  display:flex; align-items:center; gap:10px;
+  background:#fff; border:1px solid var(--hairline); border-radius:0.75rem; padding:10px 14px; font-size:0.8125rem;
+}
+.exercise-option input{accent-color:var(--citrus-amber);}
+.exercise-footer{display:flex; gap:10px; align-items:center;}
+.btn-primary{background:var(--citrus-amber); color:#fff;}
+
+/* Right-docked Drill-Down panel, max-w-2xl per EXPERIENCE.md */
+.drilldown-panel{
+  width:420px;
+  flex-shrink:0;
+  min-height:960px;
+  background:#fff;
+  border-left:1px solid var(--hairline);
+  padding:24px 24px 40px;
+}
+.dd-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;}
+.dd-title{font-family:var(--font-display); font-weight:700; font-size:1.125rem; color:var(--ink-navy); margin:0;}
+.dd-close{border:none; background:none; color:var(--muted); font-size:1rem; cursor:pointer;}
+.dd-sub{font-size:0.75rem; color:var(--muted); margin:0 0 18px;}
+.dd-levels{display:flex; flex-direction:column; gap:8px; margin-bottom:20px;}
+.dd-level{
+  border:1px solid var(--hairline); border-radius:0.75rem; padding:12px 14px; font-size:0.8125rem;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.dd-level.active{border-color:var(--ink-navy); background:rgba(20,51,88,0.04);}
+.dd-level.locked{color:var(--muted); opacity:0.55;}
+.dd-level .lv-num{font-weight:800; color:var(--ink-navy); margin-right:8px;}
+.dd-level.locked .lv-num{color:var(--muted);}
+.lock-glyph{font-size:0.75rem;}
+.dd-note{
+  font-size:0.75rem; color:var(--muted); background:var(--surface-secondary); border-radius:0.5rem; padding:10px 12px; line-height:1.5;
+}
+</style>
+
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <div class="dots"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span></div>
+    <div class="addr-bar">app.flexdemy.com/learn/physics-cbse9-force-motion/topic/momentum</div>
+  </div>
+  <div class="browser-viewport">
+
+    <div class="topnav">
+      <span class="brand">FlexDemy</span>
+      <span class="crumbs">Force and Motion — CBSE Class 9 Physics · Topic 4 of 7</span>
+    </div>
+
+    <div class="player-shell">
+
+      <div class="reading-pane">
+        <div class="reading-inner">
+          <div class="topic-eyebrow">Topic</div>
+          <h1 class="topic-title">Momentum</h1>
+
+          <div class="level-tabs">
+            <span class="level-tab active" aria-current="true">Level 1 · Simplest</span>
+            <span class="level-tab locked">Level 2</span>
+            <span class="level-tab locked">Level 3</span>
+            <span class="level-tab locked">Level 4</span>
+            <span class="level-tab locked">Level 5</span>
+          </div>
+
+          <div class="content-card">
+            <p>
+              Momentum is a way of measuring how hard it is to stop something that's moving. A heavier object moving at the same speed as a lighter one has more momentum — and so does the same object moving faster.
+            </p>
+            <p>
+              This connects directly to <button class="kw open" aria-expanded="true">inertia</button><span class="kw-popover" role="tooltip">
+                <button class="kw-close" aria-label="Close definition">✕</button>
+                <div class="kw-term">Inertia</div>
+                <div class="kw-def">An object's tendency to resist a change in its motion — a still object stays still, a moving object keeps moving, unless something pushes or pulls on it.</div>
+              </span>: a moving object "wants" to keep moving in a straight line at the same speed, and momentum is what tells you how much force it will take to change that.
+            </p>
+            <p>
+              In formula terms: momentum (p) = mass (m) × velocity (v). Not clicking for you yet? Keep reading below, or try a different way to hear it.
+            </p>
+          </div>
+
+          <div class="explain-row">
+            <button class="btn btn-secondary">Explain more — Level 2 →</button>
+            <span class="nudge">Not clicking? <button aria-expanded="true">Try a different explanation</button></span>
+          </div>
+
+          <div class="ways-tray" aria-label="Alternative explanations">
+            <div class="ways-tray-head">
+              <span class="ways-tray-label">5 Ways to hear this</span>
+            </div>
+            <div class="ways-pills" role="tablist" aria-label="Alternative explanation options">
+              <span class="way-pill">Way 1</span>
+              <span class="way-pill">Way 2</span>
+              <span class="way-pill active" aria-current="true">Way 3</span>
+              <span class="way-pill">Way 4</span>
+              <span class="way-pill">Way 5</span>
+            </div>
+            <div class="ways-tray-body">
+              <span class="way-title">Way 3 — The car-crash way</span>
+              Picture two cars hitting a wall at the same speed: an empty hatchback and a fully loaded truck. The truck does far more damage, even though both were going the same speed — because it has more mass, it has more momentum, and momentum is exactly what determines how much force it takes to bring something to a stop.
+              <div class="ways-example">
+                <b>Worked example:</b> A 1,200 kg car and a 20,000 kg loaded truck both travel at 15 m/s. Car momentum = 1,200 × 15 = 18,000 kg·m/s. Truck momentum = 20,000 × 15 = 300,000 kg·m/s — over 16× more, which is why the truck needs a far longer stopping distance at the same speed.
+              </div>
+            </div>
+          </div>
+
+          <div class="exercise-runner" aria-label="Practice exercise">
+            <div class="exercise-head">
+              <div>
+                <div class="exercise-eyebrow">Optional Practice</div>
+                <h3 class="exercise-title">Check yourself: Momentum</h3>
+              </div>
+            </div>
+            <p class="exercise-q">A 5 kg bowling ball rolls at 4 m/s. What is its momentum?</p>
+            <div class="exercise-options">
+              <label class="exercise-option"><input type="radio" name="ex1" checked> 9 kg·m/s</label>
+              <label class="exercise-option"><input type="radio" name="ex1"> 1.25 kg·m/s</label>
+              <label class="exercise-option"><input type="radio" name="ex1"> 20 kg·m/s</label>
+              <label class="exercise-option"><input type="radio" name="ex1"> 20 kg·m²/s²</label>
+            </div>
+            <div class="exercise-footer">
+              <button class="btn btn-primary">Submit Answer</button>
+              <span style="font-size:0.75rem; color:var(--muted);">Immediate feedback, no page reload — practice only, not graded.</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <aside class="drilldown-panel" aria-label="Drill-down depth levels">
+        <div class="dd-head">
+          <h2 class="dd-title">Drill-Down</h2>
+          <button class="dd-close" aria-label="Close panel">✕</button>
+        </div>
+        <p class="dd-sub">Go one level deeper at a time — each level builds on the last.</p>
+        <div class="dd-levels">
+          <div class="dd-level active"><span><span class="lv-num">1</span>Simplest — the everyday idea</span></div>
+          <div class="dd-level locked"><span><span class="lv-num">2</span>Formula &amp; units</span><span class="lock-glyph">🔒</span></div>
+          <div class="dd-level locked"><span><span class="lv-num">3</span>Conservation of momentum</span><span class="lock-glyph">🔒</span></div>
+          <div class="dd-level locked"><span><span class="lv-num">4</span>Impulse-momentum theorem</span><span class="lock-glyph">🔒</span></div>
+          <div class="dd-level locked"><span><span class="lv-num">5</span>Vector treatment &amp; problem sets</span><span class="lock-glyph">🔒</span></div>
+        </div>
+        <p class="dd-note">Levels reveal one at a time as you expand "Explain more" — Level 3 never appears before you've opened Level 2. The Ways menu at left is a separate, freely-orderable path if this explanation isn't landing.</p>
+      </aside>
+
+    </div>
+  </div>
+</div>

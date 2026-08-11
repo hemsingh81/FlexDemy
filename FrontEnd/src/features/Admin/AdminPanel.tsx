@@ -4,6 +4,8 @@ import { MasterDataManager } from './MasterDataManager';
 import { SupportUserCreation } from './SupportUserCreation';
 import { RoleVisibilityManager } from './RoleVisibilityManager';
 import { TutorApprovals } from './TutorApprovals';
+import { AiConfiguration } from './AiConfiguration/AiConfiguration';
+import { TagManagement } from './TagManagement/TagManagement';
 import { PageTransition } from '../../ui/PageTransition';
 
 interface AdminPanelProps {
@@ -51,6 +53,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab: controlled
         {activeSubTab === 'support-users' && <SupportUserCreation />}
         {activeSubTab === 'role-visibility' && <RoleVisibilityManager />}
         {activeSubTab === 'tutor-approvals' && <TutorApprovals />}
+        {activeSubTab === 'ai-configuration' && <AiConfiguration />}
+        {activeSubTab === 'tag-management' && <TagManagement />}
       </PageTransition>
     </div>
   );

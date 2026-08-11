@@ -1,6 +1,10 @@
+using FlexDemy.Application.AiConfig;
+using FlexDemy.Application.AiGateway;
+using FlexDemy.Application.AiUsage;
 using FlexDemy.Application.Courses;
 using FlexDemy.Application.Permissions;
 using FlexDemy.Application.Profiles;
+using FlexDemy.Application.Tags;
 using FlexDemy.Application.Users;
 using Microsoft.Extensions.DependencyInjection;
 using MasterDataBoard = FlexDemy.Application.MasterData.Board;
@@ -27,6 +31,13 @@ public static class DependencyInjection
         services.AddScoped<MasterDataBoard.IBoardService, MasterDataBoard.BoardService>();
         services.AddScoped<MasterDataClassLevel.IClassLevelService, MasterDataClassLevel.ClassLevelService>();
         services.AddScoped<MasterDataSubject.ISubjectService, MasterDataSubject.SubjectService>();
+
+        services.AddScoped<IAiConfigService, AiConfigService>();
+        services.AddScoped<IAiTaskGateway, AiTaskGateway>();
+        services.AddScoped<IAiUsageService, AiUsageService>();
+        services.AddScoped<IAiBudgetService, AiBudgetService>();
+
+        services.AddScoped<ITagService, TagService>();
 
         return services;
     }
