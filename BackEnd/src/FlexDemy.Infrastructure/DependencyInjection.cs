@@ -9,11 +9,17 @@ using FlexDemy.Application.Tags;
 using FlexDemy.Application.Users;
 using FlexDemy.Infrastructure.AiGateway;
 using FlexDemy.Infrastructure.IdGeneration;
+using FlexDemy.Infrastructure.Jobs;
+using FlexDemy.Infrastructure.Parsing;
 using FlexDemy.Infrastructure.Permissions;
 using FlexDemy.Infrastructure.Persistence;
 using FlexDemy.Infrastructure.Persistence.Interceptors;
 using FlexDemy.Infrastructure.Repositories;
+using FlexDemy.Infrastructure.Scanning;
 using FlexDemy.Infrastructure.Security;
+using FlexDemy.Infrastructure.Storage;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,7 +59,44 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
 
         services.AddScoped<ICourseRepository, CourseRepository>();
+        services.AddScoped<IFileStorageService, LocalFileStorageService>();
         services.AddScoped<IUserRepository, UserRepository>();
+
+        // Story 2.6: Hangfire background jobs (AD-15) -- reuses the existing Postgres instance as
+        // the job store, no Redis, no second database. Hangfire's own migrations create its
+        // job-store tables automatically on first run, separate from FlexDemyDbContext's EF
+        // migrations.
+        // Api/Program.cs calls app.UseHangfireServer() in the middleware pipeline (AD-13/the
+        // Structural Seed's explicit line) -- not AddHangfireServer() here.
+        services.AddHangfire(cfg => cfg.UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connectionString)));
+
+        services.Configure<ClamAvOptions>(configuration.GetSection(ClamAvOptions.SectionName));
+        services.AddScoped<IFileScanner, ClamAvFileScanner>();
+        services.AddScoped<ICourseFileRepository, CourseFileRepository>();
+        services.AddScoped<ICourseFileService, CourseFileService>();
+        services.AddScoped<IScanFileJob, ScanFileJob>();
+        services.AddScoped<IScanFileJobEnqueuer, ScanFileJobEnqueuer>();
+
+        // Story 2.7: Docling parsing pass, chained straight from ScanFileJob's clean-scan branch.
+        services.Configure<DoclingOptions>(configuration.GetSection(DoclingOptions.SectionName));
+        services.AddHttpClient<IDocumentParser, DoclingParsingClient>((sp, client) =>
+        {
+            var doclingOptions = sp.GetRequiredService<IOptions<DoclingOptions>>().Value;
+            client.BaseAddress = new Uri(doclingOptions.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(doclingOptions.TimeoutSeconds);
+        });
+        services.AddScoped<IParseFileJob, ParseFileJob>();
+        services.AddScoped<IParseFileJobEnqueuer, ParseFileJobEnqueuer>();
+
+        // Story 2.8: AI structure extraction, chained straight from ParseFileJob's successful-parse
+        // branch. No new HttpClient/options -- this is the first real caller of the already-fully-
+        // built IAiTaskGateway (Epic 1, registered in FlexDemy.Application's own DependencyInjection.cs).
+        services.AddScoped<IExtractStructureJob, ExtractStructureJob>();
+        services.AddScoped<IExtractStructureJobEnqueuer, ExtractStructureJobEnqueuer>();
+
+        // Story 2.9: Content Tree CRUD -- one repository for the whole tree (AD-4 deviation, see
+        // IContentTreeRepository.cs), materializing Story 2.8's staged extraction JSON on read.
+        services.AddScoped<IContentTreeRepository, ContentTreeRepository>();
 
         services.AddScoped<IStudentProfileRepository, StudentProfileRepository>();
         services.AddScoped<ITutorProfileRepository, TutorProfileRepository>();

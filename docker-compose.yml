@@ -30,6 +30,44 @@ services:
       timeout: 5s
       retries: 10
 
+  # Story 2.6: malware scanner for uploaded course files, reached only over the internal Compose
+  # network at clamav:3310 (AD-13's "none exposed externally" rule -- no `ports:` mapping). The
+  # long start_period accounts for the freshclam virus-definition download on first start.
+  clamav:
+    profiles: ["backend", "all"]
+    image: clamav/clamav:latest
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  # Story 2.7: self-hosted document-parsing/OCR service, reached only over the internal Compose
+  # network at docling:5001 (AD-13's "none exposed externally" rule -- docling-serve has no API
+  # auth by default, per this story's research, so it must never be on a host-exposed port). The
+  # named volume persists model weights across restarts -- without it, DOCLING_SERVE_LOAD_MODELS_AT_BOOT's
+  # warm-up would re-download them on every restart.
+  docling:
+    profiles: ["backend", "all"]
+    image: quay.io/docling-project/docling-serve-cpu:v1.25.0
+    environment:
+      DOCLING_SERVE_ARTIFACTS_PATH: /opt/docling-artifacts
+    volumes:
+      - docling_artifacts:/opt/docling-artifacts
+    # [ASSUMPTION, code-review patch: python3 chosen over curl -- docling-serve is a
+    # Python/FastAPI-based service, so a Python interpreter is far more likely to be present in
+    # its image than curl is (the sibling clamav service's healthcheck instead uses
+    # clamdcheck.sh, a script actually bundled with that specific image; no equivalent
+    # verification was possible here against a live docling-serve-cpu image). Confirm this
+    # command actually runs inside the real pulled image before relying on it in production.]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
   api:
     profiles: ["backend", "all"]
     build:
@@ -41,9 +79,15 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=flexdemy;Username=postgres;Password=postgres"
       RUN_MIGRATIONS_ON_STARTUP: "true"
+      ClamAv__Host: clamav
+      ClamAv__Port: "3310"
+      Docling__BaseUrl: "http://docling:5001"
     depends_on:
       postgres:
         condition: service_healthy
+      # No service_healthy condition for clamav/docling -- a not-yet-ready dependency should
+      # correctly produce a retry-then-fail-closed CourseFile.Status = Failed from
+      # ScanFileJob/ParseFileJob rather than blocking the whole API from starting.
 
   web:
     profiles: ["frontend", "all"]
@@ -54,3 +98,4 @@ services:
 
 volumes:
   pgdata:
+  docling_artifacts:

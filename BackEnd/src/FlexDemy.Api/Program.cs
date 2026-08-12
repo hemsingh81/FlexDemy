@@ -6,10 +6,28 @@ using FlexDemy.Application;
 using FlexDemy.Application.Common;
 using FlexDemy.Infrastructure;
 using FlexDemy.Infrastructure.Persistence;
+using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+
+// Story 2.4: must exist BEFORE WebApplication.CreateBuilder(args) below -- confirmed via a real
+// end-to-end check (not caught by any mocked test) that ASP.NET Core resolves
+// IWebHostEnvironment.WebRootFileProvider during CreateBuilder() itself, permanently binding it
+// to a NullFileProvider for the app's entire lifetime if wwwroot doesn't exist at that exact
+// moment. UseStaticFiles() below would then 404 every request forever, even after
+// LocalFileStorageService creates the folder later on first upload -- moving this a single line
+// later (e.g. after CreateBuilder returns) is too late and silently reintroduces the bug.
+// Deliberately Directory.GetCurrentDirectory(), not AppContext.BaseDirectory -- CreateBuilder()'s
+// own default ContentRootPath IS Directory.GetCurrentDirectory() (unless overridden via
+// WebApplicationOptions, which this project doesn't do), so matching that exactly is what
+// guarantees this creates the same wwwroot CreateBuilder() will bind WebRootFileProvider to.
+// BaseDirectory (the assembly's own directory) can differ from CWD and would silently create
+// the folder in the wrong place if it ever did -- confirmed correct for this project's actual
+// deployment (the Dockerfile's WORKDIR + `dotnet FlexDemy.Api.dll` entrypoint keeps CWD and
+// BaseDirectory identical), verified via the live end-to-end check referenced above.
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"));
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,8 +115,16 @@ if (builder.Configuration.GetValue("RUN_MIGRATIONS_ON_STARTUP", false))
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
+// Serves LocalFileStorageService's PUBLIC-category uploads (course thumbnails) from
+// wwwroot/uploads. Code-review patch: course-content source files ("course-files") are a
+// private category and are written outside wwwroot entirely -- never reachable through this
+// middleware, only through CourseFilesController's authenticated download action.
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+// Story 2.6/AD-15: runs Hangfire's background-job processing (ScanFileJob et al.) in-process.
+// No Hangfire Dashboard mapped -- it has no auth story yet and isn't required by any AC.
+app.UseHangfireServer();
 app.MapControllers();
 
 app.Run();

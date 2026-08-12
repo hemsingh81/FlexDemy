@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   Calendar,
-  Upload,
   FileText,
   BarChart2,
   TrendingUp,
@@ -36,15 +35,24 @@ import {
   GroupClassRequest,
   PublicLiveClass,
   SubjectCategory,
-  DifficultyLevel,
 } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { SidePanel } from '../../ui/SidePanel';
 import { Button } from '../../ui/Button';
 import { ChoiceToggle } from './ChoiceToggle';
+import { CourseWizard } from '../CourseWizard/CourseWizard';
+import { CourseContentEditor } from '../CourseContentEditor/CourseContentEditor';
 
 interface TutorEducatorHubViewProps {
   user: UserProfile;
+  // Story 2.4: vestigial as of this story -- the old wizard's handlePublishCourse (removed
+  // here) was their only caller in this file. The new CourseWizard flow persists real Course
+  // rows via courseDraftService directly; it has no synthesized mock Course object to push into
+  // this in-memory list, so there's nothing left in this file to call onAddCourse with. Left
+  // in place rather than removed: both props are threaded through from TutorDashboardView.tsx
+  // (and further up), which is outside this story's own File List -- removing the prop chain
+  // is a deliberate follow-up for whichever future story next touches it, not a silent
+  // out-of-scope change here.
   courses: Course[];
   onAddCourse: (newCourse: Course) => void;
   tutorSlots: TutorCalendarSlot[];
@@ -70,41 +78,15 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
 }) => {
   const { showToast } = useToast();
 
-  // Wizard Modal State
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  // New Course Wizard (Story 2.1) -- the "New Course Wizard" trigger below opens this. The old
+  // 5-step inline wizard it superseded was removed in Story 2.4 (see that story's Dev Notes).
+  const [isNewCourseWizardOpen, setIsNewCourseWizardOpen] = useState(false);
 
-  // Wizard Form Values
-  const [cTitle, setCTitle] = useState('');
-  const [cShortDesc, setCShortDesc] = useState('');
-  const [cFullDesc, setCFullDesc] = useState('');
-  const [cSubject, setCSubject] = useState<SubjectCategory>('physics');
-  const [cLevel, setCLevel] = useState<DifficultyLevel>('Intermediate');
-  const [cGradeTag, setCGradeTag] = useState('Class 12th');
-  const [cEstimatedHours, setCEstimatedHours] = useState(4);
-  const [cTagsStr, setCTagsStr] = useState('Physics, Superposition, Quantum');
-  const [cThumbnail, setCThumbnail] = useState(
-    'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=800&auto=format&fit=crop&q=80'
-  );
-
-  // Wizard Lesson Builder
-  const [lessons, setLessons] = useState<
-    Array<{
-      id: string;
-      title: string;
-      durationMinutes: number;
-      level1Analogy: string;
-      level2Principles: string;
-    }>
-  >([
-    {
-      id: 'l1',
-      title: '1.1 Fundamental Principles & Intuitive Analogy',
-      durationMinutes: 20,
-      level1Analogy: 'Think of this system as a coin spinning in mid-air...',
-      level2Principles: 'The core state vector is represented as |Ψ⟩ = α|0⟩ + β|1⟩...',
-    },
-  ]);
+  // Course Content Editor (Story 2.2) -- finishing CourseWizard now hands off here, matching
+  // EXPERIENCE.md's UJ-1 ("Advancing past Step 4 opens Course Content Editor as a new
+  // full-width surface"). Story 2.2 builds only this screen's file-upload slice.
+  const [isContentEditorOpen, setIsContentEditorOpen] = useState(false);
+  const [contentEditorDraftId, setContentEditorDraftId] = useState<string | null>(null);
 
   // Analytics Data for Recharts
   const ANALYTICS_DATA = [
@@ -280,71 +262,6 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
     setIsPublicClassModalOpen(false);
   };
 
-  const handlePublishCourse = () => {
-    const tagsArray = cTagsStr.split(',').map((s) => s.trim()).filter(Boolean);
-    const newCourse: Course = {
-      id: `course_custom_${Date.now()}`,
-      title: cTitle || 'New Interactive Course',
-      shortDescription: cShortDesc || 'Interactive course created by instructor.',
-      fullDescription: cFullDesc || 'Detailed course curriculum with 5-level drilldowns.',
-      subject: cSubject,
-      level: cLevel,
-      targetGradeTag: cGradeTag,
-      tags: tagsArray,
-      type: 'interactive',
-      instructor: {
-        name: user.name,
-        role: 'Verified FlexDemy Educator',
-        avatar: user.avatar,
-      },
-      enrolledCount: 1,
-      rating: 5.0,
-      estimatedHours: cEstimatedHours,
-      thumbnail: cThumbnail,
-      badgeIcon: 'Award',
-      prerequisites: ['Basic Mathematics & Physics Concepts'],
-      modules: [
-        {
-          id: 'mod_1',
-          title: 'Module 1: Foundations',
-          lessons: lessons.map((l) => ({
-            id: l.id,
-            title: l.title,
-            durationMinutes: l.durationMinutes,
-            sentences: [
-              { id: 's1', text: l.level1Analogy },
-              { id: 's2', text: l.level2Principles },
-            ],
-            drilldowns: {},
-          })),
-        },
-      ],
-    };
-
-    onAddCourse(newCourse);
-    setIsWizardOpen(false);
-    showToast({ message: 'Course published — now live in the course discovery library.', variant: 'success' });
-  };
-
-  const wizardFooter = (
-    <>
-      {wizardStep > 1 && (
-        <Button variant="ghost" size="sm" className="mr-auto" onClick={() => setWizardStep((wizardStep - 1) as 1 | 2 | 3)}>
-          ← Back
-        </Button>
-      )}
-      {wizardStep < 4 ? (
-        <Button variant="secondary" size="sm" onClick={() => setWizardStep((wizardStep + 1) as 2 | 3 | 4)}>
-          {wizardStep === 1 ? 'Next: Asset Upload →' : wizardStep === 2 ? 'Next: Lesson Builder →' : 'Next: Review & Publish →'}
-        </Button>
-      ) : (
-        <Button variant="primary" size="sm" onClick={handlePublishCourse}>
-          🚀 Publish Course Now
-        </Button>
-      )}
-    </>
-  );
-
   return (
     <div id="availability-performance" className="scroll-mt-24 space-y-8 w-full">
 
@@ -410,11 +327,11 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
         <div id="course-publishing" className="scroll-mt-24 p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs space-y-1 flex flex-col justify-between">
           <p className="text-xs text-[#5E6A79] font-medium">Course Creation</p>
           <button
-            onClick={() => {
-              setWizardStep(1);
-              setIsWizardOpen(true);
-            }}
-            className="w-full py-2 bg-[#143358] hover:bg-[#143358]/90 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center space-x-1"
+            onClick={() => setIsNewCourseWizardOpen(true)}
+            // Disabled while Course Content Editor is open -- otherwise this stays keyboard-
+            // reachable and a second CourseWizard session could open on top of it.
+            disabled={isContentEditorOpen}
+            className="w-full py-2 bg-[#143358] hover:bg-[#143358]/90 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             <span>New Course Wizard</span>
@@ -632,165 +549,28 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
         </div>
       </div>
 
-      {/* Course Creation Wizard side panel */}
-      {isWizardOpen && (
-        <SidePanel
-          title="Course Creation Wizard"
-          subtitle={`Step ${wizardStep} of 4`}
-          onClose={() => setIsWizardOpen(false)}
-          closeOnBackdropClick={false}
-          width="lg"
-          footer={wizardFooter}
-        >
-          <div className="space-y-6">
-            {/* Step Progress Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[10px] font-bold text-slate-500">
-              <div className={`p-2 rounded-xl ${wizardStep >= 1 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
-                1. Info & Grade Tag
-              </div>
-              <div className={`p-2 rounded-xl ${wizardStep >= 2 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
-                2. Assets & Thumb
-              </div>
-              <div className={`p-2 rounded-xl ${wizardStep >= 3 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
-                3. Lesson Builder
-              </div>
-              <div className={`p-2 rounded-xl ${wizardStep >= 4 ? 'bg-[#143358] text-white' : 'bg-slate-100'}`}>
-                4. Review & Publish
-              </div>
-            </div>
+      {/* New Course Wizard (Story 2.1) -- mock-data only, replaces the old wizard as the
+          Dashboard's course-creation entry point */}
+      <CourseWizard
+        isOpen={isNewCourseWizardOpen}
+        onClose={() => setIsNewCourseWizardOpen(false)}
+        onComplete={(draftId) => {
+          setIsNewCourseWizardOpen(false);
+          setContentEditorDraftId(draftId);
+          setIsContentEditorOpen(true);
+        }}
+      />
 
-            {/* STEP 1: Basic Info */}
-            {wizardStep === 1 && (
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="font-bold text-[#142030]">Course Title:</label>
-                  <input
-                    type="text"
-                    value={cTitle}
-                    onChange={(e) => setCTitle(e.target.value)}
-                    placeholder="E.g., Class 12th Physics: Advanced Electromagnetic Waves"
-                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-[#142030]">Target Grade Tag:</label>
-                    <select
-                      value={cGradeTag}
-                      onChange={(e) => setCGradeTag(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
-                    >
-                      <option value="Class 10th">Class 10th</option>
-                      <option value="Class 12th">Class 12th</option>
-                      <option value="Undergrad / College">Undergrad / College</option>
-                      <option value="PhD Level">PhD Level</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-[#142030]">Subject Category:</label>
-                    <select
-                      value={cSubject}
-                      onChange={(e) => setCSubject(e.target.value as SubjectCategory)}
-                      className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
-                    >
-                      <option value="physics">Physics</option>
-                      <option value="computer_science">Computer Science</option>
-                      <option value="stem_math">Mathematics</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="font-bold text-[#142030]">Short Summary:</label>
-                  <textarea
-                    value={cShortDesc}
-                    onChange={(e) => setCShortDesc(e.target.value)}
-                    placeholder="Brief description for discovery cards..."
-                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
-                    rows={2}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: Assets */}
-            {wizardStep === 2 && (
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="font-bold text-[#142030]">Thumbnail Image URL:</label>
-                  <input
-                    type="text"
-                    value={cThumbnail}
-                    onChange={(e) => setCThumbnail(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-white border border-[#E1DED4] text-xs mt-1 text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
-                  />
-                </div>
-
-                <div className="p-6 rounded-2xl border-2 border-dashed border-[#E1DED4] text-center space-y-2">
-                  <Upload className="w-8 h-8 mx-auto text-[#143358]" />
-                  <p className="font-bold text-[#142030]">Drag & Drop Syllabus PDF or Asset Files</p>
-                  <p className="text-slate-500 text-[10px]">Supports .pdf, .docx, .py up to 50MB</p>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 3: Lessons */}
-            {wizardStep === 3 && (
-              <div className="space-y-4 text-xs">
-                <h4 className="font-bold text-[#142030]">Module Lessons ({lessons.length})</h4>
-
-                {lessons.map((les, idx) => (
-                  <div key={les.id} className="p-4 rounded-2xl bg-[#FAF7EC] border border-[#E1DED4] space-y-2">
-                    <p className="font-bold text-[#143358]">Lesson {idx + 1}</p>
-                    <input
-                      type="text"
-                      value={les.title}
-                      onChange={(e) => {
-                        const updated = [...lessons];
-                        updated[idx].title = e.target.value;
-                        setLessons(updated);
-                      }}
-                      className="w-full p-2 bg-white rounded-xl border border-[#E1DED4] text-xs font-semibold text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]"
-                    />
-                  </div>
-                ))}
-
-                <button
-                  onClick={() =>
-                    setLessons([
-                      ...lessons,
-                      {
-                        id: `l_${Date.now()}`,
-                        title: `1.${lessons.length + 1} New Topic Concept`,
-                        durationMinutes: 15,
-                        level1Analogy: 'Analogy for level 1...',
-                        level2Principles: 'Mathematical principles for level 2...',
-                      },
-                    ])
-                  }
-                  className="w-full py-2 bg-[#143358]/10 text-[#143358] hover:bg-[#143358]/20 font-bold rounded-xl border border-[#143358]/20"
-                >
-                  + Add Lesson
-                </button>
-              </div>
-            )}
-
-            {/* STEP 4: Review & Publish */}
-            {wizardStep === 4 && (
-              <div className="space-y-4 text-xs">
-                <div className="p-4 rounded-2xl bg-[#143358]/5 border border-[#143358]/20 space-y-2">
-                  <p className="font-bold text-[#143358] text-sm">{cTitle || 'Untitled Course'}</p>
-                  <p className="text-[#142030]">Target Grade Tag: <span className="font-bold">{cGradeTag}</span></p>
-                  <p className="text-[#142030]">Subject: <span className="font-bold">{cSubject}</span></p>
-                  <p className="text-[#142030]">Lessons Count: <span className="font-bold">{lessons.length}</span></p>
-                </div>
-              </div>
-            )}
-          </div>
-        </SidePanel>
-      )}
+      {/* Course Content Editor (Story 2.2) -- file-upload slice only; Story 2.3 extends this
+          same screen with the Chapter/Topic/Subtopic tree. */}
+      <CourseContentEditor
+        isOpen={isContentEditorOpen}
+        onClose={() => {
+          setIsContentEditorOpen(false);
+          setContentEditorDraftId(null);
+        }}
+        draftId={contentEditorDraftId}
+      />
 
       {/* Add Slot side panel */}
       {isSlotModalOpen && (

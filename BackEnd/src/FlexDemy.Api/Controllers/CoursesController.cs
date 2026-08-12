@@ -38,4 +38,70 @@ public class CoursesController(ICourseService courseService) : ControllerBase
         var course = await courseService.CreateCourseAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
     }
+
+    // Story 2.4: the Course Wizard's live-wire persistence surface. All 6 actions below reuse
+    // the existing CoursesCreate policy (Master + Tutor) rather than adding a new FeatureKey.
+    [HttpPost("drafts")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<ActionResult<CourseDto>> CreateDraftCourse(CreateDraftCourseRequest request, CancellationToken cancellationToken)
+    {
+        var course = await courseService.CreateDraftCourseAsync(request, cancellationToken);
+        return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
+    }
+
+    [HttpPut("drafts/{id}")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<ActionResult<CourseDto>> UpdateDraftCourse(string id, UpdateDraftCourseRequest request, CancellationToken cancellationToken)
+    {
+        var course = await courseService.UpdateDraftCourseAsync(id, request, cancellationToken);
+        return Ok(course);
+    }
+
+    // First multipart/file-upload endpoint in this codebase -- 4 separate [FromForm]
+    // parameters (not a single bound request record), simplest with nothing else to mirror.
+    // Code-review patch: without an explicit limit, Kestrel's own default (much larger than
+    // this app's 5MB content-length check in CourseService) lets an oversized multipart body be
+    // fully read into memory before the application-level rejection ever runs.
+    [HttpPost("drafts/{id}/thumbnails")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<CourseDto>> AddThumbnail(
+        string id,
+        [FromForm] IFormFile file,
+        [FromForm] decimal cropX,
+        [FromForm] decimal cropY,
+        [FromForm] decimal cropZoom,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = file.OpenReadStream();
+        var course = await courseService.AddThumbnailAsync(
+            id, stream, file.ContentType, file.Length, new ThumbnailCropDto(cropX, cropY, cropZoom), cancellationToken);
+        return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
+    }
+
+    [HttpDelete("drafts/{id}/thumbnails/{thumbnailId}")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<ActionResult<CourseDto>> RemoveThumbnail(string id, string thumbnailId, CancellationToken cancellationToken)
+    {
+        var course = await courseService.RemoveThumbnailAsync(id, thumbnailId, cancellationToken);
+        return Ok(course);
+    }
+
+    public record ReorderThumbnailRequest(string Direction);
+
+    [HttpPut("drafts/{id}/thumbnails/{thumbnailId}/reorder")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<ActionResult<CourseDto>> ReorderThumbnail(string id, string thumbnailId, ReorderThumbnailRequest request, CancellationToken cancellationToken)
+    {
+        var course = await courseService.ReorderThumbnailAsync(id, thumbnailId, request.Direction, cancellationToken);
+        return Ok(course);
+    }
+
+    [HttpPut("drafts/{id}/thumbnails/{thumbnailId}/primary")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<ActionResult<CourseDto>> SetPrimaryThumbnail(string id, string thumbnailId, CancellationToken cancellationToken)
+    {
+        var course = await courseService.SetPrimaryThumbnailAsync(id, thumbnailId, cancellationToken);
+        return Ok(course);
+    }
 }

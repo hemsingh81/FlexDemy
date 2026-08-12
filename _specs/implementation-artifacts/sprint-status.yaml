@@ -1,5 +1,5 @@
 # generated: 2026-08-11
-# last_updated: 2026-08-11 (1-9 → done, epic-1 → done)
+# last_updated: 2026-08-12 (2-10 → done)
 # project: eLearning
 # project_key: NOKEY
 # tracking_system: file-system
@@ -46,7 +46,7 @@
 #   (see epics.md's per-epic "Parallelization note").
 
 generated: 2026-08-11
-last_updated: 2026-08-11
+last_updated: 2026-08-12 (2-10 → done)
 project: eLearning
 project_key: NOKEY
 tracking_system: file-system
@@ -65,17 +65,17 @@ development_status:
   1-9-tag-management-backend-live-wire-tag-ui: done
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-course-metadata-wizard-ui-mock-data: backlog
-  2-2-file-upload-ui-mock-data: backlog
-  2-3-course-content-editor-ui-mock-data: backlog
-  2-4-course-metadata-persistence-live-wire-wizard: backlog
-  2-5-tag-taxonomy-live-data-wiring: backlog
-  2-6-file-upload-malware-scanning-secure-storage: backlog
-  2-7-document-parsing-ocr-pipeline: backlog
-  2-8-ai-structure-extraction-extractstructure: backlog
-  2-9-content-tree-crud-backend-live-wire-editor: backlog
-  2-10-subject-aware-alt-text-language-tagging: backlog
+  epic-2: done
+  2-1-course-metadata-wizard-ui-mock-data: done
+  2-2-file-upload-ui-mock-data: done
+  2-3-course-content-editor-ui-mock-data: done
+  2-4-course-metadata-persistence-live-wire-wizard: done
+  2-5-tag-taxonomy-live-data-wiring: done
+  2-6-file-upload-malware-scanning-secure-storage: done
+  2-7-document-parsing-ocr-pipeline: done
+  2-8-ai-structure-extraction-extractstructure: done
+  2-9-content-tree-crud-backend-live-wire-editor: done
+  2-10-subject-aware-alt-text-language-tagging: done
   epic-2-retrospective: optional
 
   epic-3: backlog

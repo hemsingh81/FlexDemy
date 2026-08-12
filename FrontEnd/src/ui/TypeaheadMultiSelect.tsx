@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, Lock, X } from 'lucide-react';
 import { useClickOutside } from '../hooks/useClickOutside';
 
 export interface TypeaheadOption {
@@ -14,6 +14,14 @@ interface TypeaheadMultiSelectProps {
   placeholder?: string;
   emptyMessage?: string;
   disabled?: boolean;
+  // Additional chips rendered alongside `selected`'s chips, without a remove control and
+  // visually distinct -- for a value that's selected but can no longer be toggled off or
+  // re-added (e.g. CourseWizard's Tags step: a tag deactivated after attachment). Passed as
+  // full {value,label} objects rather than bare ids because these are deliberately excluded
+  // from `options` (so they can't be re-selected), so their label can't be resolved by id
+  // lookup the way `selected`'s chips are. Domain-agnostic by design -- this component has no
+  // concept of "tag" or "deactivated," only "locked."
+  lockedValues?: TypeaheadOption[];
 }
 
 // Generic searchable chip multi-select (replaces the old plain checkbox-grid pattern for
@@ -27,6 +35,7 @@ export const TypeaheadMultiSelect: React.FC<TypeaheadMultiSelectProps> = ({
   placeholder = 'Search...',
   emptyMessage = 'No options available.',
   disabled = false,
+  lockedValues = [],
 }) => {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -55,6 +64,16 @@ export const TypeaheadMultiSelect: React.FC<TypeaheadMultiSelectProps> = ({
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-text focus-within:ring-2 focus-within:ring-[#BA5012]'
         }`}
       >
+        {lockedValues.map((opt) => (
+          <span
+            key={`locked-${opt.value}`}
+            aria-label={`${opt.label} (locked)`}
+            className="flex items-center gap-1 pl-2 pr-2 py-0.5 rounded-lg bg-slate-100 border border-slate-300 text-[11px] font-semibold text-slate-500"
+          >
+            <Lock className="w-2.5 h-2.5 shrink-0" />
+            {opt.label}
+          </span>
+        ))}
         {selectedOptions.map((opt) => (
           <span
             key={opt.value}

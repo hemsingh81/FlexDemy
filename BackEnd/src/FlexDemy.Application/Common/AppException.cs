@@ -32,3 +32,16 @@ public sealed class AiTaskUnavailableException(string taskId, Exception? innerEx
 // providers failed"); this is "the call was never attempted because the budget forbade it."
 public sealed class AiTaskBudgetExceededException(string taskId)
     : AppException($"AI Task '{taskId}' has exceeded its configured budget threshold.");
+
+// Story 2.6/AD-22: thrown by IFileScanner when the malware scanner itself is unreachable
+// (connection failure/timeout) -- never returned as a "clean" FileScanResult. Caught inside
+// ScanFileJob (Infrastructure/Jobs), not surfaced to any HTTP request, so it has no
+// ExceptionHandlingMiddleware mapping.
+public sealed class FileScanUnavailableException(string message, Exception? innerException = null)
+    : AppException(message, innerException);
+
+// Story 2.7/AD-21: thrown by IDocumentParser when the Docling parsing service itself is
+// unreachable/erroring -- same fail-closed shape as FileScanUnavailableException. Caught inside
+// ParseFileJob, not surfaced to any HTTP request.
+public sealed class DocumentParsingUnavailableException(string message, Exception? innerException = null)
+    : AppException(message, innerException);

@@ -323,6 +323,158 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                     b.ToTable("ai_task_usages", (string)null);
                 });
 
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Chapter", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Confirmation")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("confirmation");
+
+                    b.Property<string>("CourseId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("course_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_chapters");
+
+                    b.HasIndex("CourseId")
+                        .HasDatabaseName("ix_chapters_course_id");
+
+                    b.ToTable("chapters", (string)null);
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.ContentBlock", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AltText")
+                        .HasColumnType("text")
+                        .HasColumnName("alt_text");
+
+                    b.Property<string>("Confirmation")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("confirmation");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("format");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("image_url");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Lang")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("lang");
+
+                    b.Property<string>("Notation")
+                        .HasColumnType("text")
+                        .HasColumnName("notation");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("SubtopicId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("subtopic_id");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.Property<string>("TopicId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("topic_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_content_blocks");
+
+                    b.HasIndex("SubtopicId")
+                        .HasDatabaseName("ix_content_blocks_subtopic_id");
+
+                    b.HasIndex("TopicId")
+                        .HasDatabaseName("ix_content_blocks_topic_id");
+
+                    b.ToTable("content_blocks", (string)null);
+                });
+
             modelBuilder.Entity("FlexDemy.Domain.Courses.Course", b =>
                 {
                     b.Property<string>("Id")
@@ -334,6 +486,26 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("badge_icon");
+
+                    b.Property<string>("BoardId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("board_id");
+
+                    b.Property<string>("CityId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_id");
+
+                    b.Property<string>("ClassLevelId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("class_level_id");
+
+                    b.Property<string>("CountryId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("country_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -385,6 +557,14 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("level");
 
+                    b.Property<string>("LifecycleState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("Published")
+                        .HasColumnName("lifecycle_state");
+
                     b.Property<decimal>("Rating")
                         .HasPrecision(3, 2)
                         .HasColumnType("numeric(3,2)")
@@ -395,11 +575,28 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("short_description");
 
+                    b.Property<string>("StateId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("state_id");
+
                     b.Property<string>("Subject")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("subject");
+
+                    b.Property<string>("SubjectId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("subject_id");
+
+                    b.PrimitiveCollection<List<string>>("TagIds")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("tag_ids")
+                        .HasDefaultValueSql("'{}'");
 
                     b.PrimitiveCollection<List<string>>("Tags")
                         .IsRequired()
@@ -422,6 +619,11 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("title");
 
+                    b.Property<string>("TutorId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tutor_id");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -434,6 +636,272 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                         .HasName("pk_courses");
 
                     b.ToTable("courses", (string)null);
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.CourseFile", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("CourseId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("course_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("ExtractedStructureJson")
+                        .HasColumnType("text")
+                        .HasColumnName("extracted_structure_json");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsMaterialized")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_materialized");
+
+                    b.Property<string>("ParsedContent")
+                        .HasColumnType("text")
+                        .HasColumnName("parsed_content");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StoredUrl")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("stored_url");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_course_files");
+
+                    b.HasIndex("CourseId")
+                        .HasDatabaseName("ix_course_files_course_id");
+
+                    b.ToTable("course_files", (string)null);
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.CourseThumbnail", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CourseId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("course_id");
+
+                    b.Property<decimal>("CropX")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("crop_x");
+
+                    b.Property<decimal>("CropY")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("crop_y");
+
+                    b.Property<decimal>("CropZoom")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("crop_zoom");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_primary");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id")
+                        .HasName("pk_course_thumbnails");
+
+                    b.HasIndex("CourseId")
+                        .HasDatabaseName("ix_course_thumbnails_course_id");
+
+                    b.ToTable("course_thumbnails", (string)null);
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Subtopic", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Confirmation")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("confirmation");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("TopicId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("topic_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_subtopics");
+
+                    b.HasIndex("TopicId")
+                        .HasDatabaseName("ix_subtopics_topic_id");
+
+                    b.ToTable("subtopics", (string)null);
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Topic", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ChapterId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("chapter_id");
+
+                    b.Property<string>("Confirmation")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("confirmation");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_topics");
+
+                    b.HasIndex("ChapterId")
+                        .HasDatabaseName("ix_topics_chapter_id");
+
+                    b.ToTable("topics", (string)null);
                 });
 
             modelBuilder.Entity("FlexDemy.Domain.MasterData.Board", b =>
@@ -1105,6 +1573,61 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Chapter", b =>
+                {
+                    b.HasOne("FlexDemy.Domain.Courses.Course", null)
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_chapters_courses_course_id");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.ContentBlock", b =>
+                {
+                    b.HasOne("FlexDemy.Domain.Courses.Subtopic", null)
+                        .WithMany("ContentBlocks")
+                        .HasForeignKey("SubtopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_content_blocks_subtopics_subtopic_id");
+
+                    b.HasOne("FlexDemy.Domain.Courses.Topic", null)
+                        .WithMany("ContentBlocks")
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_content_blocks_topics_topic_id");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.CourseThumbnail", b =>
+                {
+                    b.HasOne("FlexDemy.Domain.Courses.Course", null)
+                        .WithMany("Thumbnails")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_course_thumbnails_courses_course_id");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Subtopic", b =>
+                {
+                    b.HasOne("FlexDemy.Domain.Courses.Topic", null)
+                        .WithMany("Subtopics")
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_subtopics_topics_topic_id");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Topic", b =>
+                {
+                    b.HasOne("FlexDemy.Domain.Courses.Chapter", null)
+                        .WithMany("Topics")
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_topics_chapters_chapter_id");
+                });
+
             modelBuilder.Entity("FlexDemy.Domain.MasterData.Board", b =>
                 {
                     b.HasOne("FlexDemy.Domain.MasterData.State", null)
@@ -1132,6 +1655,28 @@ namespace FlexDemy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_states_countries_country_id");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Chapter", b =>
+                {
+                    b.Navigation("Topics");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Course", b =>
+                {
+                    b.Navigation("Thumbnails");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Subtopic", b =>
+                {
+                    b.Navigation("ContentBlocks");
+                });
+
+            modelBuilder.Entity("FlexDemy.Domain.Courses.Topic", b =>
+                {
+                    b.Navigation("ContentBlocks");
+
+                    b.Navigation("Subtopics");
                 });
 #pragma warning restore 612, 618
         }
