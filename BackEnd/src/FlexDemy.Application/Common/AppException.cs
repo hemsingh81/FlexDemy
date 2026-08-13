@@ -45,3 +45,9 @@ public sealed class FileScanUnavailableException(string message, Exception? inne
 // ParseFileJob, not surfaced to any HTTP request.
 public sealed class DocumentParsingUnavailableException(string message, Exception? innerException = null)
     : AppException(message, innerException);
+
+// Story 3.5: thrown when an AI Task call succeeded (the gateway itself is fine) but the response
+// content failed AdaptiveLearningResponseParser's validated-parse discipline -- a distinct
+// failure mode from AiGatewayException (the call itself failing). Maps to 502, same status as
+// AiGatewayException, since either way the caller got an unusable response from the AI layer.
+public sealed class AiResponseValidationException(string message) : AppException(message);

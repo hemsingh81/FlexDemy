@@ -4,6 +4,8 @@ import { useFileUpload, type FileUploadEntry, type FileUploadStatus } from './us
 import { useCourseContentTree, type Chapter, type NodeConfirmation } from './useCourseContentTree';
 import { ContentTree, type TreeMutators } from './ContentTreeNode';
 import { ConfirmModal } from '../../ui/ConfirmModal';
+import { PublishLifecycleBar } from './PublishLifecycleBar';
+import { ReviewAsStudentPreview } from './ReviewAsStudentPreview';
 
 interface CourseContentEditorProps {
   isOpen: boolean;
@@ -120,6 +122,11 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentTree = useCourseContentTree(draftId);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
+  // Story 3.9/Task 5: opened by PublishLifecycleBar's "Review as Student" button, the instant
+  // Task 1's move-to-review call actually succeeds server-side (see useCourseLifecycle.ts's own
+  // onReviewAsStudentReady callback) -- not on click alone, since the button is a no-op unless
+  // the course was actually Draft.
+  const [isReviewingAsStudent, setIsReviewingAsStudent] = useState(false);
 
   const [announcement, setAnnouncement] = useState('');
   const prevStatusesRef = useRef<Map<string, FileUploadStatus>>(new Map());
@@ -223,6 +230,7 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
     prevConfirmationsRef.current.clear();
     pendingMessagesRef.current = [];
     setAnnouncement('');
+    setIsReviewingAsStudent(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 
@@ -235,6 +243,7 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
     prevConfirmationsRef.current.clear();
     pendingMessagesRef.current = [];
     setAnnouncement('');
+    setIsReviewingAsStudent(false);
     onClose();
   };
 
@@ -248,13 +257,19 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
       // While ConfirmModal is open, its own Escape handler owns this key -- without this guard,
       // both handlers fire on the same keypress (they're two independent document-level
       // listeners), cancelling the delete confirmation AND closing/resetting the whole editor at
-      // once.
-      if (event.key === 'Escape' && !deleteTarget) handleClose();
+      // once. Same reasoning for the Review-as-Student preview (Story 3.9/Task 5): Escape exits
+      // just the preview first, not the whole editor underneath it.
+      if (event.key === 'Escape' && deleteTarget) return;
+      if (event.key === 'Escape' && isReviewingAsStudent) {
+        setIsReviewingAsStudent(false);
+        return;
+      }
+      if (event.key === 'Escape') handleClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, deleteTarget]);
+  }, [isOpen, deleteTarget, isReviewingAsStudent]);
 
   if (!isOpen) return null;
 
@@ -283,6 +298,15 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
           <X className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Story 3.4/Task 2: tutor-facing publishing lifecycle surface -- mounted here, the
+          minimal integration point, without otherwise restructuring this file. Keyed by draftId:
+          this editor can stay open and mounted while draftId itself changes (switching drafts),
+          and useCourseLifecycle has no effect watching courseId to reset its own state on that
+          change -- without this key, a publish batch already in progress (or a stale terminal
+          state) for the PREVIOUS draft would keep rendering under the newly-selected draft's
+          header instead of a fresh draft/no-checklist state. */}
+      <PublishLifecycleBar key={draftId} courseId={draftId} onReviewAsStudentReady={() => setIsReviewingAsStudent(true)} />
 
       {/* Widened from Story 2.2's max-w-3xl (sized for a plain file list) -- the nested tree
           added by Story 2.3 needs more horizontal room. Intentional layout change, not a
@@ -355,6 +379,10 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
           }}
           onCancel={() => setDeleteTarget(null)}
         />
+      )}
+
+      {isReviewingAsStudent && draftId && (
+        <ReviewAsStudentPreview courseId={draftId} chapters={contentTree.data} onClose={() => setIsReviewingAsStudent(false)} />
       )}
     </div>
   );

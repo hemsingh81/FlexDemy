@@ -12,6 +12,9 @@ Thumbs.db
 .vite/
 *.tsbuildinfo
 
+# Vitest browser-mode failure-diff attachments (Story 3.11) -- generated, non-deterministic
+.vitest-attachments/
+
 # Editors
 .vscode/
 .idea/

@@ -50,15 +50,17 @@ export interface UpdateDraftCourseFields {
 
 export class CourseDraftError extends Error {}
 
-// No GET endpoint is consumed here -- resuming an existing Draft is FR-22/Story 3.9 territory,
-// out of this story's scope (see useCourseDraft.ts's Dev Notes).
-const write = async <T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> => {
+// Story 3.9: GetPublishStatus is the first GET this file consumes -- moveToReview/confirmReview/
+// publish are also added here (Story 3.9/Task 1's endpoints), still no GET-by-id "resume this
+// Draft" capability (that gap is documented in this story's own Dev Notes/Completion Notes, not
+// silently built here).
+const write = async <T>(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> => {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers: {
-        'Content-Type': 'application/json',
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${getToken()}`,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -72,6 +74,9 @@ const write = async <T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?: 
     throw new CourseDraftError(problem?.detail || 'Something went wrong. Please try again.');
   }
 
+  // 204 No Content (move-to-review/confirm-review/publish) has no JSON body -- same handling
+  // contentTreeService.ts's own request() helper already established.
+  if (response.status === 204) return undefined as T;
   return response.json();
 };
 
@@ -125,3 +130,51 @@ export const reorderThumbnail = (courseId: string, thumbnailId: string, directio
 
 export const setPrimaryThumbnail = (courseId: string, thumbnailId: string): Promise<CourseDraftDto> =>
   write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/thumbnails/${encodeURIComponent(thumbnailId)}/primary`, 'PUT');
+
+// Story 3.9/Task 1: the real Draft -> InReview -> ReviewConfirmed transitions.
+export const moveToReview = (courseId: string): Promise<void> =>
+  write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/move-to-review`, 'POST');
+
+export const confirmReview = (courseId: string): Promise<void> =>
+  write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/confirm-review`, 'POST');
+
+// Story 3.8/Task 5: the real publish trigger + checklist status read -- mirrors
+// PublishDtos.cs/ChecklistRowDto.cs exactly (camelCase, ASP.NET Core's default JSON policy, same
+// as every other DTO in this file).
+export interface ChecklistRowDto {
+  nodeId: string;
+  nodeKind: string;
+  title: string;
+  statusKind: string;
+  statusText: string;
+}
+
+export interface PublishStatusDto {
+  lifecycleState: string;
+  isPublishing: boolean;
+  checklist: ChecklistRowDto[] | null;
+}
+
+// Story 3.10/Task 2-3: return-to-Draft (Published -> Draft, content untouched) plus version
+// history/rollback -- mirrors IVersionService.CourseVersionDto exactly.
+export const returnToDraft = (courseId: string): Promise<void> =>
+  write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/return-to-draft`, 'POST');
+
+export interface CourseVersionDto {
+  id: string;
+  publishedAt: string;
+  chapterCount: number;
+  topicCount: number;
+}
+
+export const getVersions = (courseId: string): Promise<CourseVersionDto[]> =>
+  write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/versions`, 'GET');
+
+export const restoreVersion = (courseId: string, versionId: string): Promise<void> =>
+  write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/versions/${encodeURIComponent(versionId)}/restore`, 'POST');
+
+export const publishCourse = (courseId: string): Promise<void> =>
+  write(`/api/v1/courses/${encodeURIComponent(courseId)}/publish`, 'POST');
+
+export const getPublishStatus = (courseId: string): Promise<PublishStatusDto> =>
+  write(`/api/v1/courses/${encodeURIComponent(courseId)}/publish-status`, 'GET');

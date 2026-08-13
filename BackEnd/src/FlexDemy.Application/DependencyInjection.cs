@@ -1,3 +1,4 @@
+using FlexDemy.Application.AdaptiveLearning;
 using FlexDemy.Application.AiConfig;
 using FlexDemy.Application.AiGateway;
 using FlexDemy.Application.AiUsage;
@@ -22,6 +23,11 @@ public static class DependencyInjection
     {
         services.AddScoped<ICourseService, CourseService>();
         services.AddScoped<IContentTreeService, ContentTreeService>();
+        services.AddScoped<IAdaptiveLearningService, AdaptiveLearningService>();
+        services.AddScoped<IExerciseService, ExerciseService>();
+        services.AddScoped<IKeywordDefinitionService, KeywordDefinitionService>();
+        services.AddScoped<IVersionService, VersionService>();
+        services.AddScoped<IPublishService, PublishService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<IRolePermissionService, RolePermissionService>();

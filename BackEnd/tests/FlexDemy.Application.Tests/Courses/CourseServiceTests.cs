@@ -34,6 +34,7 @@ public class CourseServiceTests
     private sealed record Sut(
         CourseService Service,
         ICourseRepository Repository,
+        IContentTreeRepository ContentTreeRepository,
         IUnitOfWork UnitOfWork,
         IIdGenerator IdGenerator,
         IFileStorageService FileStorage,
@@ -42,13 +43,14 @@ public class CourseServiceTests
     private static Sut MakeSut(string? currentUserId = "tutor_1")
     {
         var repository = Substitute.For<ICourseRepository>();
+        var contentTreeRepository = Substitute.For<IContentTreeRepository>();
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var idGenerator = Substitute.For<IIdGenerator>();
         var fileStorage = Substitute.For<IFileStorageService>();
         var currentUser = Substitute.For<ICurrentUserService>();
         currentUser.UserId.Returns(currentUserId);
-        var service = new CourseService(repository, unitOfWork, idGenerator, fileStorage, currentUser);
-        return new Sut(service, repository, unitOfWork, idGenerator, fileStorage, currentUser);
+        var service = new CourseService(repository, contentTreeRepository, unitOfWork, idGenerator, fileStorage, currentUser);
+        return new Sut(service, repository, contentTreeRepository, unitOfWork, idGenerator, fileStorage, currentUser);
     }
 
     [Fact]
@@ -669,5 +671,352 @@ public class CourseServiceTests
         sut.Repository.GetByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
 
         await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.GetOwningTutorIdAsync("missing"));
+    }
+
+    // -- MarkPublishedAsync (Story 3.8/Task 5) --------------------------------------------------
+
+    [Fact]
+    public async Task MarkPublishedAsync_sets_LifecycleState_Published_with_no_caller_identity_check()
+    {
+        // Same "trusted system caller" shape as GetOwningTutorIdAsync -- called from
+        // PublishNodeContentJob/PublishService, not directly by an HTTP request, so no
+        // CurrentUser ownership check applies here.
+        var sut = MakeSut(currentUserId: null);
+        var course = MakeDraft(id: "course_1");
+        course.LifecycleState = LifecycleState.ReviewConfirmed;
+        sut.Repository.GetByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await sut.Service.MarkPublishedAsync("course_1");
+
+        Assert.Equal(LifecycleState.Published, course.LifecycleState);
+        await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        _ = sut.CurrentUser.DidNotReceive().UserId;
+    }
+
+    [Fact]
+    public async Task MarkPublishedAsync_throws_NotFoundException_for_a_genuinely_unknown_course_id()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.MarkPublishedAsync("missing"));
+    }
+
+    // -- MoveToReviewAsync / ConfirmReviewAsync (Story 3.9/Task 1) ------------------------------
+
+    private static Chapter MakeChapter(NodeConfirmation confirmation, params Topic[] topics) => new()
+    {
+        Id = "chapter_1",
+        CourseId = "draft_1",
+        Title = "Chapter 1",
+        Confirmation = confirmation,
+        Topics = topics.ToList(),
+    };
+
+    private static Topic MakeTopic(string id, NodeConfirmation confirmation, ContentBlock[]? contentBlocks = null, Subtopic[]? subtopics = null) => new()
+    {
+        Id = id,
+        ChapterId = "chapter_1",
+        Title = $"Topic {id}",
+        Confirmation = confirmation,
+        ContentBlocks = contentBlocks?.ToList() ?? [],
+        Subtopics = subtopics?.ToList() ?? [],
+    };
+
+    private static Subtopic MakeSubtopic(string id, NodeConfirmation confirmation, ContentBlock[]? contentBlocks = null) => new()
+    {
+        Id = id,
+        TopicId = "topic_1",
+        Title = $"Subtopic {id}",
+        Confirmation = confirmation,
+        ContentBlocks = contentBlocks?.ToList() ?? [],
+    };
+
+    private static ContentBlock MakeBlock(string id, NodeConfirmation confirmation) => new()
+    {
+        Id = id,
+        TopicId = "topic_1",
+        Confirmation = confirmation,
+    };
+
+    // Every-node-confirmed fixture: one Chapter -> one Topic (with its own confirmed ContentBlock)
+    // -> one Subtopic (with its own confirmed ContentBlock) -- exercises all 4 entity types at once.
+    private static List<Chapter> MakeFullyConfirmedTree() =>
+    [
+        MakeChapter(
+            NodeConfirmation.Confirmed,
+            MakeTopic(
+                "topic_1",
+                NodeConfirmation.Confirmed,
+                contentBlocks: [MakeBlock("block_topic", NodeConfirmation.Confirmed)],
+                subtopics: [MakeSubtopic("subtopic_1", NodeConfirmation.Confirmed, [MakeBlock("block_subtopic", NodeConfirmation.Confirmed)])]))
+    ];
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_ValidationException_when_the_course_is_not_Draft()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        course.LifecycleState = LifecycleState.InReview;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_NotFoundException_for_a_genuinely_unknown_course_id()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.MoveToReviewAsync("missing"));
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_UnauthorizedAppException_for_a_different_tutors_draft()
+    {
+        var sut = MakeSut(currentUserId: "stranger");
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft(tutorId: "owner"));
+
+        await Assert.ThrowsAsync<UnauthorizedAppException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_ValidationException_naming_the_unconfirmed_Chapter()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>())
+            .Returns([MakeChapter(NodeConfirmation.Unconfirmed)]);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+        Assert.Contains("Chapter 1", ex.Message);
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_ValidationException_naming_the_unconfirmed_Topic()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>())
+            .Returns([MakeChapter(NodeConfirmation.Confirmed, MakeTopic("topic_1", NodeConfirmation.Unconfirmed))]);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+        Assert.Contains("Topic topic_1", ex.Message);
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_ValidationException_for_an_unconfirmed_ContentBlock_directly_under_a_Topic()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([
+            MakeChapter(NodeConfirmation.Confirmed,
+                MakeTopic("topic_1", NodeConfirmation.Confirmed, contentBlocks: [MakeBlock("block_1", NodeConfirmation.Unconfirmed)]))
+        ]);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+        Assert.Contains("content block", ex.Message);
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_ValidationException_naming_the_unconfirmed_Subtopic()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([
+            MakeChapter(NodeConfirmation.Confirmed,
+                MakeTopic("topic_1", NodeConfirmation.Confirmed, subtopics: [MakeSubtopic("subtopic_1", NodeConfirmation.Unconfirmed)]))
+        ]);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+        Assert.Contains("Subtopic subtopic_1", ex.Message);
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_throws_ValidationException_for_an_unconfirmed_ContentBlock_under_a_Subtopic()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([
+            MakeChapter(NodeConfirmation.Confirmed,
+                MakeTopic("topic_1", NodeConfirmation.Confirmed,
+                    subtopics: [MakeSubtopic("subtopic_1", NodeConfirmation.Confirmed, [MakeBlock("block_1", NodeConfirmation.Unconfirmed)])]))
+        ]);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+        Assert.Contains("content block", ex.Message);
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_sets_LifecycleState_InReview_when_every_node_across_all_4_types_is_confirmed()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeFullyConfirmedTree());
+
+        await sut.Service.MoveToReviewAsync("draft_1");
+
+        Assert.Equal(LifecycleState.InReview, course.LifecycleState);
+        await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task MoveToReviewAsync_with_an_empty_content_tree_succeeds_vacuously()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([]);
+
+        await sut.Service.MoveToReviewAsync("draft_1");
+
+        Assert.Equal(LifecycleState.InReview, course.LifecycleState);
+    }
+
+    [Fact]
+    public async Task ConfirmReviewAsync_throws_NotFoundException_for_a_genuinely_unknown_course_id()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.ConfirmReviewAsync("missing"));
+    }
+
+    [Fact]
+    public async Task ConfirmReviewAsync_throws_ValidationException_when_the_course_is_not_InReview()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
+
+        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.ConfirmReviewAsync("draft_1"));
+    }
+
+    [Fact]
+    public async Task ConfirmReviewAsync_throws_UnauthorizedAppException_for_a_different_tutors_draft()
+    {
+        var sut = MakeSut(currentUserId: "stranger");
+        var course = MakeDraft(tutorId: "owner");
+        course.LifecycleState = LifecycleState.InReview;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<UnauthorizedAppException>(() => sut.Service.ConfirmReviewAsync("draft_1"));
+    }
+
+    [Fact]
+    public async Task ConfirmReviewAsync_sets_LifecycleState_ReviewConfirmed()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        course.LifecycleState = LifecycleState.InReview;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await sut.Service.ConfirmReviewAsync("draft_1");
+
+        Assert.Equal(LifecycleState.ReviewConfirmed, course.LifecycleState);
+        await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    // -- ReturnToDraftAsync (Story 3.10/Task 2) -------------------------------------------------
+
+    [Fact]
+    public async Task ReturnToDraftAsync_sets_LifecycleState_Draft()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        course.LifecycleState = LifecycleState.Published;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await sut.Service.ReturnToDraftAsync("draft_1");
+
+        Assert.Equal(LifecycleState.Draft, course.LifecycleState);
+        await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        // Positively proves "content untouched" (a state transition only, distinct from
+        // IVersionService.RestoreVersionAsync's genuine rollback) rather than just never
+        // referencing the content-tree mock at all.
+        await sut.ContentTreeRepository.DidNotReceiveWithAnyArgs().GetTreeAsync(default!, default);
+    }
+
+    [Theory]
+    [InlineData(LifecycleState.Draft)]
+    [InlineData(LifecycleState.InReview)]
+    [InlineData(LifecycleState.ReviewConfirmed)]
+    public async Task ReturnToDraftAsync_throws_ValidationException_when_the_course_is_not_Published(LifecycleState lifecycleState)
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        course.LifecycleState = lifecycleState;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.ReturnToDraftAsync("draft_1"));
+    }
+
+    [Fact]
+    public async Task ReturnToDraftAsync_throws_UnauthorizedAppException_for_a_different_tutors_course()
+    {
+        var sut = MakeSut(currentUserId: "stranger");
+        var course = MakeDraft(tutorId: "owner");
+        course.LifecycleState = LifecycleState.Published;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<UnauthorizedAppException>(() => sut.Service.ReturnToDraftAsync("draft_1"));
+    }
+
+    [Fact]
+    public async Task ReturnToDraftAsync_throws_NotFoundException_for_a_genuinely_unknown_course_id()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.ReturnToDraftAsync("missing"));
+    }
+
+    // A course returned to Draft has no bypass back to Published -- MoveToReviewAsync's own
+    // precondition (LifecycleState == Draft) applies identically regardless of whether the course
+    // was ever Published before; there is no separate "re-publish" code path to special-case.
+    [Fact]
+    public async Task after_ReturnToDraftAsync_MoveToReviewAsync_still_requires_the_normal_all_nodes_confirmed_precondition()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        course.LifecycleState = LifecycleState.Draft; // as ReturnToDraftAsync would have left it
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>())
+            .Returns([new Chapter { Id = "chapter_1", CourseId = "draft_1", Title = "Chapter 1", Confirmation = NodeConfirmation.Unconfirmed }]);
+
+        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
+    }
+
+    // -- MarkDraftAsync (Story 3.10/Task 3) ------------------------------------------------------
+
+    [Theory]
+    [InlineData(LifecycleState.Draft)]
+    [InlineData(LifecycleState.InReview)]
+    [InlineData(LifecycleState.ReviewConfirmed)]
+    [InlineData(LifecycleState.Published)]
+    public async Task MarkDraftAsync_sets_LifecycleState_Draft_with_no_caller_identity_check_regardless_of_current_state(LifecycleState lifecycleState)
+    {
+        // Same "trusted system caller" shape as MarkPublishedAsync/GetOwningTutorIdAsync -- called
+        // from VersionService.RestoreVersionAsync, not directly by an HTTP request.
+        var sut = MakeSut(currentUserId: null);
+        var course = MakeDraft(id: "course_1");
+        course.LifecycleState = lifecycleState;
+        sut.Repository.GetByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await sut.Service.MarkDraftAsync("course_1");
+
+        Assert.Equal(LifecycleState.Draft, course.LifecycleState);
+        await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        _ = sut.CurrentUser.DidNotReceive().UserId;
+    }
+
+    [Fact]
+    public async Task MarkDraftAsync_throws_NotFoundException_for_a_genuinely_unknown_course_id()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.MarkDraftAsync("missing"));
     }
 }

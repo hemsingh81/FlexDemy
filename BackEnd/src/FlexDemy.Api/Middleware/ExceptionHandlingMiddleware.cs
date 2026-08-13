@@ -23,6 +23,7 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
                 ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
                 UnauthorizedAppException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
                 AiGatewayException => (StatusCodes.Status502BadGateway, "AI Gateway Error"),
+                AiResponseValidationException => (StatusCodes.Status502BadGateway, "AI Response Validation Failed"),
                 AiTaskUnavailableException => (StatusCodes.Status503ServiceUnavailable, "AI Task Unavailable"),
                 AiTaskBudgetExceededException => (StatusCodes.Status429TooManyRequests, "AI Task Budget Exceeded"),
                 _ => (StatusCodes.Status500InternalServerError, "Unexpected Error"),

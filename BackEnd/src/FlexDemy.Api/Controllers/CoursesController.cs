@@ -1,3 +1,4 @@
+using FlexDemy.Application.AdaptiveLearning;
 using FlexDemy.Application.Courses;
 using FlexDemy.Application.Permissions;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +9,7 @@ namespace FlexDemy.Api.Controllers;
 // AD-5: thin controller -- HTTP <-> DTO mapping and one Application service call, nothing else.
 [ApiController]
 [Route("api/v1/courses")]
-public class CoursesController(ICourseService courseService) : ControllerBase
+public class CoursesController(ICourseService courseService, IPublishService publishService, IVersionService versionService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<CourseDto>>> GetCourses(
@@ -103,5 +104,75 @@ public class CoursesController(ICourseService courseService) : ControllerBase
     {
         var course = await courseService.SetPrimaryThumbnailAsync(id, thumbnailId, cancellationToken);
         return Ok(course);
+    }
+
+    // Story 3.9/Task 1: the real Draft -> InReview -> ReviewConfirmed transitions, live-wiring
+    // Story 3.4's own mock useCourseLifecycle hook. Same CoursesCreate policy as every other
+    // authoring action on this controller.
+    [HttpPost("drafts/{id}/move-to-review")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<IActionResult> MoveToReview(string id, CancellationToken cancellationToken)
+    {
+        await courseService.MoveToReviewAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("drafts/{id}/confirm-review")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<IActionResult> ConfirmReview(string id, CancellationToken cancellationToken)
+    {
+        await courseService.ConfirmReviewAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    // Story 3.10/Task 2: Published -> Draft, so a tutor can iterate on a live course. Same
+    // CoursesCreate policy as every other authoring action on this controller.
+    [HttpPost("drafts/{id}/return-to-draft")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<IActionResult> ReturnToDraft(string id, CancellationToken cancellationToken)
+    {
+        await courseService.ReturnToDraftAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    // Story 3.10/Task 3: tutor-facing version history + rollback. Ownership is enforced inside
+    // VersionService itself (EnsureOwnedAsync), not just by this policy -- CoursesCreate alone
+    // only proves "some tutor," not "this course's own tutor."
+    [HttpGet("drafts/{id}/versions")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<ActionResult<IReadOnlyList<CourseVersionDto>>> GetVersions(string id, CancellationToken cancellationToken)
+    {
+        var versions = await versionService.GetVersionsAsync(id, cancellationToken);
+        return Ok(versions);
+    }
+
+    [HttpPost("drafts/{id}/versions/{versionId}/restore")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<IActionResult> RestoreVersion(string id, string versionId, CancellationToken cancellationToken)
+    {
+        await versionService.RestoreVersionAsync(id, versionId, cancellationToken);
+        return NoContent();
+    }
+
+    // Story 3.8/Task 5: the real ReviewConfirmed -> Publishing trigger, live-wiring Story 3.4's
+    // own mock PublishLifecycleBar. Tutor-facing, same CoursesCreate policy as every other
+    // authoring action on this controller.
+    [HttpPost("{id}/publish")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<IActionResult> Publish(string id, CancellationToken cancellationToken)
+    {
+        await publishService.PublishAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    // No [Authorize(Policy = ...)] attribute -- same student-facing-read auth-shape decision this
+    // epic's AdaptiveLearningController/ExerciseController/KeywordDefinitionController each make
+    // (Stories 3.5-3.7); a tutor watching their own course's publish progress reads through the
+    // same open endpoint.
+    [HttpGet("{id}/publish-status")]
+    public async Task<ActionResult<PublishStatusDto>> GetPublishStatus(string id, CancellationToken cancellationToken)
+    {
+        var status = await publishService.GetStatusAsync(id, cancellationToken);
+        return Ok(status);
     }
 }

@@ -5,6 +5,7 @@ namespace FlexDemy.Application.Courses;
 
 public class CourseService(
     ICourseRepository repository,
+    IContentTreeRepository contentTreeRepository,
     IUnitOfWork unitOfWork,
     IIdGenerator idGenerator,
     IFileStorageService fileStorage,
@@ -201,6 +202,148 @@ public class CourseService(
             ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
 
         return course.TutorId ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
+    }
+
+    // Story 3.5/Task 3: ownership-only, no LifecycleState restriction (unlike
+    // EnsureOwnedDraftAsync, which additionally requires Draft). Uses GetByIdAsync (not
+    // GetDraftByIdAsync, which filters to Draft-only rows) so a Published course's own tutor can
+    // still pass this check. Same NotFoundException/UnauthorizedAppException split as
+    // LoadOwnedDraftAsync below (this is the closer analog -- a "may I mutate this" write guard --
+    // not GetCourseByIdAsync's deliberately-existence-hiding read guard).
+    public async Task EnsureOwnedAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await repository.GetByIdAsync(courseId, cancellationToken)
+            ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
+
+        var currentUserId = RequireCurrentUserId();
+        if (course.TutorId != currentUserId)
+            throw new UnauthorizedAppException("You do not have permission to modify this course.");
+    }
+
+    // Story 3.9/Task 1: real Draft -> InReview transition, replacing Story 3.4's mock hook.
+    // FR-15's confirmation scope is all 4 content-tree entity types, deliberately wider than
+    // Stories 3.5-3.8's Topic/Subtopic-only generation-target scope (see this epic's own
+    // Story 3.1 Dev Notes) -- an unconfirmed Chapter or ContentBlock must block Review exactly
+    // the same as an unconfirmed Topic or Subtopic.
+    public async Task MoveToReviewAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await LoadOwnedCourseAsync(courseId, cancellationToken);
+        if (course.LifecycleState != LifecycleState.Draft)
+            throw new ValidationException("A course can only move to review from Draft.");
+
+        var chapters = await contentTreeRepository.GetTreeAsync(courseId, cancellationToken);
+        var unconfirmedReason = FindFirstUnconfirmedNodeReason(chapters);
+        if (unconfirmedReason is not null)
+            throw new ValidationException(unconfirmedReason);
+
+        course.LifecycleState = LifecycleState.InReview;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    // Story 3.9/Task 1: real InReview -> ReviewConfirmed transition, replacing Story 3.4's mock hook.
+    public async Task ConfirmReviewAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await LoadOwnedCourseAsync(courseId, cancellationToken);
+        if (course.LifecycleState != LifecycleState.InReview)
+            throw new ValidationException("A course can only be review-confirmed from In Review.");
+
+        course.LifecycleState = LifecycleState.ReviewConfirmed;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    // Story 3.10/Task 2: Published -> Draft, a state transition only -- the current content-tree
+    // rows are left exactly as-is (this is NOT a rollback; RestoreVersionAsync on IVersionService
+    // is the distinct operation that replaces content). The prior CourseVersion row created at the
+    // most recent publish (Story 3.8) already retains the pre-edit published state, so nothing
+    // further needs to happen here to satisfy "the prior published state is retained as a
+    // version." Re-publish afterward requires the exact same MoveToReviewAsync ->
+    // ConfirmReviewAsync -> PublishAsync sequence as any first-time publish -- this method adds no
+    // bypass, by construction: it only ever sets LifecycleState back to Draft, which every other
+    // transition method already gates on identically regardless of prior history.
+    public async Task ReturnToDraftAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await LoadOwnedCourseAsync(courseId, cancellationToken);
+        if (course.LifecycleState != LifecycleState.Published)
+            throw new ValidationException("Only a Published course can be returned to Draft.");
+
+        course.LifecycleState = LifecycleState.Draft;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    // Story 3.10/Task 3: system caller only (VersionService.RestoreVersionAsync), no
+    // precondition -- a restore always lands the course in Draft regardless of its current state.
+    public async Task MarkDraftAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await repository.GetByIdAsync(courseId, cancellationToken)
+            ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
+
+        course.LifecycleState = LifecycleState.Draft;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    // Story 3.8/Task 3: system caller only (PublishNodeContentJob's finalize step), no
+    // ownership/precondition check -- mirrors GetOwningTutorIdAsync's own "the job itself is the
+    // trusted caller" shape. Idempotent-by-effect: setting an already-Published course to
+    // Published again is a harmless no-op write, so no extra guard is needed against a
+    // theoretical double-finalize (which AD-16's own atomic decrement already prevents from
+    // happening in practice -- only the one item observing remaining == 0 ever calls this).
+    public async Task MarkPublishedAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await repository.GetByIdAsync(courseId, cancellationToken)
+            ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
+
+        course.LifecycleState = LifecycleState.Published;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    // Story 3.9: ownership check with no LifecycleState restriction of its own -- unlike
+    // LoadOwnedDraftAsync (which bakes in Draft-only), MoveToReviewAsync/ConfirmReviewAsync each
+    // check their own required precondition state explicitly, matching EnsureOwnedAsync's own
+    // "no built-in state restriction" shape rather than duplicating LoadOwnedDraftAsync's.
+    private async Task<Course> LoadOwnedCourseAsync(string courseId, CancellationToken cancellationToken)
+    {
+        var course = await repository.GetDraftByIdAsync(courseId, cancellationToken)
+            ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
+
+        var currentUserId = RequireCurrentUserId();
+        if (course.TutorId != currentUserId)
+            throw new UnauthorizedAppException("You do not have permission to modify this course.");
+
+        return course;
+    }
+
+    // Walks all 4 content-tree entity types depth-first, returning a ready-to-throw message for
+    // the first Unconfirmed node found (or null if every node is Confirmed). ContentBlock has no
+    // Title field, so its message names the parent Topic/Subtopic instead.
+    private static string? FindFirstUnconfirmedNodeReason(List<Chapter> chapters)
+    {
+        foreach (var chapter in chapters)
+        {
+            if (chapter.Confirmation != NodeConfirmation.Confirmed)
+                return $"Chapter '{chapter.Title}' must be confirmed before this course can move to review.";
+
+            foreach (var topic in chapter.Topics)
+            {
+                if (topic.Confirmation != NodeConfirmation.Confirmed)
+                    return $"Topic '{topic.Title}' must be confirmed before this course can move to review.";
+
+                foreach (var block in topic.ContentBlocks)
+                    if (block.Confirmation != NodeConfirmation.Confirmed)
+                        return $"A content block under Topic '{topic.Title}' must be confirmed before this course can move to review.";
+
+                foreach (var subtopic in topic.Subtopics)
+                {
+                    if (subtopic.Confirmation != NodeConfirmation.Confirmed)
+                        return $"Subtopic '{subtopic.Title}' must be confirmed before this course can move to review.";
+
+                    foreach (var block in subtopic.ContentBlocks)
+                        if (block.Confirmation != NodeConfirmation.Confirmed)
+                            return $"A content block under Subtopic '{subtopic.Title}' must be confirmed before this course can move to review.";
+                }
+            }
+        }
+
+        return null;
     }
 
     private async Task<Course> LoadOwnedDraftAsync(string courseId, CancellationToken cancellationToken)

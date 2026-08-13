@@ -1,3 +1,4 @@
+using FlexDemy.Domain.AdaptiveLearning;
 using FlexDemy.Domain.AiConfig;
 using FlexDemy.Domain.AiUsage;
 using FlexDemy.Domain.Courses;
@@ -39,6 +40,14 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
     public DbSet<AiTaskBudget> AiTaskBudgets => Set<AiTaskBudget>();
 
     public DbSet<Tag> Tags => Set<Tag>();
+
+    public DbSet<DrilldownLevel> DrilldownLevels => Set<DrilldownLevel>();
+    public DbSet<WayContent> WayContents => Set<WayContent>();
+    public DbSet<Exercise> Exercises => Set<Exercise>();
+    public DbSet<KeywordDefinition> KeywordDefinitions => Set<KeywordDefinition>();
+    public DbSet<PublishBatch> PublishBatches => Set<PublishBatch>();
+    public DbSet<PublishBatchItem> PublishBatchItems => Set<PublishBatchItem>();
+    public DbSet<CourseVersion> CourseVersions => Set<CourseVersion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

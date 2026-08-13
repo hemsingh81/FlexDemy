@@ -1,5 +1,5 @@
 # generated: 2026-08-11
-# last_updated: 2026-08-12 (2-10 → done)
+# last_updated: 2026-08-13 (3-11 → done, epic-3 → done)
 # project: eLearning
 # project_key: NOKEY
 # tracking_system: file-system
@@ -46,7 +46,7 @@
 #   (see epics.md's per-epic "Parallelization note").
 
 generated: 2026-08-11
-last_updated: 2026-08-12 (2-10 → done)
+last_updated: 2026-08-13 (3-11 → done, epic-3 → done)
 project: eLearning
 project_key: NOKEY
 tracking_system: file-system
@@ -78,16 +78,16 @@ development_status:
   2-10-subject-aware-alt-text-language-tagging: done
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-student-course-player-shell-ui-mock-data: backlog
-  3-2-ways-menu-keyword-popover-ui-mock-data: backlog
-  3-3-exercise-runner-ui-mock-data: backlog
-  3-4-publishing-lifecycle-ui-mock-data: backlog
-  3-5-drill-down-ways-ai-task-implementation: backlog
-  3-6-exercise-generation-grading-backend: backlog
-  3-7-keyword-definition-backend-definekeyword: backlog
-  3-8-publish-batch-job-pre-generation-caching: backlog
-  3-9-review-as-student-lifecycle-transitions: backlog
-  3-10-publish-versioning-rollback: backlog
-  3-11-cross-view-golden-file-visual-regression-parity: backlog
+  epic-3: done
+  3-1-student-course-player-shell-ui-mock-data: done
+  3-2-ways-menu-keyword-popover-ui-mock-data: done
+  3-3-exercise-runner-ui-mock-data: done
+  3-4-publishing-lifecycle-ui-mock-data: done
+  3-5-drill-down-ways-ai-task-implementation: done
+  3-6-exercise-generation-grading-backend: done
+  3-7-keyword-definition-backend-definekeyword: done
+  3-8-publish-batch-job-pre-generation-caching: done
+  3-9-review-as-student-lifecycle-transitions: done
+  3-10-publish-versioning-rollback: done
+  3-11-cross-view-golden-file-visual-regression-parity: done
   epic-3-retrospective: optional

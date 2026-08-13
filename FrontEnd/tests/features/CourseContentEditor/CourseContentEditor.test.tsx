@@ -8,10 +8,18 @@ import * as courseFileService from '@/src/services/courseFileService';
 import type { CourseFileDto } from '@/src/services/courseFileService';
 import * as contentTreeService from '@/src/services/contentTreeService';
 import type { ChapterDto } from '@/src/services/contentTreeService';
+import * as courseDraftService from '@/src/services/courseDraftService';
 
 vi.mock('@/src/services/courseFileService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/courseFileService')>('@/src/services/courseFileService');
   return { ...actual, uploadFile: vi.fn(), getFiles: vi.fn() };
+});
+
+// Story 3.9/Task 4: PublishLifecycleBar's own useCourseLifecycle now calls the real backend --
+// mocked here the same way as courseFileService/contentTreeService above.
+vi.mock('@/src/services/courseDraftService', async () => {
+  const actual = await vi.importActual<typeof import('@/src/services/courseDraftService')>('@/src/services/courseDraftService');
+  return { ...actual, moveToReview: vi.fn(), confirmReview: vi.fn(), publishCourse: vi.fn(), getPublishStatus: vi.fn() };
 });
 
 vi.mock('@/src/services/contentTreeService', async () => {
@@ -190,6 +198,11 @@ beforeEach(() => {
   vi.mocked(contentTreeService.addContentBlock).mockImplementation(async (courseId) => fixtures[courseId][0].topics[0].subtopics[0].contentBlocks[0]);
   vi.mocked(contentTreeService.confirmNode).mockResolvedValue(undefined);
 
+  vi.mocked(courseDraftService.moveToReview).mockResolvedValue(undefined);
+  vi.mocked(courseDraftService.confirmReview).mockResolvedValue(undefined);
+  vi.mocked(courseDraftService.publishCourse).mockResolvedValue(undefined);
+  vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue({ lifecycleState: 'Draft', isPublishing: false, checklist: null });
+
   vi.mocked(contentTreeService.editNodeTitle).mockImplementation(async (courseId, id, title) => {
     const tree = fixtures[courseId] ?? [];
     const chapter = tree.find((c) => c.id === id);
@@ -354,6 +367,23 @@ describe('CourseContentEditor', () => {
     await waitFor(() =>
       expect(within(screen.getByTestId('tree-node-chapter_1')).getByDisplayValue('Chapter 1: Waves & Chemistry')).toBeInTheDocument()
     );
+  });
+
+  it('resets the publishing lifecycle state (Story 3.4) when draftId changes to a different draft', async () => {
+    const u = userEvent.setup();
+    const { rerender } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    const lifecycleNav = screen.getByRole('navigation', { name: 'Course publishing lifecycle' });
+    await u.click(screen.getByRole('button', { name: 'Review as Student' }));
+    await waitFor(() => expect(lifecycleNav.querySelectorAll('[aria-current="true"]')[0].textContent).toContain('In Review'));
+
+    // useCourseLifecycle has no effect keyed on courseId to reset its own state -- without
+    // PublishLifecycleBar being keyed by draftId in CourseContentEditor.tsx, switching drafts
+    // here would otherwise keep showing draft-1's "In Review" stage under draft-2's header.
+    rerender(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-2" />);
+
+    const lifecycleNavAfter = screen.getByRole('navigation', { name: 'Course publishing lifecycle' });
+    expect(lifecycleNavAfter.querySelectorAll('[aria-current="true"]')[0].textContent).toContain('Draft');
   });
 
   describe('with fake timers', () => {

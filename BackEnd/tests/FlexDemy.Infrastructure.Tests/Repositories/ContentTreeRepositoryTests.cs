@@ -199,4 +199,66 @@ public class ContentTreeRepositoryTests
 
         Assert.Null(await repository.FindNodeAsync(CourseId, "chapter_1"));
     }
+
+    // Code-review regression tests (Story 3.10): VersionService.RestoreVersionAsync deserializes a
+    // prior snapshot's Chapter graph and re-inserts it reusing the ORIGINAL node ids -- deliberately,
+    // so cached adaptive-learning content keyed by those same ids reconnects (see that class's own
+    // doc comment). A code review pass raised a concern that GetTreeAsync's result being TRACKED
+    // (no AsNoTracking) would make removing a chapter and adding a new instance under the same id,
+    // staged for the SAME SaveChangesAsync call, throw an EF Core identity-map collision. Verified
+    // directly against a real DbContext (this is exactly the class of bug an NSubstitute-mocked
+    // IContentTreeRepository could never catch) that this concern does NOT materialize: a Deleted
+    // entry and a separately-tracked Added instance for the same key coexist without conflict and
+    // commit correctly as DELETE-then-INSERT within one SaveChanges call, including with a nested
+    // Topics graph (VersionService.RestoreVersionAsync's own real shape). These tests exist so this
+    // verified-safe behavior stays regression-tested, not because a fix was needed here.
+    [Fact]
+    public async Task RemoveChapter_then_AddChapter_reusing_the_same_id_in_ONE_SaveChangesAsync_call_succeeds()
+    {
+        await using var db = NewContext();
+        db.Courses.Add(MakeCourse());
+        var original = new Chapter { Id = "chapter_1", CourseId = CourseId, Title = "Original", Order = 0 };
+        db.Chapters.Add(original);
+        await db.SaveChangesAsync();
+
+        var repository = new ContentTreeRepository(db);
+        var tracked = (await repository.GetTreeAsync(CourseId)).Single();
+        repository.RemoveChapter(tracked);
+
+        var replacement = new Chapter { Id = "chapter_1", CourseId = CourseId, Title = "Restored" };
+        repository.AddChapter(replacement);
+
+        await db.SaveChangesAsync(); // Must not throw.
+
+        var result = await repository.GetTreeAsync(CourseId);
+        var restored = Assert.Single(result);
+        Assert.Equal("Restored", restored.Title);
+    }
+
+    [Fact]
+    public async Task RemoveChapter_then_AddChapter_reusing_the_same_id_with_a_nested_Topic_in_ONE_SaveChangesAsync_call_succeeds()
+    {
+        await using var db = NewContext();
+        db.Courses.Add(MakeCourse());
+        var originalTopic = new Topic { Id = "topic_1", ChapterId = "chapter_1", Title = "Original Topic", Order = 0 };
+        var original = new Chapter { Id = "chapter_1", CourseId = CourseId, Title = "Original", Order = 0, Topics = [originalTopic] };
+        db.Chapters.Add(original);
+        await db.SaveChangesAsync();
+
+        var repository = new ContentTreeRepository(db);
+        var tracked = (await repository.GetTreeAsync(CourseId)).Single();
+        repository.RemoveChapter(tracked);
+
+        var replacementTopic = new Topic { Id = "topic_1", ChapterId = "chapter_1", Title = "Restored Topic", Order = 0 };
+        var replacement = new Chapter { Id = "chapter_1", CourseId = CourseId, Title = "Restored", Topics = [replacementTopic] };
+        repository.AddChapter(replacement);
+
+        await db.SaveChangesAsync(); // Must not throw.
+
+        var result = await repository.GetTreeAsync(CourseId);
+        var restoredChapter = Assert.Single(result);
+        Assert.Equal("Restored", restoredChapter.Title);
+        var restoredTopic = Assert.Single(restoredChapter.Topics);
+        Assert.Equal("Restored Topic", restoredTopic.Title);
+    }
 }

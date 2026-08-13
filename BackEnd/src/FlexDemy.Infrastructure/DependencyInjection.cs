@@ -1,3 +1,4 @@
+using FlexDemy.Application.AdaptiveLearning;
 using FlexDemy.Application.AiConfig;
 using FlexDemy.Application.AiGateway;
 using FlexDemy.Application.AiUsage;
@@ -97,6 +98,18 @@ public static class DependencyInjection
         // Story 2.9: Content Tree CRUD -- one repository for the whole tree (AD-4 deviation, see
         // IContentTreeRepository.cs), materializing Story 2.8's staged extraction JSON on read.
         services.AddScoped<IContentTreeRepository, ContentTreeRepository>();
+
+        // Story 3.5: Drill-Down/Ways generation + tutor-override storage -- a new feature area
+        // (Domain/Application.AdaptiveLearning), not folded into Courses.
+        services.AddScoped<IAdaptiveLearningRepository, AdaptiveLearningRepository>();
+        services.AddScoped<IExerciseRepository, ExerciseRepository>();
+        services.AddScoped<IKeywordDefinitionRepository, KeywordDefinitionRepository>();
+        services.AddScoped<IVersionRepository, VersionRepository>();
+        services.AddScoped<IPublishBatchRepository, PublishBatchRepository>();
+
+        // Story 3.8: publish-time pre-generation batch -- one Hangfire job per confirmed node.
+        services.AddScoped<IPublishNodeContentJob, PublishNodeContentJob>();
+        services.AddScoped<IPublishNodeContentJobEnqueuer, PublishNodeContentJobEnqueuer>();
 
         services.AddScoped<IStudentProfileRepository, StudentProfileRepository>();
         services.AddScoped<ITutorProfileRepository, TutorProfileRepository>();

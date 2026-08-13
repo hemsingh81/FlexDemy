@@ -31,6 +31,9 @@ import { FlashcardsModal } from './FlashcardsModal';
 import { CourseReviewModal } from '../CourseOverview/CourseReviewModal';
 import { saveLessonProgress } from '../../services/userService';
 import { ttsManager } from '../../lib/tts';
+import { makeMockContentTree, type Chapter as ContentChapter } from './playerContent';
+import { BookMarked } from 'lucide-react';
+import { ContentNodeReadingPane, findContentNode } from './ContentNodeReadingPane';
 
 interface CoursePlayerProps {
   course: Course;
@@ -67,7 +70,20 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   const [selectedVoiceName, setSelectedVoiceName] = useState<string>('');
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  // Active Drilldown Drawer topic key
+  // Story 3.1/Task 2: the real Chapter/Topic/Subtopic/ContentBlock content tree (Epic 2's real
+  // entities, AC#4) -- a mock fixture for now, standing in for a real student-facing
+  // "fetch a Published course's content tree" endpoint that doesn't exist yet (Phase B/Story 3.5's
+  // job). Selecting a Topic/Subtopic renders its own ContentBlocks in the main reading pane,
+  // replacing the legacy course.modules[].lessons[].sentences[] rendering for that pane only --
+  // Module/Lesson/Sentence and the rest of this file's own features (voice narration, per-level
+  // LLM chat, Assignment deep-link) are untouched and still work against the existing Lesson data
+  // when no content-tree node is selected.
+  const [contentChapters] = useState<ContentChapter[]>(() => makeMockContentTree());
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const selectedContentNode = selectedNodeId ? findContentNode(contentChapters, selectedNodeId) : null;
+
+  // Active Drilldown Drawer -- now a real content-tree node id (Story 1's stable hook interface),
+  // not a legacy topicKey.
   const [activeDrillTopic, setActiveDrillTopic] = useState<string | null>(null);
 
   // Scratchpad Side-Panel state
@@ -146,10 +162,6 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
       setCurrentSentenceIndex((prev) => prev - 1);
     }
   };
-
-  const activeDrilldownData = activeDrillTopic
-    ? currentLesson.drilldowns[activeDrillTopic]
-    : null;
 
   // Generate comprehensive lesson Markdown notes including sentences and drilldowns
   const generateLessonSummaryMarkdown = () => {
@@ -396,11 +408,64 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
               </div>
             ))}
           </div>
+
+          {/* Story 3.1/Task 2: real Chapter/Topic/Subtopic content-tree navigation (AC#4) --
+              a separate section from the legacy Module/Lesson list above, not a replacement of it;
+              selecting a node here switches the main reading pane to that node's ContentBlocks. */}
+          <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+            <h2 className="text-xs font-bold uppercase text-slate-500 tracking-wider flex items-center space-x-2 px-2 pb-2">
+              <BookMarked className="w-4 h-4 text-[#143358]" />
+              <span>Course Content</span>
+            </h2>
+            <div className="space-y-3">
+              {contentChapters.map((chapter) => (
+                <div key={chapter.id} className="space-y-1">
+                  <p className="text-xs font-bold text-slate-800 px-2 py-1">{chapter.title}</p>
+                  {chapter.topics.map((topic) => (
+                    <div key={topic.id} className="space-y-1">
+                      <button
+                        onClick={() => setSelectedNodeId(topic.id)}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                          selectedNodeId === topic.id
+                            ? 'bg-[#143358]/10 text-[#143358] font-bold border border-[#143358]/20'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                        }`}
+                      >
+                        {topic.title}
+                      </button>
+                      {topic.subtopics.map((subtopic) => (
+                        <button
+                          key={subtopic.id}
+                          onClick={() => setSelectedNodeId(subtopic.id)}
+                          className={`w-full text-left ml-4 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                            selectedNodeId === subtopic.id
+                              ? 'bg-[#143358]/10 text-[#143358] font-bold border border-[#143358]/20'
+                              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                        >
+                          {subtopic.title}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
         </aside>
 
         {/* Central Reader Canvas */}
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-8 bg-slate-50">
 
+          {selectedContentNode ? (
+            // Story 3.9/Task 5: extracted to ContentNodeReadingPane.tsx so CourseContentEditor's
+            // Review-as-Student preview reuses this exact rendering instead of duplicating it.
+            // Keyed by node id -- without a key, navigating between two nodes both carrying an
+            // exercise/keyword state would otherwise reuse the same ExerciseRunner/keyword-state
+            // instance, letting stale per-node local state (a typed answer, an open popover)
+            // survive the switch.
+            <ContentNodeReadingPane key={selectedContentNode.id} courseId={course.id} node={selectedContentNode} onOpenDrilldown={setActiveDrillTopic} />
+          ) : (
           <div className="w-full max-w-4xl mx-auto">
             <ReaderCanvas
               sentences={sentences}
@@ -412,20 +477,27 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                   ttsManager.cancel();
                 }
               }}
-              onOpenDrilldown={(topicKey) => setActiveDrillTopic(topicKey)}
               onOpenScratchpadForParagraph={(index) => {
                 setScratchpadParaIndex(index);
                 setIsScratchpadOpen(true);
               }}
             />
           </div>
+          )}
 
         </main>
 
-        {/* Slide-over Drilldown Drawer */}
-        {activeDrilldownData && (
+        {/* Slide-over Drilldown Drawer -- activeDrillTopic is now a real content-tree node id
+            (Story 3.1's stable hook interface), not a legacy topicKey. Keyed by nodeId: the panel
+            is a non-blocking slide-over (no backdrop), so the sidebar stays clickable behind it and
+            activeDrillTopic can change directly from one node id to another without unmounting --
+            the key forces a fresh instance per node so DrilldownPanel's own local state
+            (selectedLevelNum/expandedSolutions/customExamples) never leaks across nodes. */}
+        {activeDrillTopic && (
           <DrilldownPanel
-            drilldown={activeDrilldownData}
+            key={activeDrillTopic}
+            courseId={course.id}
+            nodeId={activeDrillTopic}
             onClose={() => setActiveDrillTopic(null)}
             onReturnToLesson={() => setActiveDrillTopic(null)}
           />
