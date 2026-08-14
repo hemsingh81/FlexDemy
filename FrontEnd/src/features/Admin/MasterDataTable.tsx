@@ -76,6 +76,119 @@ interface MasterDataTableProps<T extends { id: string; isActive: boolean }, TCre
 // giving the opacity/scale collapse enough time to read as intentional.
 const ROW_EXIT_MS = 200;
 
+interface MasterDataTableRowProps<T extends { id: string; isActive: boolean }> {
+  row: T;
+  columns: MasterDataColumn<T>[];
+  entityLabel: string;
+  isExiting: boolean;
+  isConfirmingDelete: boolean;
+  isToggling: boolean;
+  isDeleting: boolean;
+  isBusy: boolean;
+  canDelete: boolean;
+  onToggleActive: (row: T) => void;
+  onEdit: (row: T) => void;
+  onRequestDelete: (id: string) => void;
+  onConfirmDelete: (row: T) => void;
+  onCancelDelete: () => void;
+}
+
+// Extracted out of the `rows.map(...)` below (plan/audit item 3) and wrapped in React.memo --
+// this table can hold dozens of rows (Board's 34, per the scroll-container comment above), and
+// without this split, opening a single row's Edit panel or toggling one row's Active state
+// re-renders the JSX for every OTHER row too (the whole `rows.map` re-runs on any state change
+// in the parent). Memoizing means an unrelated row only re-renders when its own props actually
+// change -- which is why every callback prop below is itself a useCallback in the parent (a
+// non-memoized inline callback would defeat this by giving React.memo a "changed" prop on every
+// render regardless).
+//
+// Generic components can't be passed directly to React.memo (memo's return type erases the type
+// parameter) -- the `as typeof MasterDataTableRowInner` cast is the standard workaround, keeping
+// this component's own call sites fully generic over T.
+function MasterDataTableRowInner<T extends { id: string; isActive: boolean }>({
+  row,
+  columns,
+  entityLabel,
+  isExiting,
+  isConfirmingDelete,
+  isToggling,
+  isDeleting,
+  isBusy,
+  canDelete,
+  onToggleActive,
+  onEdit,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
+}: MasterDataTableRowProps<T>) {
+  return (
+    <tr
+      className={`border-t border-[#E1DED4] transition-all duration-200 ${
+        isExiting ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'
+      }`}
+    >
+      {columns.map((col) => (
+        <td key={col.key} className="px-4 py-2.5 text-[#142030]">
+          {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '')}
+        </td>
+      ))}
+      <td className="px-4 py-2.5">
+        {isConfirmingDelete ? (
+          <ConfirmDialog
+            message="Really delete?"
+            variant="danger"
+            isConfirming={isDeleting}
+            onConfirm={() => onConfirmDelete(row)}
+            onCancel={onCancelDelete}
+          />
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onToggleActive(row)}
+              disabled={isToggling}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50 ${
+                row.isActive ? 'bg-[#179765]/15 text-[#179765]' : 'bg-red-100 text-red-600'
+              }`}
+            >
+              {row.isActive ? 'Active' : 'Inactive'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdit(row)}
+              disabled={isBusy}
+              aria-label={`Edit ${entityLabel}`}
+              className="p-1.5 rounded-lg text-[#5E6A79] hover:text-[#143358] hover:bg-[#F3F0E6] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => onRequestDelete(row.id)}
+                disabled={isBusy}
+                aria-label={`Delete ${entityLabel}`}
+                className="p-1.5 rounded-lg text-[#5E6A79] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// The plain `as typeof MasterDataTableRowInner` cast loses `key` support (React.memo's return
+// type doesn't preserve T, and a bare generic-function type isn't recognized by the JSX checker
+// as something LibraryManagedAttributes should intersect with `{ key?: Key }`) -- explicitly
+// including `key` in the cast target's call signature keeps `<MasterDataTableRow key={row.id} ...
+// />` below type-checking correctly while still being generic over T.
+const MasterDataTableRow = React.memo(MasterDataTableRowInner) as <T extends { id: string; isActive: boolean }>(
+  props: MasterDataTableRowProps<T> & { key?: React.Key }
+) => React.ReactElement | null;
+
 export function MasterDataTable<T extends { id: string; isActive: boolean }, TCreate, TUpdate>({
   entityLabel,
   fetchAll,
@@ -259,31 +372,41 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
     }
   };
 
-  const handleToggleActive = async (row: T) => {
-    setTogglingId(row.id);
-    setRowActionError('');
-    try {
-      const updated = await update(row.id, buildUpdatePayload(row, !row.isActive, rowFieldValues(row), rowExtraValues(row)));
-      // Patch just this row locally (from the API's own response) instead of calling load() --
-      // a full fetchAll()+isLoading reload on every toggle swapped the entire table body out to
-      // a "Loading..." row and back, which is what read as flickering.
-      setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
-      showToast({ message: `${entityLabel} ${updated.isActive ? 'activated' : 'deactivated'}.`, variant: 'success' });
-    } catch (err) {
-      setRowActionError(err instanceof Error ? err.message : 'Unable to update status. Please try again.');
-    } finally {
-      setTogglingId(null);
-    }
-  };
+  // useCallback (not a plain function) so this identity stays stable across renders that don't
+  // actually touch it -- MasterDataTableRow is React.memo'd specifically so an unrelated row's
+  // re-render is skippable, which only works if the callback props it receives aren't a fresh
+  // closure every render.
+  const handleToggleActive = useCallback(
+    async (row: T) => {
+      setTogglingId(row.id);
+      setRowActionError('');
+      try {
+        const updated = await update(row.id, buildUpdatePayload(row, !row.isActive, rowFieldValues(row), rowExtraValues(row)));
+        // Patch just this row locally (from the API's own response) instead of calling load() --
+        // a full fetchAll()+isLoading reload on every toggle swapped the entire table body out to
+        // a "Loading..." row and back, which is what read as flickering.
+        setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+        showToast({ message: `${entityLabel} ${updated.isActive ? 'activated' : 'deactivated'}.`, variant: 'success' });
+      } catch (err) {
+        setRowActionError(err instanceof Error ? err.message : 'Unable to update status. Please try again.');
+      } finally {
+        setTogglingId(null);
+      }
+    },
+    [update, buildUpdatePayload, rowFieldValues, rowExtraValues, entityLabel, showToast]
+  );
 
-  const openEdit = (row: T) => {
-    setEditError('');
-    setEditingRowId(row.id);
-    setEditFieldValues(rowFieldValues(row));
-    setEditExtraValues(rowExtraValues(row));
-    setEditIsActive(row.isActive);
-    setEditFieldErrors({});
-  };
+  const openEdit = useCallback(
+    (row: T) => {
+      setEditError('');
+      setEditingRowId(row.id);
+      setEditFieldValues(rowFieldValues(row));
+      setEditExtraValues(rowExtraValues(row));
+      setEditIsActive(row.isActive);
+      setEditFieldErrors({});
+    },
+    [rowFieldValues, rowExtraValues]
+  );
 
   const closeEdit = () => {
     setEditingRowId(null);
@@ -314,32 +437,38 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
     }
   };
 
-  const handleDelete = async (row: T) => {
-    if (!deleteFn) return;
-    setDeletingId(row.id);
-    setRowActionError('');
-    try {
-      await deleteFn(row.id);
-      setConfirmDeleteId(null);
-      setDeletingId(null);
-      showToast({ message: `${entityLabel} deleted.`, variant: 'success' });
-      // Collapse-and-remove: mark exiting so the row transitions out, then drop it from
-      // local state once the transition has had time to play (plan Part C -- self-contained
-      // CSS transition, not the shared page-fade system another task owns).
-      setExitingIds((prev) => new Set(prev).add(row.id));
-      setTimeout(() => {
-        setRows((prev) => prev.filter((r) => r.id !== row.id));
-        setExitingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(row.id);
-          return next;
-        });
-      }, ROW_EXIT_MS);
-    } catch (err) {
-      setRowActionError(err instanceof Error ? err.message : 'Unable to delete. Please try again.');
-      setDeletingId(null);
-    }
-  };
+  const handleDelete = useCallback(
+    async (row: T) => {
+      if (!deleteFn) return;
+      setDeletingId(row.id);
+      setRowActionError('');
+      try {
+        await deleteFn(row.id);
+        setConfirmDeleteId(null);
+        setDeletingId(null);
+        showToast({ message: `${entityLabel} deleted.`, variant: 'success' });
+        // Collapse-and-remove: mark exiting so the row transitions out, then drop it from
+        // local state once the transition has had time to play (plan Part C -- self-contained
+        // CSS transition, not the shared page-fade system another task owns).
+        setExitingIds((prev) => new Set(prev).add(row.id));
+        setTimeout(() => {
+          setRows((prev) => prev.filter((r) => r.id !== row.id));
+          setExitingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(row.id);
+            return next;
+          });
+        }, ROW_EXIT_MS);
+      } catch (err) {
+        setRowActionError(err instanceof Error ? err.message : 'Unable to delete. Please try again.');
+        setDeletingId(null);
+      }
+    },
+    [deleteFn, entityLabel, showToast]
+  );
+
+  const requestDelete = useCallback((id: string) => setConfirmDeleteId(id), []);
+  const cancelDelete = useCallback(() => setConfirmDeleteId(null), []);
 
   const editingRow = rows.find((r) => r.id === editingRowId) ?? null;
 
@@ -448,62 +577,23 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
               </tr>
             ) : (
               rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={`border-t border-[#E1DED4] transition-all duration-200 ${
-                      exitingIds.has(row.id) ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'
-                    }`}
-                  >
-                    {columns.map((col) => (
-                      <td key={col.key} className="px-4 py-2.5 text-[#142030]">
-                        {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '')}
-                      </td>
-                    ))}
-                    <td className="px-4 py-2.5">
-                      {confirmDeleteId === row.id ? (
-                        <ConfirmDialog
-                          message="Really delete?"
-                          variant="danger"
-                          isConfirming={deletingId === row.id}
-                          onConfirm={() => handleDelete(row)}
-                          onCancel={() => setConfirmDeleteId(null)}
-                        />
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleActive(row)}
-                            disabled={togglingId === row.id}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50 ${
-                              row.isActive ? 'bg-[#179765]/15 text-[#179765]' : 'bg-red-100 text-red-600'
-                            }`}
-                          >
-                            {row.isActive ? 'Active' : 'Inactive'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openEdit(row)}
-                            disabled={isBusy}
-                            aria-label={`Edit ${entityLabel}`}
-                            className="p-1.5 rounded-lg text-[#5E6A79] hover:text-[#143358] hover:bg-[#F3F0E6] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          {deleteFn && (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(row.id)}
-                              disabled={isBusy}
-                              aria-label={`Delete ${entityLabel}`}
-                              className="p-1.5 rounded-lg text-[#5E6A79] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                <MasterDataTableRow
+                  key={row.id}
+                  row={row}
+                  columns={columns}
+                  entityLabel={entityLabel}
+                  isExiting={exitingIds.has(row.id)}
+                  isConfirmingDelete={confirmDeleteId === row.id}
+                  isToggling={togglingId === row.id}
+                  isDeleting={deletingId === row.id}
+                  isBusy={isBusy}
+                  canDelete={Boolean(deleteFn)}
+                  onToggleActive={handleToggleActive}
+                  onEdit={openEdit}
+                  onRequestDelete={requestDelete}
+                  onConfirmDelete={handleDelete}
+                  onCancelDelete={cancelDelete}
+                />
               ))
             )}
           </tbody>

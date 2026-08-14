@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '../../../ui/Button';
 import { AI_MODELS, AI_PROVIDERS, type AiTaskConfig, type AiTaskConfigPatch } from './useAiTaskConfig';
+import { SAVE_CONFIRMATION_DISMISS_MS } from '../../../lib/constants';
 
 // Display labels for the 7 AI Task ids -- purely presentational, keeps the wire/mock identifier
 // (`taskId`, matches the backend's real AiTaskConfig.taskId once Story 1.5 lands) distinct from
@@ -87,7 +88,7 @@ export const AiTaskConfigRow: React.FC<AiTaskConfigRowProps> = ({ task, onSave }
       await onSave(task.taskId, { provider, model, fallbackProvider, fallbackModel, budgetThreshold: parsedThreshold });
       setJustSaved(true);
       clearTimeout(savedTimeoutRef.current);
-      savedTimeoutRef.current = setTimeout(() => setJustSaved(false), 1500);
+      savedTimeoutRef.current = setTimeout(() => setJustSaved(false), SAVE_CONFIRMATION_DISMISS_MS);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Unable to save. Please try again.');
     } finally {

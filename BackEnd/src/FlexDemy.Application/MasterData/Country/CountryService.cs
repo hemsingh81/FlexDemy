@@ -2,7 +2,11 @@ using FlexDemy.Application.Common;
 
 namespace FlexDemy.Application.MasterData.Country;
 
-public class CountryService(ICountryRepository repository, IUnitOfWork unitOfWork, IIdGenerator idGenerator) : ICountryService
+// Country has no parent to validate -- EnsureCreateParentValidAsync/EnsureUpdateParentValidAsync
+// below are the intentional no-op case MasterDataService<...>'s own comment calls out. Common
+// CRUD/soft-delete plumbing lives in MasterDataService<...> (Application/MasterData).
+public class CountryService(ICountryRepository repository, IUnitOfWork unitOfWork, IIdGenerator idGenerator)
+    : MasterDataService<Domain.MasterData.Country, CountryDto, CreateCountryRequest, UpdateCountryRequest>(repository, unitOfWork, idGenerator), ICountryService
 {
     public async Task<IReadOnlyList<CountryDto>> GetAllAsync(bool includeInactive, CancellationToken cancellationToken = default)
     {
@@ -10,46 +14,17 @@ public class CountryService(ICountryRepository repository, IUnitOfWork unitOfWor
         return countries.Select(c => c.ToDto()).ToList();
     }
 
-    public async Task<CountryDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var country = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Country), id);
-        return country.ToDto();
-    }
+    protected override string EntityName => nameof(Domain.MasterData.Country);
 
-    public async Task<CountryDto> CreateAsync(CreateCountryRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name, request.IsoCode);
-        var country = request.ToEntity(idGenerator.NewId());
-        repository.Add(country);
-        // AD-11: the service commits once, after every repository call for this use-case has staged its change.
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return country.ToDto();
-    }
+    protected override void ValidateCreateFields(CreateCountryRequest request) => EnsureRequiredFields(request.Name, request.IsoCode);
+    protected override void ValidateUpdateFields(UpdateCountryRequest request) => EnsureRequiredFields(request.Name, request.IsoCode);
 
-    public async Task<CountryDto> UpdateAsync(string id, UpdateCountryRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name, request.IsoCode);
-        var country = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Country), id);
-        country.ApplyUpdate(request);
-        repository.Update(country);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return country.ToDto();
-    }
+    protected override Task EnsureCreateParentValidAsync(CreateCountryRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
+    protected override Task EnsureUpdateParentValidAsync(UpdateCountryRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var country = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Country), id);
-        // Soft delete only -- IsDeleted flips the global HasQueryFilter(e => !e.IsDeleted) shut
-        // for this row on every future query, with none of the FK-constraint risk a hard DELETE
-        // would carry (CountryConfiguration.cs). UpdatedAt/UpdatedBy are stamped by
-        // AuditSaveChangesInterceptor on SaveChanges, not here.
-        country.IsDeleted = true;
-        repository.Update(country);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
+    protected override Domain.MasterData.Country ToEntity(CreateCountryRequest request, string id) => request.ToEntity(id);
+    protected override void ApplyUpdate(Domain.MasterData.Country country, UpdateCountryRequest request) => country.ApplyUpdate(request);
+    protected override CountryDto ToDto(Domain.MasterData.Country country) => country.ToDto();
 
     // Defense-in-depth: the frontend already blocks a blank Name/IsoCode before it ever calls
     // create/update, but the API contract shouldn't rely on that alone.

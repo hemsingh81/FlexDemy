@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import type { ErrorListFilters } from '../../../services/errorsService';
 import { ToggleSwitch } from '../../../ui/ToggleSwitch';
 import { CATEGORY_VALUES, PRIORITY_VALUES, STATUS_VALUES, SOURCE_VALUES, humanizeEnumValue } from './errorLogConstants';
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 
 interface ErrorLogFiltersProps {
   filters: ErrorListFilters;
@@ -34,27 +35,24 @@ export const ErrorLogFilters: React.FC<ErrorLogFiltersProps> = ({ filters, onCha
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const currentFilters = filtersRef.current;
-      if (searchInput.trim() !== (currentFilters.search ?? '')) {
-        onChange({ ...currentFilters, search: searchInput.trim() || undefined });
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
+  const debouncedSearchInput = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
+  const debouncedCorrelationIdInput = useDebouncedValue(correlationIdInput, SEARCH_DEBOUNCE_MS);
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const currentFilters = filtersRef.current;
-      if (correlationIdInput.trim() !== (currentFilters.correlationId ?? '')) {
-        onChange({ ...currentFilters, correlationId: correlationIdInput.trim() || undefined });
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeoutId);
+    const currentFilters = filtersRef.current;
+    if (debouncedSearchInput.trim() !== (currentFilters.search ?? '')) {
+      onChange({ ...currentFilters, search: debouncedSearchInput.trim() || undefined });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [correlationIdInput]);
+  }, [debouncedSearchInput]);
+
+  useEffect(() => {
+    const currentFilters = filtersRef.current;
+    if (debouncedCorrelationIdInput.trim() !== (currentFilters.correlationId ?? '')) {
+      onChange({ ...currentFilters, correlationId: debouncedCorrelationIdInput.trim() || undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedCorrelationIdInput]);
 
   // Re-syncs the local input when `filters.correlationId` changes from outside this component
   // (e.g. ErrorLog.tsx sets it after a Correlation ID click in the detail panel).

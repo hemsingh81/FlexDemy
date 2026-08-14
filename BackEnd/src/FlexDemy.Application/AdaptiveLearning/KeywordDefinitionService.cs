@@ -78,84 +78,46 @@ public class KeywordDefinitionService(
     }
 
     // Code-review-lesson-applied-proactively: the existence check and the SaveChangesAsync below
-    // are not atomic -- two concurrent requests generating this exact (course, keyword) for the
-    // first time (a realistic scenario: two students clicking the same never-before-seen keyword
-    // at once) can both see no row, both insert, and the second SaveChangesAsync then fails
-    // against the unique index (KeywordDefinitionConfiguration.cs) that correctly rejects the
-    // duplicate. Same class of race Story 3.5/3.6's own analogous upserts were patched for --
-    // applied here from the start rather than waiting for a review pass to catch it a third time.
-    // FlexDemy.Application has no EF Core package reference (Clean Architecture boundary), so this
-    // catches broadly, then verifies the failure was actually a lost race by re-checking whether
-    // the row now exists, rethrowing untouched if it doesn't. On a real lost race, the winner's
-    // row already has valid generated content (it went through this exact same code path), so
-    // that's returned directly -- our own freshly generated content is discarded.
-    private async Task<KeywordDefinition> UpsertGeneratedAsync(string courseId, string keyword, string normalizedKeyword, string generatedText, CancellationToken cancellationToken)
-    {
-        var row = await repository.GetAsync(courseId, normalizedKeyword, cancellationToken);
-        if (row is not null)
-        {
-            row.GeneratedDefinitionText = generatedText;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return row;
-        }
-
-        var newRow = new KeywordDefinition
-        {
-            Id = idGenerator.NewId(),
-            CourseId = courseId,
-            Keyword = keyword,
-            NormalizedKeyword = normalizedKeyword,
-            GeneratedDefinitionText = generatedText,
-        };
-        repository.Add(newRow);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return newRow;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            var winner = await repository.GetAsync(courseId, normalizedKeyword, cancellationToken);
-            if (winner is null) throw;
-            return winner;
-        }
-    }
+    // are not atomic -- see RaceRetryUpsert.UpsertWithRaceRetryAsync (Application/Common) for the
+    // full race explanation this shares with AdaptiveLearningService's/ExerciseService's own
+    // analogous upserts.
+    private Task<KeywordDefinition> UpsertGeneratedAsync(string courseId, string keyword, string normalizedKeyword, string generatedText, CancellationToken cancellationToken) =>
+        RaceRetryUpsert.UpsertWithRaceRetryAsync(
+            lookup: ct => repository.GetAsync(courseId, normalizedKeyword, ct),
+            createNew: () => new KeywordDefinition
+            {
+                Id = idGenerator.NewId(),
+                CourseId = courseId,
+                Keyword = keyword,
+                NormalizedKeyword = normalizedKeyword,
+                GeneratedDefinitionText = generatedText,
+            },
+            add: repository.Add,
+            applyUpdate: row => row.GeneratedDefinitionText = generatedText,
+            applyUpdateOnRaceLoss: false, // a generation loser's redundant AI output is discarded -- the winner's row already has valid generated content.
+            unitOfWork: unitOfWork,
+            cancellationToken: cancellationToken);
 
     // Same lost-insert-race scenario as UpsertGeneratedAsync, but a tutor's own explicit override
     // write must still take effect even after losing the race -- retries as an UPDATE against the
     // now-existing winner row instead (last-write-wins for a deliberate edit action), matching
     // Story 3.5/3.6's own override-path precedent.
-    private async Task UpsertOverrideAsync(string courseId, string keyword, string normalizedKeyword, string overrideText, CancellationToken cancellationToken)
-    {
-        var row = await repository.GetAsync(courseId, normalizedKeyword, cancellationToken);
-        if (row is not null)
-        {
-            row.OverrideDefinitionText = overrideText;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return;
-        }
-
-        var newRow = new KeywordDefinition
-        {
-            Id = idGenerator.NewId(),
-            CourseId = courseId,
-            Keyword = keyword,
-            NormalizedKeyword = normalizedKeyword,
-            OverrideDefinitionText = overrideText,
-        };
-        repository.Add(newRow);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            var winner = await repository.GetAsync(courseId, normalizedKeyword, cancellationToken);
-            if (winner is null) throw;
-            winner.OverrideDefinitionText = overrideText;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-    }
+    private async Task UpsertOverrideAsync(string courseId, string keyword, string normalizedKeyword, string overrideText, CancellationToken cancellationToken) =>
+        await RaceRetryUpsert.UpsertWithRaceRetryAsync(
+            lookup: ct => repository.GetAsync(courseId, normalizedKeyword, ct),
+            createNew: () => new KeywordDefinition
+            {
+                Id = idGenerator.NewId(),
+                CourseId = courseId,
+                Keyword = keyword,
+                NormalizedKeyword = normalizedKeyword,
+                OverrideDefinitionText = overrideText,
+            },
+            add: repository.Add,
+            applyUpdate: row => row.OverrideDefinitionText = overrideText,
+            applyUpdateOnRaceLoss: true,
+            unitOfWork: unitOfWork,
+            cancellationToken: cancellationToken);
 
     // Story 3.9/Task 2: identical widened gate/reasoning as AdaptiveLearningService's own
     // EnsureViewableForGenerationAsync and ExerciseService's own copy of it.

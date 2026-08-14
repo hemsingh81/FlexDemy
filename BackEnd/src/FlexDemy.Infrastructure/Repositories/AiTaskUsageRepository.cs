@@ -11,6 +11,7 @@ public class AiTaskUsageRepository(FlexDemyDbContext db) : IAiTaskUsageRepositor
 
     public Task<List<AiTaskUsage>> GetSinceAsync(DateTimeOffset? cutoffUtc, CancellationToken cancellationToken = default) =>
         db.AiTaskUsages
+            .AsNoTracking()
             .Where(u => cutoffUtc == null || u.CreatedAt >= cutoffUtc)
             .OrderBy(u => u.CreatedAt)
             .ToListAsync(cancellationToken);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FlexDemy.Application.Common;
 using FlexDemy.Domain.AdaptiveLearning;
 
 namespace FlexDemy.Application.AdaptiveLearning;
@@ -15,7 +16,7 @@ public static class AdaptiveLearningResponseParser
     public static bool TryParseLevel(string aiContent, out DrilldownLevelContent? content, out string? parseError)
     {
         content = null;
-        var stripped = StripCodeFence(aiContent);
+        var stripped = AiResponseTextUtils.StripCodeFence(aiContent);
 
         RawLevel? raw;
         try
@@ -64,7 +65,7 @@ public static class AdaptiveLearningResponseParser
     public static bool TryParseWay(string aiContent, out WayContentData? content, out string? parseError)
     {
         content = null;
-        var stripped = StripCodeFence(aiContent);
+        var stripped = AiResponseTextUtils.StripCodeFence(aiContent);
 
         RawWay? raw;
         try
@@ -107,7 +108,7 @@ public static class AdaptiveLearningResponseParser
     public static bool TryParseExercise(string aiContent, AnswerType answerType, out ExerciseProposalContent? content, out string? parseError)
     {
         content = null;
-        var stripped = StripCodeFence(aiContent);
+        var stripped = AiResponseTextUtils.StripCodeFence(aiContent);
 
         RawExerciseProposal? raw;
         try
@@ -245,25 +246,6 @@ public static class AdaptiveLearningResponseParser
         example = new ExampleItemContent(raw.Id, raw.Title, raw.Problem, raw.StepByStepSolution, raw.FinalAnswer, raw.Difficulty);
         parseError = null;
         return true;
-    }
-
-    // Byte-for-byte the same fence-stripping behavior as ExtractionResponseParser's own helper --
-    // duplicated rather than shared, matching this codebase's established per-parser-file
-    // self-containment (ExtractionResponseParser/NotationDescriptionPromptBuilder don't share a
-    // common base either).
-    private static string StripCodeFence(string content)
-    {
-        var trimmed = content.Trim();
-        var fenceStart = trimmed.IndexOf("```", StringComparison.Ordinal);
-        if (fenceStart < 0)
-            return trimmed;
-
-        var afterOpeningMarker = trimmed[(fenceStart + 3)..];
-        var firstNewline = afterOpeningMarker.IndexOf('\n');
-        var fencedContent = firstNewline >= 0 ? afterOpeningMarker[(firstNewline + 1)..] : afterOpeningMarker;
-
-        var closingFenceIndex = fencedContent.LastIndexOf("```", StringComparison.Ordinal);
-        return (closingFenceIndex >= 0 ? fencedContent[..closingFenceIndex] : fencedContent).Trim();
     }
 
     private sealed record RawLevel(

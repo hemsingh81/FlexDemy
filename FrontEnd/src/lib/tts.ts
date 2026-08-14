@@ -1,3 +1,5 @@
+import { TOAST_DURATION_MS } from './constants';
+
 export interface TTSVoiceOption {
   name: string;
   lang: string;
@@ -49,7 +51,7 @@ export class TextToSpeechManager {
     }
   ) {
     if (!this.synth) {
-      if (options.onEnd) setTimeout(options.onEnd, 3000);
+      if (options.onEnd) setTimeout(options.onEnd, TOAST_DURATION_MS);
       return;
     }
 

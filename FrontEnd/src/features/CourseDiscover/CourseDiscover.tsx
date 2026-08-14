@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Search,
   Filter,
@@ -38,21 +38,30 @@ export const CourseDiscover: React.FC<CourseDiscoverProps> = ({
 
   if (isLoading) return null;
 
-  // Enrolled / Running courses
-  const runningCourses = courses.filter((c) => c.enrolledCount > 0 || c.id === 'course_quantum_101');
+  // Enrolled / Running courses -- memoized so this filter only re-runs when `courses` actually
+  // changes, not on every render (e.g. typing in the search box, which doesn't affect this list).
+  const runningCourses = useMemo(
+    () => courses.filter((c) => c.enrolledCount > 0 || c.id === 'course_quantum_101'),
+    [courses]
+  );
 
-  // Filter logic
-  const filteredCourses = courses.filter((course) => {
-    const matchesSearch =
-      course.title.toLowerCase().includes(search.toLowerCase()) ||
-      course.shortDescription.toLowerCase().includes(search.toLowerCase()) ||
-      course.subject.toLowerCase().includes(search.toLowerCase());
+  // Filter logic -- memoized on its actual dependencies (courses + the three filter criteria)
+  // so it isn't recomputed on unrelated re-renders (e.g. opening the preview/review modals).
+  const filteredCourses = useMemo(
+    () =>
+      courses.filter((course) => {
+        const matchesSearch =
+          course.title.toLowerCase().includes(search.toLowerCase()) ||
+          course.shortDescription.toLowerCase().includes(search.toLowerCase()) ||
+          course.subject.toLowerCase().includes(search.toLowerCase());
 
-    const matchesSubject = selectedSubject === 'all' || course.subject === selectedSubject;
-    const matchesLevel = selectedLevel === 'all' || course.level === selectedLevel;
+        const matchesSubject = selectedSubject === 'all' || course.subject === selectedSubject;
+        const matchesLevel = selectedLevel === 'all' || course.level === selectedLevel;
 
-    return matchesSearch && matchesSubject && matchesLevel;
-  });
+        return matchesSearch && matchesSubject && matchesLevel;
+      }),
+    [courses, search, selectedSubject, selectedLevel]
+  );
 
   return (
     <div className="space-y-10 pb-12 w-full">

@@ -105,11 +105,48 @@ public class CourseRepositoryTests
         await db.SaveChangesAsync();
         var repository = new CourseRepository(db);
 
-        var byGrade = await repository.GetAllAsync("Class 12th", null, null);
+        var (byGrade, _) = await repository.GetAllAsync("Class 12th", null, null, page: 1, pageSize: 50);
         Assert.Equal(["course_2", "course_3"], byGrade.Select(c => c.Id).Order());
 
-        var bySubject = await repository.GetAllAsync(null, null, "stem_math");
+        var (bySubject, _) = await repository.GetAllAsync(null, null, "stem_math", page: 1, pageSize: 50);
         Assert.Equal(["course_3"], bySubject.Select(c => c.Id));
+    }
+
+    [Fact]
+    public async Task GetAllAsync_pages_results_and_reports_the_unpaged_TotalCount()
+    {
+        await using var db = NewContext();
+        db.Courses.AddRange(
+            MakeCourse("course_1", title: "Alpha"),
+            MakeCourse("course_2", title: "Bravo"),
+            MakeCourse("course_3", title: "Charlie"));
+        await db.SaveChangesAsync();
+        var repository = new CourseRepository(db);
+
+        var (firstPage, totalCount) = await repository.GetAllAsync(null, null, null, page: 1, pageSize: 2);
+
+        Assert.Equal(["course_1", "course_2"], firstPage.Select(c => c.Id));
+        Assert.Equal(3, totalCount);
+
+        var (secondPage, secondPageTotalCount) = await repository.GetAllAsync(null, null, null, page: 2, pageSize: 2);
+
+        Assert.Equal(["course_3"], secondPage.Select(c => c.Id));
+        Assert.Equal(3, secondPageTotalCount);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_clamps_a_non_positive_page_or_pageSize()
+    {
+        await using var db = NewContext();
+        db.Courses.AddRange(MakeCourse("course_1", title: "Alpha"), MakeCourse("course_2", title: "Bravo"));
+        await db.SaveChangesAsync();
+        var repository = new CourseRepository(db);
+
+        var (items, totalCount) = await repository.GetAllAsync(null, null, null, page: 0, pageSize: 0);
+
+        Assert.Single(items); // page clamped to 1, pageSize clamped to 1
+        Assert.Equal("course_1", items[0].Id);
+        Assert.Equal(2, totalCount);
     }
 
     [Fact]
@@ -126,7 +163,7 @@ public class CourseRepositoryTests
         }
 
         await using var readDb = new FlexDemyDbContext(options);
-        var all = await new CourseRepository(readDb).GetAllAsync(null, null, null);
+        var (all, _) = await new CourseRepository(readDb).GetAllAsync(null, null, null, page: 1, pageSize: 50);
 
         Assert.Single(all.Single().Thumbnails);
     }
@@ -142,7 +179,7 @@ public class CourseRepositoryTests
         await db.SaveChangesAsync();
         var repository = new CourseRepository(db);
 
-        var all = await repository.GetAllAsync(null, null, null);
+        var (all, _) = await repository.GetAllAsync(null, null, null, page: 1, pageSize: 50);
 
         Assert.Equal(["course_published"], all.Select(c => c.Id));
     }
@@ -161,7 +198,7 @@ public class CourseRepositoryTests
         await db.SaveChangesAsync();
         var repository = new CourseRepository(db);
 
-        var results = await repository.GetAllAsync(null, "50%", null);
+        var (results, _) = await repository.GetAllAsync(null, "50%", null, page: 1, pageSize: 50);
 
         Assert.Equal(["course_1"], results.Select(c => c.Id));
     }

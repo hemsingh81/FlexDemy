@@ -7,7 +7,12 @@ namespace FlexDemy.Infrastructure.Repositories;
 
 public class CourseRepository(FlexDemyDbContext db) : ICourseRepository
 {
-    public async Task<IReadOnlyList<Course>> GetAllAsync(string? gradeTag, string? search, string? subject, CancellationToken cancellationToken = default)
+    // Code-review patch: an unbounded PageSize let any caller force a full-table read of the
+    // public catalog in one request -- same clamp-and-cap shape as ErrorRecordRepository.QueryAsync's
+    // own established convention.
+    private const int MaxPageSize = 100;
+
+    public async Task<(IReadOnlyList<Course> Items, int TotalCount)> GetAllAsync(string? gradeTag, string? search, string? subject, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         // Story 2.4/AC#5: this method backs the public catalog only -- no caller of it should
         // ever see an in-progress Draft (GetDraftByIdAsync below is the Draft-aware read path).
@@ -30,7 +35,25 @@ public class CourseRepository(FlexDemyDbContext db) : ICourseRepository
             query = query.Where(c => c.Title.ToLower().Contains(loweredSearch));
         }
 
-        return await query.ToListAsync(cancellationToken);
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        // Code-review patch: Page/PageSize are unvalidated caller input -- clamp before they
+        // reach Skip()/Take() instead of trusting them, matching ErrorRecordRepository.QueryAsync's
+        // own established clamp.
+        var clampedPage = Math.Max(1, page);
+        var clampedPageSize = Math.Clamp(pageSize <= 0 ? 1 : pageSize, 1, MaxPageSize);
+
+        var items = await query
+            // Title/Id (not just Title) as a fully deterministic sort -- Skip/Take pagination is
+            // only stable across separate requests when ties can't reorder between pages, same
+            // "Id as a stable tie-breaker" reasoning as ErrorRecordRepository.QueryAsync's own.
+            .OrderBy(c => c.Title)
+            .ThenBy(c => c.Id)
+            .Skip((clampedPage - 1) * clampedPageSize)
+            .Take(clampedPageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
     }
 
     // Story 2.4: .Include(Thumbnails) added after a real end-to-end check (not caught by any

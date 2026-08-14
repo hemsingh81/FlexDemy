@@ -4,8 +4,10 @@ using FlexDemy.Application.MasterData.State;
 namespace FlexDemy.Application.MasterData.Board;
 
 // Board validates its parent State exists and is active only when StateId is set -- national
-// boards (CBSE, ICSE, IB, ...) have a null StateId and skip the check entirely (plan §2).
-public class BoardService(IBoardRepository repository, IStateRepository stateRepository, IUnitOfWork unitOfWork, IIdGenerator idGenerator) : IBoardService
+// boards (CBSE, ICSE, IB, ...) have a null StateId and skip the check entirely (plan §2). Common
+// CRUD/soft-delete plumbing lives in MasterDataService<...> (Application/MasterData).
+public class BoardService(IBoardRepository repository, IStateRepository stateRepository, IUnitOfWork unitOfWork, IIdGenerator idGenerator)
+    : MasterDataService<Domain.MasterData.Board, BoardDto, CreateBoardRequest, UpdateBoardRequest>(repository, unitOfWork, idGenerator), IBoardService
 {
     public async Task<IReadOnlyList<BoardDto>> GetAllAsync(bool includeInactive, string? stateId, CancellationToken cancellationToken = default)
     {
@@ -13,48 +15,19 @@ public class BoardService(IBoardRepository repository, IStateRepository stateRep
         return boards.Select(b => b.ToDto()).ToList();
     }
 
-    public async Task<BoardDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var board = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Board), id);
-        return board.ToDto();
-    }
+    protected override string EntityName => nameof(Domain.MasterData.Board);
 
-    public async Task<BoardDto> CreateAsync(CreateBoardRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name, request.Code);
-        await EnsureStateIsActiveWhenSetAsync(request.StateId, cancellationToken);
-        var board = request.ToEntity(idGenerator.NewId());
-        repository.Add(board);
-        // AD-11: the service commits once, after every repository call for this use-case has staged its change.
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return board.ToDto();
-    }
+    protected override void ValidateCreateFields(CreateBoardRequest request) => EnsureRequiredFields(request.Name, request.Code);
+    protected override void ValidateUpdateFields(UpdateBoardRequest request) => EnsureRequiredFields(request.Name, request.Code);
 
-    public async Task<BoardDto> UpdateAsync(string id, UpdateBoardRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name, request.Code);
-        var board = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Board), id);
-        await EnsureStateIsActiveWhenSetAsync(request.StateId, cancellationToken);
-        board.ApplyUpdate(request);
-        repository.Update(board);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return board.ToDto();
-    }
+    protected override Task EnsureCreateParentValidAsync(CreateBoardRequest request, CancellationToken cancellationToken) =>
+        EnsureStateIsActiveWhenSetAsync(request.StateId, cancellationToken);
+    protected override Task EnsureUpdateParentValidAsync(UpdateBoardRequest request, CancellationToken cancellationToken) =>
+        EnsureStateIsActiveWhenSetAsync(request.StateId, cancellationToken);
 
-    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var board = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Board), id);
-        // Soft delete only -- IsDeleted flips the global HasQueryFilter(e => !e.IsDeleted) shut
-        // for this row on every future query, with none of the FK-constraint risk a hard DELETE
-        // would carry (BoardConfiguration.cs). UpdatedAt/UpdatedBy are stamped by
-        // AuditSaveChangesInterceptor on SaveChanges, not here.
-        board.IsDeleted = true;
-        repository.Update(board);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
+    protected override Domain.MasterData.Board ToEntity(CreateBoardRequest request, string id) => request.ToEntity(id);
+    protected override void ApplyUpdate(Domain.MasterData.Board board, UpdateBoardRequest request) => board.ApplyUpdate(request);
+    protected override BoardDto ToDto(Domain.MasterData.Board board) => board.ToDto();
 
     private async Task EnsureStateIsActiveWhenSetAsync(string? stateId, CancellationToken cancellationToken)
     {

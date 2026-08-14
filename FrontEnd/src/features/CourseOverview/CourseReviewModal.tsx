@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, X, MessageSquare, Send, ThumbsUp, UserCheck, Sparkles } from 'lucide-react';
 import { Course, CourseReview } from '../../types';
 import { getReviewsForCourse, submitReview } from '../../services/reviewsService';
+import { TOAST_DURATION_MS } from '../../lib/constants';
 
 interface CourseReviewModalProps {
   course: Course;
@@ -51,7 +52,7 @@ export const CourseReviewModal: React.FC<CourseReviewModalProps> = ({
 
     setReviewText('');
     setSubmittedToast(true);
-    setTimeout(() => setSubmittedToast(false), 3000);
+    setTimeout(() => setSubmittedToast(false), TOAST_DURATION_MS);
   };
 
   if (!isOpen) return null;

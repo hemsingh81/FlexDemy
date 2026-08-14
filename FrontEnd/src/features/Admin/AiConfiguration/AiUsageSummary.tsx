@@ -1,10 +1,15 @@
 import React from 'react';
 import { DollarSign, Hash, TrendingUp } from 'lucide-react';
-import { aggregateUsageByTask, type AiUsageEntry } from './useAiUsage';
+import { type AiUsageByTask } from './useAiUsage';
 import { TASK_LABELS } from './AiTaskConfigRow';
 
 interface AiUsageSummaryProps {
-  data: AiUsageEntry[];
+  // Pre-aggregated by the parent (AiConfiguration.tsx), via aggregateUsageByTask(usageData) --
+  // computed once and shared with AiUsageChart.tsx, rather than each of them independently
+  // re-running the same aggregation over the same raw data on every render. Always covers all 7
+  // tasks, even ones with zero usage in the selected range, so "broken down by AI Task" (AC #2)
+  // is never silently missing a row.
+  usageByTask: AiUsageByTask[];
 }
 
 // Stat-card shell copied exactly from StudentDashboardView.tsx's hero row (~line 175-203) --
@@ -12,12 +17,7 @@ interface AiUsageSummaryProps {
 const statCardClassName = 'p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs flex items-center space-x-4';
 const iconWellClassName = (accentClass: string) => `p-3 rounded-xl border ${accentClass}`;
 
-export const AiUsageSummary: React.FC<AiUsageSummaryProps> = ({ data }) => {
-  // Single shared aggregation (also used by AiUsageChart.tsx) -- always returns all 7 tasks,
-  // even ones with zero usage in the selected range, so "broken down by AI Task" (AC #2) is
-  // never silently missing a row.
-  const byTask = aggregateUsageByTask(data);
-
+export const AiUsageSummary: React.FC<AiUsageSummaryProps> = ({ usageByTask: byTask }) => {
   const totalCost = byTask.reduce((sum, row) => sum + row.cost, 0);
   const totalGenerations = byTask.reduce((sum, row) => sum + row.count, 0);
 

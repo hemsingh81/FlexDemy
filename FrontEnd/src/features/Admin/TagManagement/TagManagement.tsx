@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { MasterDataTable } from '../MasterDataTable';
 import * as tagsService from '../../../services/tagsService';
 import type { CreateTagRequest, Tag, UpdateTagRequest } from '../../../services/tagsService';
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 
 // Keystrokes narrower than this apart are collapsed into one fetchAll identity change --
 // otherwise every character typed re-triggers MasterDataTable's load() (see below) and flashes
@@ -29,12 +30,7 @@ const searchInputClassName =
 // create()/update() call's own return value, so there's nothing left here to keep in sync.
 export const TagManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => setDebouncedSearchQuery(searchQuery), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, SEARCH_DEBOUNCE_MS);
 
   const fetchAll = useCallback(async () => {
     const all = await tagsService.getTags();

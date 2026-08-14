@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { WifiOff, CheckCircle2, Wifi } from 'lucide-react';
+import { NETWORK_STATUS_TOAST_DURATION_MS } from '../lib/constants';
 
 interface OfflineProgressToastProps {
   isOfflineOverride?: boolean;
@@ -18,7 +19,7 @@ export const OfflineProgressToast: React.FC<OfflineProgressToastProps> = ({ isOf
     const handleOnline = () => {
       setIsOffline(false);
       setShowToast(true);
-      setTimeout(() => setShowToast(false), 4000);
+      setTimeout(() => setShowToast(false), NETWORK_STATUS_TOAST_DURATION_MS);
     };
 
     window.addEventListener('offline', handleOffline);

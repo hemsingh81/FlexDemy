@@ -1,20 +1,21 @@
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { aggregateUsageByTask, type AiUsageEntry } from './useAiUsage';
+import { type AiUsageByTask } from './useAiUsage';
 import { TASK_LABELS } from './AiTaskConfigRow';
 
 interface AiUsageChartProps {
-  data: AiUsageEntry[];
+  // Pre-aggregated by the parent (AiConfiguration.tsx) and shared with AiUsageSummary.tsx --
+  // see that component's own prop doc. Always includes all 7 tasks, so a task with zero usage in
+  // the selected range still renders as a $0 bar, not a silent gap.
+  usageByTask: AiUsageByTask[];
 }
 
 // Same recharts BarChart styling as TutorEducatorHubView.tsx's "Earnings & Teaching Analytics"
 // chart (~line 440) -- grid/axis/tooltip colors copied exactly, not reinvented. XAxis rotation
 // (angle/textAnchor) is an adaptation the source chart didn't need -- month labels are short,
 // task labels ("Drill-Down (explainTopic)") are not, and would overlap unrotated.
-export const AiUsageChart: React.FC<AiUsageChartProps> = ({ data }) => {
-  // Shared aggregation (also used by AiUsageSummary.tsx) -- always includes all 7 tasks, so a
-  // task with zero usage in the selected range still renders as a $0 bar, not a silent gap.
-  const chartData = aggregateUsageByTask(data).map((row) => ({
+export const AiUsageChart: React.FC<AiUsageChartProps> = ({ usageByTask }) => {
+  const chartData = usageByTask.map((row) => ({
     task: TASK_LABELS[row.taskId],
     cost: row.cost,
   }));

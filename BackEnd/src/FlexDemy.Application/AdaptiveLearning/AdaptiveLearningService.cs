@@ -101,123 +101,53 @@ public class AdaptiveLearningService(
     }
 
     // Code-review patch: the existence check (GetLevelAsync) and the SaveChangesAsync below are
-    // not atomic -- two concurrent requests generating this exact (node, level) for the first
-    // time can both see no existing row, both construct one, and the second SaveChangesAsync then
-    // fails against the partial unique index (DrilldownLevelConfiguration.cs) that correctly
-    // rejects the duplicate. FlexDemy.Application deliberately has no EF Core package reference
-    // (Clean Architecture boundary -- Application is persistence-ignorant), so this can't catch
-    // DbUpdateException by type; instead it catches broadly, then verifies the failure was
-    // actually a lost race by re-checking whether the row now exists (ContentTreeService's own
-    // established `catch (Exception ex) when (ex is not OperationCanceledException)` idiom) --
-    // rethrowing untouched if it doesn't, so a genuinely different failure is never silently
-    // absorbed. On a real lost race, the winner's row already has valid generated content (it
-    // went through this exact same code path), so that's returned directly -- our own freshly
-    // generated content is discarded rather than wastefully overwriting the winner's.
-    private async Task<DrilldownLevel> UpsertGeneratedLevelAsync(string? topicId, string? subtopicId, int level, string generatedContentJson, CancellationToken cancellationToken)
-    {
-        var row = await repository.GetLevelAsync(topicId, subtopicId, level, cancellationToken);
-        if (row is not null)
-        {
-            row.GeneratedContentJson = generatedContentJson;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return row;
-        }
-
-        var newRow = new DrilldownLevel { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, LevelNumber = level, GeneratedContentJson = generatedContentJson };
-        repository.AddLevel(newRow);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return newRow;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            var winner = await repository.GetLevelAsync(topicId, subtopicId, level, cancellationToken);
-            if (winner is null) throw;
-            return winner;
-        }
-    }
+    // not atomic -- see RaceRetryUpsert.UpsertWithRaceRetryAsync (Application/Common) for the full
+    // race explanation this and every other Upsert* method in this file/feature area shares.
+    private Task<DrilldownLevel> UpsertGeneratedLevelAsync(string? topicId, string? subtopicId, int level, string generatedContentJson, CancellationToken cancellationToken) =>
+        RaceRetryUpsert.UpsertWithRaceRetryAsync(
+            lookup: ct => repository.GetLevelAsync(topicId, subtopicId, level, ct),
+            createNew: () => new DrilldownLevel { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, LevelNumber = level, GeneratedContentJson = generatedContentJson },
+            add: repository.AddLevel,
+            applyUpdate: row => row.GeneratedContentJson = generatedContentJson,
+            applyUpdateOnRaceLoss: false, // a generation loser's redundant AI output is discarded -- the winner's row already has valid generated content.
+            unitOfWork: unitOfWork,
+            cancellationToken: cancellationToken);
 
     // Same race as UpsertGeneratedLevelAsync, mirrored for Ways.
-    private async Task<WayContent> UpsertGeneratedWayAsync(string? topicId, string? subtopicId, int wayNumber, string generatedContentJson, CancellationToken cancellationToken)
-    {
-        var row = await repository.GetWayAsync(topicId, subtopicId, wayNumber, cancellationToken);
-        if (row is not null)
-        {
-            row.GeneratedContentJson = generatedContentJson;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return row;
-        }
-
-        var newRow = new WayContent { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, WayNumber = wayNumber, GeneratedContentJson = generatedContentJson };
-        repository.AddWay(newRow);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return newRow;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            var winner = await repository.GetWayAsync(topicId, subtopicId, wayNumber, cancellationToken);
-            if (winner is null) throw;
-            return winner;
-        }
-    }
+    private Task<WayContent> UpsertGeneratedWayAsync(string? topicId, string? subtopicId, int wayNumber, string generatedContentJson, CancellationToken cancellationToken) =>
+        RaceRetryUpsert.UpsertWithRaceRetryAsync(
+            lookup: ct => repository.GetWayAsync(topicId, subtopicId, wayNumber, ct),
+            createNew: () => new WayContent { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, WayNumber = wayNumber, GeneratedContentJson = generatedContentJson },
+            add: repository.AddWay,
+            applyUpdate: row => row.GeneratedContentJson = generatedContentJson,
+            applyUpdateOnRaceLoss: false,
+            unitOfWork: unitOfWork,
+            cancellationToken: cancellationToken);
 
     // Same lost-insert-race scenario as UpsertGeneratedLevelAsync, but a tutor's own explicit
     // override write must still take effect even after losing the race -- unlike generation
     // (where the loser's redundant AI output is simply discarded), this retries as an UPDATE
     // against the now-existing winner row instead (last-write-wins for a deliberate edit action).
-    private async Task UpsertLevelOverrideAsync(string? topicId, string? subtopicId, int level, string overrideContentJson, CancellationToken cancellationToken)
-    {
-        var row = await repository.GetLevelAsync(topicId, subtopicId, level, cancellationToken);
-        if (row is not null)
-        {
-            row.OverrideContentJson = overrideContentJson;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return;
-        }
-
-        var newRow = new DrilldownLevel { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, LevelNumber = level, OverrideContentJson = overrideContentJson };
-        repository.AddLevel(newRow);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            var winner = await repository.GetLevelAsync(topicId, subtopicId, level, cancellationToken);
-            if (winner is null) throw;
-            winner.OverrideContentJson = overrideContentJson;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-    }
+    private async Task UpsertLevelOverrideAsync(string? topicId, string? subtopicId, int level, string overrideContentJson, CancellationToken cancellationToken) =>
+        await RaceRetryUpsert.UpsertWithRaceRetryAsync(
+            lookup: ct => repository.GetLevelAsync(topicId, subtopicId, level, ct),
+            createNew: () => new DrilldownLevel { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, LevelNumber = level, OverrideContentJson = overrideContentJson },
+            add: repository.AddLevel,
+            applyUpdate: row => row.OverrideContentJson = overrideContentJson,
+            applyUpdateOnRaceLoss: true,
+            unitOfWork: unitOfWork,
+            cancellationToken: cancellationToken);
 
     // Same last-write-wins retry as UpsertLevelOverrideAsync, mirrored for Ways.
-    private async Task UpsertWayOverrideAsync(string? topicId, string? subtopicId, int wayNumber, string overrideContentJson, CancellationToken cancellationToken)
-    {
-        var row = await repository.GetWayAsync(topicId, subtopicId, wayNumber, cancellationToken);
-        if (row is not null)
-        {
-            row.OverrideContentJson = overrideContentJson;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return;
-        }
-
-        var newRow = new WayContent { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, WayNumber = wayNumber, OverrideContentJson = overrideContentJson };
-        repository.AddWay(newRow);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            var winner = await repository.GetWayAsync(topicId, subtopicId, wayNumber, cancellationToken);
-            if (winner is null) throw;
-            winner.OverrideContentJson = overrideContentJson;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-    }
+    private async Task UpsertWayOverrideAsync(string? topicId, string? subtopicId, int wayNumber, string overrideContentJson, CancellationToken cancellationToken) =>
+        await RaceRetryUpsert.UpsertWithRaceRetryAsync(
+            lookup: ct => repository.GetWayAsync(topicId, subtopicId, wayNumber, ct),
+            createNew: () => new WayContent { Id = idGenerator.NewId(), TopicId = topicId, SubtopicId = subtopicId, WayNumber = wayNumber, OverrideContentJson = overrideContentJson },
+            add: repository.AddWay,
+            applyUpdate: row => row.OverrideContentJson = overrideContentJson,
+            applyUpdateOnRaceLoss: true,
+            unitOfWork: unitOfWork,
+            cancellationToken: cancellationToken);
 
     // AC#4 (Story 3.5) + Story 3.9/Task 2: a student reads Drill-Down/Ways only for a genuinely
     // Published course; a tutor previewing their own course via Review-as-Student additionally

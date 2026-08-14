@@ -159,9 +159,19 @@ public class ContentTreeService(
                 Order = topicOrder++,
             };
 
-            var blockOrder = 0;
-            foreach (var proposedBlock in proposedTopic.ContentBlocks)
-                topic.ContentBlocks.Add(await BuildContentBlockAsync(proposedBlock, topicId: topic.Id, subtopicId: null, blockOrder++, courseId, tutorId, cancellationToken));
+            // Code-review patch: each ContentBlock in this topic that's Math format makes its own
+            // AI Gateway HTTP round-trip inside BuildContentBlockAsync (TryDescribeNotationAsync)
+            // -- awaiting them one at a time here meant a topic with N math blocks took roughly
+            // N x gateway-latency to materialize. RunWithBoundedConcurrencyAsync below fans these
+            // out with a capped number in flight at once (never unbounded -- an extraction with
+            // many blocks must not hammer the AI Gateway with one simultaneous request per block)
+            // while still reproducing the exact same per-block Order values and the exact same
+            // resulting ContentBlocks order the original sequential foreach produced.
+            var topicBlocks = await RunWithBoundedConcurrencyAsync(
+                proposedTopic.ContentBlocks,
+                (proposedBlock, blockOrder) => BuildContentBlockAsync(proposedBlock, topicId: topic.Id, subtopicId: null, blockOrder, courseId, tutorId, cancellationToken),
+                cancellationToken);
+            topic.ContentBlocks.AddRange(topicBlocks);
 
             var subtopicOrder = 0;
             foreach (var proposedSubtopic in proposedTopic.Subtopics)
@@ -175,9 +185,11 @@ public class ContentTreeService(
                     Order = subtopicOrder++,
                 };
 
-                var subBlockOrder = 0;
-                foreach (var proposedBlock in proposedSubtopic.ContentBlocks)
-                    subtopic.ContentBlocks.Add(await BuildContentBlockAsync(proposedBlock, topicId: null, subtopicId: subtopic.Id, subBlockOrder++, courseId, tutorId, cancellationToken));
+                var subtopicBlocks = await RunWithBoundedConcurrencyAsync(
+                    proposedSubtopic.ContentBlocks,
+                    (proposedBlock, blockOrder) => BuildContentBlockAsync(proposedBlock, topicId: null, subtopicId: subtopic.Id, blockOrder, courseId, tutorId, cancellationToken),
+                    cancellationToken);
+                subtopic.ContentBlocks.AddRange(subtopicBlocks);
 
                 topic.Subtopics.Add(subtopic);
             }
@@ -216,6 +228,45 @@ public class ContentTreeService(
             block.AltText = await TryDescribeNotationAsync(block.Notation, courseId, tutorId, cancellationToken);
 
         return block;
+    }
+
+    // Code-review patch: bounded fan-out for BuildContentBlockAsync's per-block AI Gateway call --
+    // no existing concurrency-limiting helper in Application/Common to reuse, so this is a small,
+    // local one. `body` receives each source item together with its list index, which doubles as
+    // the block's `order` argument -- assigning it here (synchronously, before any task starts)
+    // rather than via a shared mutable counter is what keeps the result list's ordering identical
+    // to the original sequential foreach, even though the tasks themselves may complete out of
+    // order. A `SemaphoreSlim` caps how many of `body`'s calls (i.e. AI Gateway HTTP round-trips)
+    // run at once -- deliberately not Task.WhenAll over the raw enumerable, which would fan out
+    // one simultaneous request per content block with no cap at all.
+    private const int MaxConcurrentAiCalls = 4;
+
+    private static async Task<List<TResult>> RunWithBoundedConcurrencyAsync<TSource, TResult>(
+        IReadOnlyList<TSource> source, Func<TSource, int, Task<TResult>> body, CancellationToken cancellationToken)
+    {
+        if (source.Count == 0)
+            return [];
+
+        using var gate = new SemaphoreSlim(MaxConcurrentAiCalls);
+
+        async Task<TResult> RunOneAsync(TSource item, int index)
+        {
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                return await body(item, index);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        var tasks = new Task<TResult>[source.Count];
+        for (var i = 0; i < source.Count; i++)
+            tasks[i] = RunOneAsync(source[i], i);
+
+        return [.. await Task.WhenAll(tasks)];
     }
 
     // Story 2.10/Task 2: AD-14's inline/authoring-time rule -- never a Hangfire job. Catches only
@@ -499,8 +550,7 @@ public class ContentTreeService(
         // input before confirming the caller may even touch this course).
         await courseService.EnsureOwnedDraftAsync(courseId, cancellationToken);
 
-        if (direction is not ("up" or "down"))
-            throw new ValidationException($"Invalid reorder direction '{direction}'. Expected 'up' or 'down'.");
+        var parsedDirection = ParseNodeDirection(direction);
 
         var node = await repository.FindNodeAsync(courseId, nodeId, cancellationToken)
             ?? throw new NotFoundException("Node", nodeId);
@@ -508,13 +558,13 @@ public class ContentTreeService(
         if (node.Chapter is not null)
         {
             var siblings = await repository.GetChaptersByCourseIdAsync(courseId, cancellationToken);
-            SwapAdjacent(siblings, node.Chapter.Id, direction, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
+            SwapAdjacent(siblings, node.Chapter.Id, parsedDirection, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
             // No parent to reset, matching the mock.
         }
         else if (node.Topic is not null)
         {
             var siblings = await repository.GetTopicsByChapterIdAsync(node.Topic.ChapterId, cancellationToken);
-            SwapAdjacent(siblings, node.Topic.Id, direction, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
+            SwapAdjacent(siblings, node.Topic.Id, parsedDirection, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
             // Mock's own resetIfConfirmed wrap is unconditional once the id is found at this level
             // -- even a boundary no-op swap still resets the parent's confirmation. Replicated as-is.
             var parent = await repository.GetChapterByIdAsync(node.Topic.ChapterId, cancellationToken);
@@ -523,7 +573,7 @@ public class ContentTreeService(
         else if (node.Subtopic is not null)
         {
             var siblings = await repository.GetSubtopicsByTopicIdAsync(node.Subtopic.TopicId, cancellationToken);
-            SwapAdjacent(siblings, node.Subtopic.Id, direction, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
+            SwapAdjacent(siblings, node.Subtopic.Id, parsedDirection, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
             var parent = await repository.GetTopicByIdAsync(node.Subtopic.TopicId, cancellationToken);
             if (parent is not null) ResetIfConfirmed(parent);
         }
@@ -533,14 +583,14 @@ public class ContentTreeService(
             if (block.TopicId is not null)
             {
                 var siblings = await repository.GetContentBlocksByTopicIdAsync(block.TopicId, cancellationToken);
-                SwapAdjacent(siblings, block.Id, direction, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
+                SwapAdjacent(siblings, block.Id, parsedDirection, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
                 var parent = await repository.GetTopicByIdAsync(block.TopicId, cancellationToken);
                 if (parent is not null) ResetIfConfirmed(parent);
             }
             else
             {
                 var siblings = await repository.GetContentBlocksBySubtopicIdAsync(block.SubtopicId!, cancellationToken);
-                SwapAdjacent(siblings, block.Id, direction, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
+                SwapAdjacent(siblings, block.Id, parsedDirection, (a, b) => (a.Order, b.Order) = (b.Order, a.Order));
                 var parent = await repository.GetSubtopicByIdAsync(block.SubtopicId!, cancellationToken);
                 if (parent is not null) ResetIfConfirmed(parent);
             }
@@ -645,7 +695,7 @@ public class ContentTreeService(
     // `siblings` is already Order-sorted (repository contract). Swaps by list index, not by
     // arithmetic on Order values -- CourseService.ReorderThumbnailAsync's own established pattern.
     // A no-op at either end, matching swapAdjacent's own bounds check.
-    private static void SwapAdjacent<T>(IReadOnlyList<T> siblings, string id, string direction, Action<T, T> swapOrders) where T : class
+    private static void SwapAdjacent<T>(IReadOnlyList<T> siblings, string id, ReorderDirection direction, Action<T, T> swapOrders) where T : class
     {
         var index = -1;
         for (var i = 0; i < siblings.Count; i++)
@@ -655,10 +705,20 @@ public class ContentTreeService(
         if (index == -1)
             return;
 
-        var swapWith = direction == "up" ? index - 1 : index + 1;
+        var swapWith = direction == ReorderDirection.Backward ? index - 1 : index + 1;
         if (swapWith >= 0 && swapWith < siblings.Count)
             swapOrders(siblings[index], siblings[swapWith]);
     }
+
+    // Parses this endpoint's own "up"/"down" wire vocabulary into the shared ReorderDirection enum
+    // (Application/Common/ReorderDirection.cs) -- see that file for why this isn't parsed further
+    // out at the controller boundary instead.
+    private static ReorderDirection ParseNodeDirection(string direction) => direction switch
+    {
+        "up" => ReorderDirection.Backward,
+        "down" => ReorderDirection.Forward,
+        _ => throw new ValidationException($"Invalid reorder direction '{direction}'. Expected 'up' or 'down'."),
+    };
 
     // `siblings` is already Order-sorted. Splice-and-reinsert (moveToIndex's exact semantics: the
     // target index is captured from the ORIGINAL list before the dragged item is removed), then

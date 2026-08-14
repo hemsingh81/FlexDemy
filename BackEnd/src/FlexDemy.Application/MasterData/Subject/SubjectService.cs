@@ -2,7 +2,11 @@ using FlexDemy.Application.Common;
 
 namespace FlexDemy.Application.MasterData.Subject;
 
-public class SubjectService(ISubjectRepository repository, IUnitOfWork unitOfWork, IIdGenerator idGenerator) : ISubjectService
+// Subject has no parent to validate -- EnsureCreateParentValidAsync/EnsureUpdateParentValidAsync
+// below are the intentional no-op case MasterDataService<...>'s own comment calls out. Common
+// CRUD/soft-delete plumbing lives in MasterDataService<...> (Application/MasterData).
+public class SubjectService(ISubjectRepository repository, IUnitOfWork unitOfWork, IIdGenerator idGenerator)
+    : MasterDataService<Domain.MasterData.Subject, SubjectDto, CreateSubjectRequest, UpdateSubjectRequest>(repository, unitOfWork, idGenerator), ISubjectService
 {
     public async Task<IReadOnlyList<SubjectDto>> GetAllAsync(bool includeInactive, CancellationToken cancellationToken = default)
     {
@@ -10,46 +14,17 @@ public class SubjectService(ISubjectRepository repository, IUnitOfWork unitOfWor
         return subjects.Select(s => s.ToDto()).ToList();
     }
 
-    public async Task<SubjectDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var subject = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Subject), id);
-        return subject.ToDto();
-    }
+    protected override string EntityName => nameof(Domain.MasterData.Subject);
 
-    public async Task<SubjectDto> CreateAsync(CreateSubjectRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name);
-        var subject = request.ToEntity(idGenerator.NewId());
-        repository.Add(subject);
-        // AD-11: the service commits once, after every repository call for this use-case has staged its change.
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return subject.ToDto();
-    }
+    protected override void ValidateCreateFields(CreateSubjectRequest request) => EnsureRequiredFields(request.Name);
+    protected override void ValidateUpdateFields(UpdateSubjectRequest request) => EnsureRequiredFields(request.Name);
 
-    public async Task<SubjectDto> UpdateAsync(string id, UpdateSubjectRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name);
-        var subject = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Subject), id);
-        subject.ApplyUpdate(request);
-        repository.Update(subject);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return subject.ToDto();
-    }
+    protected override Task EnsureCreateParentValidAsync(CreateSubjectRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
+    protected override Task EnsureUpdateParentValidAsync(UpdateSubjectRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var subject = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.Subject), id);
-        // Soft delete only -- IsDeleted flips the global HasQueryFilter(e => !e.IsDeleted) shut
-        // for this row on every future query, with none of the FK-constraint risk a hard DELETE
-        // would carry (SubjectConfiguration.cs). UpdatedAt/UpdatedBy are stamped by
-        // AuditSaveChangesInterceptor on SaveChanges, not here.
-        subject.IsDeleted = true;
-        repository.Update(subject);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
+    protected override Domain.MasterData.Subject ToEntity(CreateSubjectRequest request, string id) => request.ToEntity(id);
+    protected override void ApplyUpdate(Domain.MasterData.Subject subject, UpdateSubjectRequest request) => subject.ApplyUpdate(request);
+    protected override SubjectDto ToDto(Domain.MasterData.Subject subject) => subject.ToDto();
 
     // Defense-in-depth: the frontend already blocks a blank Name before it ever calls
     // create/update, but the API contract shouldn't rely on that alone.

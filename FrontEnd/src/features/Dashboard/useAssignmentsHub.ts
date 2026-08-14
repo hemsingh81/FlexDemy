@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import {
   AssignmentSubmission,
   QuizQuestion,
@@ -9,9 +9,17 @@ import {
 import * as assignmentsService from '../../services/assignmentsService';
 import { useDomain } from '../../context/DomainContext';
 import { useToast } from '../../context/ToastContext';
+import { useAsync } from '../../hooks/useAsync';
 
 const MASTERY_POINTS_THRESHOLD = 70;
 const MASTERY_POINTS_AWARD = 150;
+
+interface AssignmentsHubData {
+  tutorAssignments: TutorAssignment[];
+  submissions: AssignmentSubmission[];
+}
+
+const EMPTY_ASSIGNMENTS_HUB_DATA: AssignmentsHubData = { tutorAssignments: [], submissions: [] };
 
 // Course-source assignments, flattened out of course/lesson data -- same source useAssignments.ts
 // (the now-retired standalone Assignments tab's hook) used, kept here so the unified Available
@@ -27,24 +35,19 @@ export const useAssignmentsHub = () => {
   const { user, courses, isLoading: isDomainLoading, awardPoints } = useDomain();
   const { showToast } = useToast();
 
-  const [tutorAssignments, setTutorAssignments] = useState<TutorAssignment[]>([]);
-  const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([assignmentsService.getTutorAssignments(), assignmentsService.getSubmissions()]).then(
-      ([assignments, subs]) => {
-        if (cancelled) return;
-        setTutorAssignments(assignments);
-        setSubmissions(subs);
-        setIsLoading(false);
-      }
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Same Promise.all -> combined-object shape as useTutorHub.ts, via hooks/useAsync.ts -- the
+  // mutators below patch one field of `data` at a time via setData, so this hook's own public
+  // return shape (tutorAssignments/submissions as separate fields) stays unchanged even though
+  // they're now backed by one combined async fetch under the hood.
+  const { data, setData, isLoading } = useAsync<AssignmentsHubData>(
+    () =>
+      Promise.all([assignmentsService.getTutorAssignments(), assignmentsService.getSubmissions()]).then(
+        ([tutorAssignments, submissions]) => ({ tutorAssignments, submissions })
+      ),
+    EMPTY_ASSIGNMENTS_HUB_DATA,
+    []
+  );
+  const { tutorAssignments, submissions } = data;
 
   const courseAssignments: CourseAssignmentEntry[] = courses.flatMap((c) =>
     c.modules.flatMap((m) =>
@@ -84,7 +87,7 @@ export const useAssignmentsHub = () => {
           visibilityMode: params.visibilityMode,
         })
         .then((subs) => {
-          setSubmissions(subs);
+          setData((prev) => ({ ...prev, submissions: subs }));
           // Immediate visibility awards points right away, same as today's unchanged flow
           // (PRD FR-7). Hold-visibility withholds points until Review (FR-14).
           if (params.visibilityMode === 'immediate' && percentage >= MASTERY_POINTS_THRESHOLD) {
@@ -100,46 +103,46 @@ export const useAssignmentsHub = () => {
           return subs[0];
         });
     },
-    [user, awardPoints, showToast]
+    [user, awardPoints, showToast, setData]
   );
 
   // publish=true implements the creation form's "Save & Publish" action (FR-12) -- creates as
   // Draft first (the only state createAssignment can produce), then immediately publishes it,
   // rather than leaving "Save & Publish" behaving identically to "Save as Draft".
   const createAssignment = useCallback(
-    (data: Omit<TutorAssignment, 'id' | 'status' | 'createdAt'>, publish = false) => {
-      return assignmentsService.createAssignment(data).then((assignments) => {
+    (newAssignment: Omit<TutorAssignment, 'id' | 'status' | 'createdAt'>, publish = false) => {
+      return assignmentsService.createAssignment(newAssignment).then((assignments) => {
         if (!publish) {
-          setTutorAssignments(assignments);
+          setData((prev) => ({ ...prev, tutorAssignments: assignments }));
           showToast({ message: 'Assignment saved as draft.', variant: 'success' });
           return assignments;
         }
         const created = assignments[0];
         return assignmentsService.publishAssignment(created.id).then((updated) => {
-          setTutorAssignments(updated);
+          setData((prev) => ({ ...prev, tutorAssignments: updated }));
           showToast({ message: 'Assignment published.', variant: 'success' });
           return updated;
         });
       });
     },
-    [showToast]
+    [showToast, setData]
   );
 
   const publishAssignment = useCallback((assignmentId: string) => {
     return assignmentsService.publishAssignment(assignmentId).then((updated) => {
-      setTutorAssignments(updated);
+      setData((prev) => ({ ...prev, tutorAssignments: updated }));
       showToast({ message: 'Assignment published.', variant: 'success' });
       return updated;
     });
-  }, [showToast]);
+  }, [showToast, setData]);
 
   const unpublishAssignment = useCallback((assignmentId: string) => {
     return assignmentsService.unpublishAssignment(assignmentId).then((updated) => {
-      setTutorAssignments(updated);
+      setData((prev) => ({ ...prev, tutorAssignments: updated }));
       showToast({ message: 'Assignment unpublished.', variant: 'success' });
       return updated;
     });
-  }, [showToast]);
+  }, [showToast, setData]);
 
   // Review (PRD FR-14): confirms and publishes a Hold submission's already-computed score.
   // Points award on publish, not on original submit, for Hold-visibility assignments -- see
@@ -148,7 +151,7 @@ export const useAssignmentsHub = () => {
     (submissionId: string) => {
       const target = submissions.find((s) => s.id === submissionId);
       return assignmentsService.reviewSubmission(submissionId).then((subs) => {
-        setSubmissions(subs);
+        setData((prev) => ({ ...prev, submissions: subs }));
         if (target && target.percentage >= MASTERY_POINTS_THRESHOLD) {
           awardPoints(MASTERY_POINTS_AWARD);
         }
@@ -156,7 +159,7 @@ export const useAssignmentsHub = () => {
         return subs;
       });
     },
-    [submissions, awardPoints, showToast]
+    [submissions, awardPoints, showToast, setData]
   );
 
   // Re-evaluate (PRD FR-15): tutor manually overrides an already-Reviewed score. Adjusts the
@@ -167,7 +170,7 @@ export const useAssignmentsHub = () => {
       return assignmentsService
         .reEvaluateSubmission(submissionId, newPercentage, newCorrectCount)
         .then((subs) => {
-          setSubmissions(subs);
+          setData((prev) => ({ ...prev, submissions: subs }));
           if (target) {
             const wasAwarded = target.percentage >= MASTERY_POINTS_THRESHOLD;
             const nowAwarded = newPercentage >= MASTERY_POINTS_THRESHOLD;
@@ -178,7 +181,7 @@ export const useAssignmentsHub = () => {
           return subs;
         });
     },
-    [submissions, awardPoints, showToast]
+    [submissions, awardPoints, showToast, setData]
   );
 
   return {

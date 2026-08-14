@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BarChart2, Cpu } from 'lucide-react';
 import { Spinner } from '../../../ui/Spinner';
 import { AiTaskConfigRow } from './AiTaskConfigRow';
 import { useAiTaskConfig } from './useAiTaskConfig';
-import { useAiUsage } from './useAiUsage';
+import { aggregateUsageByTask, useAiUsage } from './useAiUsage';
 import { AiUsageSummary } from './AiUsageSummary';
 import { AiUsageChart } from './AiUsageChart';
 import { AiUsageDateRangeControl } from './AiUsageDateRangeControl';
@@ -20,6 +20,10 @@ import { AiUsageDateRangeControl } from './AiUsageDateRangeControl';
 export const AiConfiguration: React.FC = () => {
   const { data: configData, updateTaskConfig } = useAiTaskConfig();
   const { data: usageData, isLoading: isUsageLoading, error: usageError, dateRange, setDateRange } = useAiUsage();
+  // Computed once here and passed down as a prop -- previously AiUsageSummary.tsx and
+  // AiUsageChart.tsx each called aggregateUsageByTask(usageData) independently on every render,
+  // duplicating the same aggregation work for the same data.
+  const usageByTask = useMemo(() => aggregateUsageByTask(usageData), [usageData]);
 
   return (
     <div className="space-y-6">
@@ -54,8 +58,8 @@ export const AiConfiguration: React.FC = () => {
           </p>
         ) : (
           <div className="space-y-6">
-            <AiUsageSummary data={usageData} />
-            <AiUsageChart data={usageData} />
+            <AiUsageSummary usageByTask={usageByTask} />
+            <AiUsageChart usageByTask={usageByTask} />
           </div>
         )}
       </section>

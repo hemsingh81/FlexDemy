@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Timer, Play, Pause, RotateCcw, Flame, Trophy, X, Sparkles, CheckCircle } from 'lucide-react';
+import { TOAST_DURATION_MS, CELEBRATION_TOAST_DURATION_MS } from '../../lib/constants';
 
 interface FocusSessionTimerProps {
   moduleTitle?: string;
@@ -29,7 +30,7 @@ export const FocusSessionTimer: React.FC<FocusSessionTimerProps> = ({
 
   // Interval timer effect
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     if (isActive && secondsLeft > 0) {
       interval = setInterval(() => {
@@ -42,7 +43,7 @@ export const FocusSessionTimer: React.FC<FocusSessionTimerProps> = ({
             setEarnedPoints((pts) => pts + 15);
             if (onRewardPoints) onRewardPoints(15);
             setRewardToast('+15 Focus Points Earned!');
-            setTimeout(() => setRewardToast(null), 3000);
+            setTimeout(() => setRewardToast(null), TOAST_DURATION_MS);
           }
 
           if (next === 0) {
@@ -51,7 +52,7 @@ export const FocusSessionTimer: React.FC<FocusSessionTimerProps> = ({
             setEarnedPoints((pts) => pts + bonus);
             if (onRewardPoints) onRewardPoints(bonus);
             setRewardToast('🎉 Target Reached! +50 Bonus XP Earned!');
-            setTimeout(() => setRewardToast(null), 4500);
+            setTimeout(() => setRewardToast(null), CELEBRATION_TOAST_DURATION_MS);
           }
 
           return next;

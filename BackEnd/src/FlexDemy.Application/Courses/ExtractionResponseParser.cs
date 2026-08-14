@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FlexDemy.Application.Common;
 
 namespace FlexDemy.Application.Courses;
 
@@ -14,7 +15,7 @@ public static class ExtractionResponseParser
     {
         structure = null;
 
-        var stripped = StripCodeFence(aiContent);
+        var stripped = AiResponseTextUtils.StripCodeFence(aiContent);
 
         RawStructure? raw;
         try
@@ -150,28 +151,6 @@ public static class ExtractionResponseParser
         blocks = validated;
         parseError = null;
         return true;
-    }
-
-    // Real-world model output not perfectly following instructions is the norm, not the
-    // exception -- strips a ```/```json fence even when it isn't the very first thing in the
-    // response (code-review patch: a model prepending "Here's the JSON:" before the fence used to
-    // fall straight through to a raw JSON-parse failure instead of being stripped).
-    private static string StripCodeFence(string content)
-    {
-        var trimmed = content.Trim();
-        var fenceStart = trimmed.IndexOf("```", StringComparison.Ordinal);
-        if (fenceStart < 0)
-            return trimmed;
-
-        var afterOpeningMarker = trimmed[(fenceStart + 3)..];
-        // A language tag ("json") may follow the opening marker on the same line -- skip past it
-        // if a newline follows; otherwise treat everything after the marker as the fenced content
-        // itself (a same-line fence with no language tag/newline).
-        var firstNewline = afterOpeningMarker.IndexOf('\n');
-        var fencedContent = firstNewline >= 0 ? afterOpeningMarker[(firstNewline + 1)..] : afterOpeningMarker;
-
-        var closingFenceIndex = fencedContent.LastIndexOf("```", StringComparison.Ordinal);
-        return (closingFenceIndex >= 0 ? fencedContent[..closingFenceIndex] : fencedContent).Trim();
     }
 
     // Wire-shape DTOs for deserialization only -- deliberately nullable/loose so a malformed

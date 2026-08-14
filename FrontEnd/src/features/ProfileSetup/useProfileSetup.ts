@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useDomain } from '../../context/DomainContext';
 import * as masterDataService from '../../services/masterDataService';
 import * as profileService from '../../services/profileService';
 import { Country, State, City, Board, ClassLevel, Subject } from '../../services/masterDataService';
+import { useAsync } from '../../hooks/useAsync';
 
 export type ProfileSetupRole = 'Student' | 'Tutor';
 
@@ -50,6 +51,15 @@ export interface ProfileSetupState {
   submitTutorApplication: () => Promise<void>;
 }
 
+interface InitialMasterData {
+  countries: Country[];
+  classLevels: ClassLevel[];
+  subjects: Subject[];
+  boards: Board[];
+}
+
+const EMPTY_MASTER_DATA: InitialMasterData = { countries: [], classLevels: [], subjects: [], boards: [] };
+
 // Feature-local hook (AD-2) for the whole ProfileSetup folder -- ProfileSetupPage uses the
 // role/chooseRole step, TutorRejectedPage ignores that and drives submitStudentProfile /
 // submitTutorApplication directly from its own re-apply / switch-to-student choice. Both
@@ -61,13 +71,8 @@ export const useProfileSetup = (): ProfileSetupState => {
   const [role, setRole] = useState<ProfileSetupRole | null>(null);
   const chooseRole = useCallback((next: ProfileSetupRole | null) => setRole(next), []);
 
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [classLevels, setClassLevels] = useState<ClassLevel[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [boards, setBoards] = useState<Board[]>([]);
   const [states, setStates] = useState<State[]>([]);
   const [cities, setCities] = useState<City[]>([]);
-  const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
 
   const [countryId, setCountryId] = useState('');
   const [stateId, setStateId] = useState('');
@@ -84,25 +89,18 @@ export const useProfileSetup = (): ProfileSetupState => {
   // Country-independent lookups fetched once on mount. Boards are fetched with no parentId
   // so national boards (no StateId) come back alongside every state's board in one call --
   // availableBoards below filters that full list against the currently selected state.
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      masterDataService.getCountries(),
-      masterDataService.getClassLevels(),
-      masterDataService.getSubjects(),
-      masterDataService.getBoards(),
-    ]).then(([c, cl, s, b]) => {
-      if (cancelled) return;
-      setCountries(c);
-      setClassLevels(cl);
-      setSubjects(s);
-      setBoards(b);
-      setIsLoadingMasterData(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data: masterData, isLoading: isLoadingMasterData } = useAsync<InitialMasterData>(
+    () =>
+      Promise.all([
+        masterDataService.getCountries(),
+        masterDataService.getClassLevels(),
+        masterDataService.getSubjects(),
+        masterDataService.getBoards(),
+      ]).then(([countries, classLevels, subjects, boards]) => ({ countries, classLevels, subjects, boards })),
+    EMPTY_MASTER_DATA,
+    []
+  );
+  const { countries, classLevels, subjects, boards } = masterData;
 
   const availableBoards = useMemo(
     () => boards.filter((b) => b.stateId === null || b.stateId === stateId),

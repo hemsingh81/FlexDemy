@@ -24,6 +24,7 @@ import {
 import { Course, UserProgress, ScratchpadNote } from '../../types';
 import { CourseReviewModal } from './CourseReviewModal';
 import { useCourseOverview } from './useCourseOverview';
+import { TOAST_DURATION_MS } from '../../lib/constants';
 
 interface CourseOverviewScreenProps {
   course: Course;
@@ -79,7 +80,7 @@ export const CourseOverviewScreen: React.FC<CourseOverviewScreenProps> = ({
   const handleShareCourse = () => {
     navigator.clipboard.writeText(window.location.href);
     setShareToast(true);
-    setTimeout(() => setShareToast(false), 3000);
+    setTimeout(() => setShareToast(false), TOAST_DURATION_MS);
   };
 
   const scrollToSection = (sectionId: 'section-chapters' | 'section-progress' | 'section-notes' | 'section-reviews') => {

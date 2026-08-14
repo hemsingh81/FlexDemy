@@ -4,8 +4,10 @@ using FlexDemy.Application.MasterData.State;
 namespace FlexDemy.Application.MasterData.City;
 
 // City validates its parent State exists and is active before create/update -- this
-// per-entity variance is exactly why 6 slices beat one polymorphic controller (plan §2).
-public class CityService(ICityRepository repository, IStateRepository stateRepository, IUnitOfWork unitOfWork, IIdGenerator idGenerator) : ICityService
+// per-entity variance is exactly why 6 slices beat one polymorphic controller (plan §2). Common
+// CRUD/soft-delete plumbing lives in MasterDataService<...> (Application/MasterData).
+public class CityService(ICityRepository repository, IStateRepository stateRepository, IUnitOfWork unitOfWork, IIdGenerator idGenerator)
+    : MasterDataService<Domain.MasterData.City, CityDto, CreateCityRequest, UpdateCityRequest>(repository, unitOfWork, idGenerator), ICityService
 {
     public async Task<IReadOnlyList<CityDto>> GetAllAsync(bool includeInactive, string? stateId, CancellationToken cancellationToken = default)
     {
@@ -13,48 +15,19 @@ public class CityService(ICityRepository repository, IStateRepository stateRepos
         return cities.Select(c => c.ToDto()).ToList();
     }
 
-    public async Task<CityDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var city = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.City), id);
-        return city.ToDto();
-    }
+    protected override string EntityName => nameof(Domain.MasterData.City);
 
-    public async Task<CityDto> CreateAsync(CreateCityRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name);
-        await EnsureStateIsActiveAsync(request.StateId, cancellationToken);
-        var city = request.ToEntity(idGenerator.NewId());
-        repository.Add(city);
-        // AD-11: the service commits once, after every repository call for this use-case has staged its change.
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return city.ToDto();
-    }
+    protected override void ValidateCreateFields(CreateCityRequest request) => EnsureRequiredFields(request.Name);
+    protected override void ValidateUpdateFields(UpdateCityRequest request) => EnsureRequiredFields(request.Name);
 
-    public async Task<CityDto> UpdateAsync(string id, UpdateCityRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name);
-        var city = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.City), id);
-        await EnsureStateIsActiveAsync(request.StateId, cancellationToken);
-        city.ApplyUpdate(request);
-        repository.Update(city);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return city.ToDto();
-    }
+    protected override Task EnsureCreateParentValidAsync(CreateCityRequest request, CancellationToken cancellationToken) =>
+        EnsureStateIsActiveAsync(request.StateId, cancellationToken);
+    protected override Task EnsureUpdateParentValidAsync(UpdateCityRequest request, CancellationToken cancellationToken) =>
+        EnsureStateIsActiveAsync(request.StateId, cancellationToken);
 
-    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var city = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.City), id);
-        // Soft delete only -- IsDeleted flips the global HasQueryFilter(e => !e.IsDeleted) shut
-        // for this row on every future query, with none of the FK-constraint risk a hard DELETE
-        // would carry (CityConfiguration.cs). UpdatedAt/UpdatedBy are stamped by
-        // AuditSaveChangesInterceptor on SaveChanges, not here.
-        city.IsDeleted = true;
-        repository.Update(city);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
+    protected override Domain.MasterData.City ToEntity(CreateCityRequest request, string id) => request.ToEntity(id);
+    protected override void ApplyUpdate(Domain.MasterData.City city, UpdateCityRequest request) => city.ApplyUpdate(request);
+    protected override CityDto ToDto(Domain.MasterData.City city) => city.ToDto();
 
     private async Task EnsureStateIsActiveAsync(string stateId, CancellationToken cancellationToken)
     {

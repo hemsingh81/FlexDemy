@@ -1,10 +1,9 @@
 namespace FlexDemy.Application.MasterData.State;
 
 // AD-4: Application defines the repository interface; Infrastructure implements it against EF Core.
-public interface IStateRepository
+// GetByIdAsync/Add/Update come from IMasterDataRepository<State> (Application/MasterData) -- the
+// shared shape all 6 master-data repositories already implemented identically.
+public interface IStateRepository : IMasterDataRepository<FlexDemy.Domain.MasterData.State>
 {
     Task<IReadOnlyList<FlexDemy.Domain.MasterData.State>> GetAllAsync(bool includeInactive, string? countryId, CancellationToken cancellationToken = default);
-    Task<FlexDemy.Domain.MasterData.State?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
-    void Add(FlexDemy.Domain.MasterData.State state);
-    void Update(FlexDemy.Domain.MasterData.State state);
 }

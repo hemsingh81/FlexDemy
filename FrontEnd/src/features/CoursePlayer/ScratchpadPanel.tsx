@@ -19,6 +19,24 @@ import {
 } from 'lucide-react';
 import { ScratchpadNote, Course, Lesson, Module } from '../../types';
 import { getNotesForCourse, addNote, saveNotesForCourse } from '../../services/scratchpadService';
+import { COPY_CONFIRMATION_DISMISS_MS } from '../../lib/constants';
+
+// Minimal local shapes for the Web Speech API's callback events -- only the fields this
+// component actually reads, standing in for the `lib.dom.d.ts` types TypeScript doesn't ship
+// (SpeechRecognition is still non-standard/vendor-prefixed) without resorting to `any`.
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: { length: number; [index: number]: SpeechRecognitionResultLike };
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
 
 interface ScratchpadPanelProps {
   course: Course;
@@ -71,7 +89,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let finalTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
@@ -83,7 +101,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
       }
     };
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
     };
@@ -182,7 +200,7 @@ export const ScratchpadPanel: React.FC<ScratchpadPanelProps> = ({
   const handleCopyNote = (id: string, content: string) => {
     navigator.clipboard.writeText(content);
     setCopiedNoteId(id);
-    setTimeout(() => setCopiedNoteId(null), 2000);
+    setTimeout(() => setCopiedNoteId(null), COPY_CONFIRMATION_DISMISS_MS);
   };
 
   // Filter notes

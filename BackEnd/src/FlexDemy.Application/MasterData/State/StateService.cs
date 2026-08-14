@@ -4,8 +4,11 @@ using FlexDemy.Application.MasterData.Country;
 namespace FlexDemy.Application.MasterData.State;
 
 // State validates its parent Country exists and is active before create/update -- this
-// per-entity variance is exactly why 6 slices beat one polymorphic controller (plan §2).
-public class StateService(IStateRepository repository, ICountryRepository countryRepository, IUnitOfWork unitOfWork, IIdGenerator idGenerator) : IStateService
+// per-entity variance is exactly why 6 slices beat one polymorphic controller (plan §2). Common
+// CRUD/soft-delete plumbing lives in MasterDataService<...> (Application/MasterData) -- see that
+// file's own comment for why the variance above survives the extraction.
+public class StateService(IStateRepository repository, ICountryRepository countryRepository, IUnitOfWork unitOfWork, IIdGenerator idGenerator)
+    : MasterDataService<Domain.MasterData.State, StateDto, CreateStateRequest, UpdateStateRequest>(repository, unitOfWork, idGenerator), IStateService
 {
     public async Task<IReadOnlyList<StateDto>> GetAllAsync(bool includeInactive, string? countryId, CancellationToken cancellationToken = default)
     {
@@ -13,48 +16,19 @@ public class StateService(IStateRepository repository, ICountryRepository countr
         return states.Select(s => s.ToDto()).ToList();
     }
 
-    public async Task<StateDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var state = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.State), id);
-        return state.ToDto();
-    }
+    protected override string EntityName => nameof(Domain.MasterData.State);
 
-    public async Task<StateDto> CreateAsync(CreateStateRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name, request.Code);
-        await EnsureCountryIsActiveAsync(request.CountryId, cancellationToken);
-        var state = request.ToEntity(idGenerator.NewId());
-        repository.Add(state);
-        // AD-11: the service commits once, after every repository call for this use-case has staged its change.
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return state.ToDto();
-    }
+    protected override void ValidateCreateFields(CreateStateRequest request) => EnsureRequiredFields(request.Name, request.Code);
+    protected override void ValidateUpdateFields(UpdateStateRequest request) => EnsureRequiredFields(request.Name, request.Code);
 
-    public async Task<StateDto> UpdateAsync(string id, UpdateStateRequest request, CancellationToken cancellationToken = default)
-    {
-        EnsureRequiredFields(request.Name, request.Code);
-        var state = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.State), id);
-        await EnsureCountryIsActiveAsync(request.CountryId, cancellationToken);
-        state.ApplyUpdate(request);
-        repository.Update(state);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return state.ToDto();
-    }
+    protected override Task EnsureCreateParentValidAsync(CreateStateRequest request, CancellationToken cancellationToken) =>
+        EnsureCountryIsActiveAsync(request.CountryId, cancellationToken);
+    protected override Task EnsureUpdateParentValidAsync(UpdateStateRequest request, CancellationToken cancellationToken) =>
+        EnsureCountryIsActiveAsync(request.CountryId, cancellationToken);
 
-    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var state = await repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Domain.MasterData.State), id);
-        // Soft delete only -- IsDeleted flips the global HasQueryFilter(e => !e.IsDeleted) shut
-        // for this row on every future query, with none of the FK-constraint risk a hard DELETE
-        // would carry (StateConfiguration.cs). UpdatedAt/UpdatedBy are stamped by
-        // AuditSaveChangesInterceptor on SaveChanges, not here.
-        state.IsDeleted = true;
-        repository.Update(state);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
+    protected override Domain.MasterData.State ToEntity(CreateStateRequest request, string id) => request.ToEntity(id);
+    protected override void ApplyUpdate(Domain.MasterData.State state, UpdateStateRequest request) => state.ApplyUpdate(request);
+    protected override StateDto ToDto(Domain.MasterData.State state) => state.ToDto();
 
     private async Task EnsureCountryIsActiveAsync(string countryId, CancellationToken cancellationToken)
     {

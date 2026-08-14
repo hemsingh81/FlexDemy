@@ -1,22 +1,9 @@
-import { useEffect, useState } from 'react';
 import { StudyGroupRoom } from '../../types';
 import * as groupStudyService from '../../services/groupStudyService';
+import { useAsync } from '../../hooks/useAsync';
 
 export const useGroupStudy = () => {
-  const [rooms, setRooms] = useState<StudyGroupRoom[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    groupStudyService.getStudyRooms().then((r) => {
-      if (cancelled) return;
-      setRooms(r);
-      setIsLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data: rooms, isLoading } = useAsync<StudyGroupRoom[]>(() => groupStudyService.getStudyRooms(), [], []);
 
   return { rooms, isLoading };
 };

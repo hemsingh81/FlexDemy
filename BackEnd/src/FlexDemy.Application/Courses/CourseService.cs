@@ -14,7 +14,10 @@ public class CourseService(
     // Story 2.4/AC#3: server-side twin of the frontend's MAX_THUMBNAILS -- the backend must
     // not trust the client alone here either.
     private const int MaxThumbnails = 3;
-    private const long MaxThumbnailContentLength = 5 * 1024 * 1024;
+    // Public (not private) so CoursesController's [RequestSizeLimit] attribute can derive its own
+    // buffer from this instead of an independently hardcoded number -- see AddThumbnail's
+    // [RequestSizeLimit(CourseService.MaxThumbnailContentLength + ...)] there.
+    public const long MaxThumbnailContentLength = 5 * 1024 * 1024;
     private static readonly Dictionary<string, string> AllowedThumbnailContentTypes = new()
     {
         ["image/jpeg"] = ".jpg",
@@ -22,10 +25,10 @@ public class CourseService(
         ["image/webp"] = ".webp",
     };
 
-    public async Task<IReadOnlyList<CourseDto>> GetCoursesAsync(string? gradeTag, string? search, string? subject, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<CourseDto>> GetCoursesAsync(string? gradeTag, string? search, string? subject, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
     {
-        var courses = await repository.GetAllAsync(gradeTag, search, subject, cancellationToken);
-        return courses.Select(c => c.ToDto()).ToList();
+        var (courses, totalCount) = await repository.GetAllAsync(gradeTag, search, subject, page, pageSize, cancellationToken);
+        return new PagedResult<CourseDto>(courses.Select(c => c.ToDto()).ToList(), totalCount, page, pageSize);
     }
 
     public async Task<CourseDto> GetCourseByIdAsync(string id, CancellationToken cancellationToken = default)
@@ -159,8 +162,7 @@ public class CourseService(
 
     public async Task<CourseDto> ReorderThumbnailAsync(string courseId, string thumbnailId, string direction, CancellationToken cancellationToken = default)
     {
-        if (direction is not ("left" or "right"))
-            throw new ValidationException($"Invalid reorder direction '{direction}'. Expected 'left' or 'right'.");
+        var parsedDirection = ParseThumbnailDirection(direction);
 
         var course = await LoadOwnedDraftAsync(courseId, cancellationToken);
         var ordered = course.Thumbnails.OrderBy(t => t.Order).ToList();
@@ -168,7 +170,7 @@ public class CourseService(
         if (index == -1)
             throw new NotFoundException(nameof(CourseThumbnail), thumbnailId);
 
-        var swapWith = direction == "left" ? index - 1 : index + 1;
+        var swapWith = parsedDirection == ReorderDirection.Backward ? index - 1 : index + 1;
         if (swapWith >= 0 && swapWith < ordered.Count)
         {
             (ordered[index].Order, ordered[swapWith].Order) = (ordered[swapWith].Order, ordered[index].Order);
@@ -410,4 +412,14 @@ public class CourseService(
             throw new ValidationException($"Taxonomy reference ids must be {MaxReferenceIdLength} characters or fewer.");
         return id;
     }
+
+    // Parses this endpoint's own "left"/"right" wire vocabulary into the shared ReorderDirection
+    // enum (Application/Common/ReorderDirection.cs) -- see that file for why this isn't parsed
+    // further out at the controller boundary instead.
+    private static ReorderDirection ParseThumbnailDirection(string direction) => direction switch
+    {
+        "left" => ReorderDirection.Backward,
+        "right" => ReorderDirection.Forward,
+        _ => throw new ValidationException($"Invalid reorder direction '{direction}'. Expected 'left' or 'right'."),
+    };
 }

@@ -14,7 +14,7 @@ public class UserRepository(FlexDemyDbContext db) : IUserRepository
         db.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
     public Task<List<User>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default) =>
-        db.Users.Where(u => u.Role == role).ToListAsync(cancellationToken);
+        db.Users.AsNoTracking().Where(u => u.Role == role).ToListAsync(cancellationToken);
 
     public void Add(User user) => db.Users.Add(user);
 

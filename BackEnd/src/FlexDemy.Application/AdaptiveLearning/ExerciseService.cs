@@ -74,54 +74,32 @@ public class ExerciseService(
     }
 
     // Code-review patch: the existence check (GetByNodeAsync) and the SaveChangesAsync below are
-    // not atomic -- two concurrent SaveExerciseAsync calls for the same node with no existing
-    // exercise (e.g. a tutor double-clicking Save) can both see no row, both construct one, and
-    // the second SaveChangesAsync then fails against the partial unique index
-    // (ExerciseConfiguration.cs) that correctly rejects the duplicate. Same class of race
-    // Story 3.5's AdaptiveLearningService.cs was patched for, and the same fix shape: catch
-    // broadly (FlexDemy.Application has no EF Core package reference, so DbUpdateException can't
-    // be caught by type), verify it was actually a lost race by re-checking whether the row now
-    // exists, rethrow untouched if it doesn't. Unlike Story 3.5's generation path (which discards
-    // the loser's redundant AI output), a tutor's own explicit save must still take effect
-    // (last-write-wins) -- retried as an UPDATE against the now-existing winner row.
-    private async Task<Exercise> UpsertExerciseAsync(
-        string? topicId, string? subtopicId, AnswerType answerType, SaveExerciseRequest request, string? optionsJson, CancellationToken cancellationToken)
-    {
-        var existing = await repository.GetByNodeAsync(topicId, subtopicId, cancellationToken);
-        if (existing is not null)
-        {
-            ApplyRequest(existing, answerType, request, optionsJson);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return existing;
-        }
-
-        var newRow = new Exercise
-        {
-            Id = idGenerator.NewId(),
-            TopicId = topicId,
-            SubtopicId = subtopicId,
-            AnswerType = answerType,
-            QuestionText = request.QuestionText,
-            OptionsJson = optionsJson,
-            CorrectAnswer = request.CorrectAnswer,
-            FeedbackText = request.FeedbackText,
-            IsAiProposed = request.IsAiProposed,
-        };
-        repository.Add(newRow);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return newRow;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            var winner = await repository.GetByNodeAsync(topicId, subtopicId, cancellationToken);
-            if (winner is null) throw;
-            ApplyRequest(winner, answerType, request, optionsJson);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return winner;
-        }
-    }
+    // not atomic -- see RaceRetryUpsert.UpsertWithRaceRetryAsync (Application/Common) for the full
+    // race explanation this shares with AdaptiveLearningService's/KeywordDefinitionService's own
+    // analogous upserts. Unlike those services' AI-generation paths (which discard the loser's
+    // redundant AI output), a tutor's own explicit save must still take effect (last-write-wins)
+    // -- retried as an UPDATE against the now-existing winner row.
+    private Task<Exercise> UpsertExerciseAsync(
+        string? topicId, string? subtopicId, AnswerType answerType, SaveExerciseRequest request, string? optionsJson, CancellationToken cancellationToken) =>
+        RaceRetryUpsert.UpsertWithRaceRetryAsync(
+            lookup: ct => repository.GetByNodeAsync(topicId, subtopicId, ct),
+            createNew: () => new Exercise
+            {
+                Id = idGenerator.NewId(),
+                TopicId = topicId,
+                SubtopicId = subtopicId,
+                AnswerType = answerType,
+                QuestionText = request.QuestionText,
+                OptionsJson = optionsJson,
+                CorrectAnswer = request.CorrectAnswer,
+                FeedbackText = request.FeedbackText,
+                IsAiProposed = request.IsAiProposed,
+            },
+            add: repository.Add,
+            applyUpdate: row => ApplyRequest(row, answerType, request, optionsJson),
+            applyUpdateOnRaceLoss: true,
+            unitOfWork: unitOfWork,
+            cancellationToken: cancellationToken);
 
     private static void ApplyRequest(Exercise exercise, AnswerType answerType, SaveExerciseRequest request, string? optionsJson)
     {

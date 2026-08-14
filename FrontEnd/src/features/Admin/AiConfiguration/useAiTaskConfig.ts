@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import * as aiConfigService from '../../../services/aiConfigService';
+import { useAsync } from '../../../hooks/useAsync';
 
 // The 7 AI Tasks routed through the AI Service Layer (New Course Wizard PRD FR-1/FR-27).
 // `describeNotation` was added during the UX accessibility review -- screen-reader alt-text
@@ -91,9 +92,15 @@ const toAiTaskConfig = (dto: aiConfigService.AiTaskConfigDto): AiTaskConfig | nu
 // now Promise<void> instead of void -- a deliberate signature change, see Story 1.5 Dev Notes),
 // so AiConfiguration.tsx never needs to change.
 export const useAiTaskConfig = (): UseAiTaskConfigResult => {
-  const [data, setData] = useState<AiTaskConfig[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, setData, isLoading, error } = useAsync<AiTaskConfig[]>(
+    () =>
+      aiConfigService
+        .getAiTaskConfigs()
+        .then((dtos) => dtos.map(toAiTaskConfig).filter((row): row is AiTaskConfig => row !== null)),
+    [],
+    [],
+    (err) => (err instanceof Error ? err.message : 'Could not load AI Task configuration.')
+  );
   // Kept in sync via the effect below (not read synchronously inside the same tick as a
   // setData call anywhere in this hook, so a plain effect-synced ref is safe here -- unlike
   // Story 1.3's TagManagement.tsx, nothing calls updateTaskConfig immediately after a setData
@@ -103,28 +110,6 @@ export const useAiTaskConfig = (): UseAiTaskConfigResult => {
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    aiConfigService
-      .getAiTaskConfigs()
-      .then((dtos) => {
-        if (cancelled) return;
-        setData(dtos.map(toAiTaskConfig).filter((row): row is AiTaskConfig => row !== null));
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Could not load AI Task configuration.');
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Row-scoped: a save failure re-throws so the calling row (AiTaskConfigRow.tsx) can show its
   // own inline error, rather than being swallowed into this page-level `error` state (Story 1.5

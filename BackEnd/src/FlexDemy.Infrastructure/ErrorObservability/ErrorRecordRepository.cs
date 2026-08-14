@@ -25,7 +25,7 @@ public class ErrorRecordRepository(FlexDemyDbContext db) : IErrorRecordRepositor
     // searched term gets treated as a SQL wildcard under ILike, causing false-positive matches).
     public async Task<(IReadOnlyList<ErrorRecord> Items, int TotalCount)> QueryAsync(ErrorListQuery query, CancellationToken cancellationToken = default)
     {
-        var filtered = db.ErrorRecords.AsQueryable();
+        var filtered = db.ErrorRecords.AsNoTracking().AsQueryable();
 
         // Code-review patch: the default exclude-Archived clause must not run when the caller
         // explicitly asked for Status = Archived -- IncludeArchived and Status are independent

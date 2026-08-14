@@ -1,4 +1,5 @@
 using FlexDemy.Application.AdaptiveLearning;
+using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
 using FlexDemy.Application.Permissions;
 using Microsoft.AspNetCore.Authorization;
@@ -11,14 +12,21 @@ namespace FlexDemy.Api.Controllers;
 [Route("api/v1/courses")]
 public class CoursesController(ICourseService courseService, IPublishService publishService, IVersionService versionService) : ControllerBase
 {
+    // Code-review patch: the public catalog previously had no paging at all -- page/pageSize are
+    // ordinary optional [FromQuery] parameters (ASP.NET Core model binding applies the C# default
+    // below when a query string parameter is omitted entirely), threaded straight through to
+    // GetCoursesAsync's own matching defaults. An explicitly-supplied non-positive value (e.g.
+    // "?page=0") still reaches CourseRepository.GetAllAsync's own defensive clamp.
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<CourseDto>>> GetCourses(
+    public async Task<ActionResult<PagedResult<CourseDto>>> GetCourses(
         [FromQuery] string? gradeTag,
         [FromQuery] string? search,
         [FromQuery] string? subject,
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
     {
-        var courses = await courseService.GetCoursesAsync(gradeTag, search, subject, cancellationToken);
+        var courses = await courseService.GetCoursesAsync(gradeTag, search, subject, page, pageSize, cancellationToken);
         return Ok(courses);
     }
 
@@ -63,9 +71,14 @@ public class CoursesController(ICourseService courseService, IPublishService pub
     // Code-review patch: without an explicit limit, Kestrel's own default (much larger than
     // this app's 5MB content-length check in CourseService) lets an oversized multipart body be
     // fully read into memory before the application-level rejection ever runs.
+    // Code-review patch: the 1MB multipart-overhead buffer above CourseService's own 5MB content-
+    // length check is now an arithmetic expression on that same public const (CourseFilesController's
+    // own [RequestSizeLimit(CourseFileService.MaxFileContentLength)] precedent) instead of an
+    // independently hardcoded 6MB -- [RequestSizeLimit] requires a compile-time constant, which a
+    // const-plus-const expression still is.
     [HttpPost("drafts/{id}/thumbnails")]
     [Authorize(Policy = FeatureKeys.CoursesCreate)]
-    [RequestSizeLimit(6 * 1024 * 1024)]
+    [RequestSizeLimit(CourseService.MaxThumbnailContentLength + 1024 * 1024)]
     public async Task<ActionResult<CourseDto>> AddThumbnail(
         string id,
         [FromForm] IFormFile file,
