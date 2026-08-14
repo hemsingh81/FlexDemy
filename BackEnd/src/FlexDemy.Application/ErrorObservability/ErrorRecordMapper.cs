@@ -10,21 +10,21 @@ public static class ErrorRecordMapper
 
     public static ErrorRecordSummaryDto ToSummaryDto(this ErrorRecord record) => new(
         record.Id,
-        record.Category,
-        record.Priority,
-        record.Status,
+        record.Category.ToString(),
+        record.Priority.ToString(),
+        record.Status.ToString(),
         Truncate(record.Message, SummaryMessageMaxLength),
-        record.Source,
+        record.Source.ToString(),
         record.OccurrenceCount,
         record.LastOccurredAt);
 
     public static ErrorRecordDetailDto ToDetailDto(this ErrorRecord record) => new(
         record.Id,
-        record.Category,
-        record.Priority,
-        record.Status,
+        record.Category.ToString(),
+        record.Priority.ToString(),
+        record.Status.ToString(),
         record.Message,
-        record.Source,
+        record.Source.ToString(),
         record.OccurrenceCount,
         record.LastOccurredAt,
         record.StackTrace,

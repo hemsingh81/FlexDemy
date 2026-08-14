@@ -105,3 +105,7 @@ export const archiveError = (id: string): Promise<void> => request(`/api/v1/erro
 export const resolveError = (id: string): Promise<void> => request(`/api/v1/errors/${encodeURIComponent(id)}/resolve`, 'POST');
 
 export const increasePriority = (id: string): Promise<void> => request(`/api/v1/errors/${encodeURIComponent(id)}/increase-priority`, 'POST');
+
+// Permanent hard delete -- unlike the lifecycle actions above, there's no undo and no Status to
+// transition to. The caller (ErrorDetailPanel) confirms with the admin before calling this.
+export const deleteError = (id: string): Promise<void> => request(`/api/v1/errors/${encodeURIComponent(id)}`, 'DELETE');

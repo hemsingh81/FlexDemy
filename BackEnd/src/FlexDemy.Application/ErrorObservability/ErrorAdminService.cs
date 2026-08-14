@@ -76,6 +76,13 @@ public class ErrorAdminService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var record = await GetRecordOrThrowAsync(id, cancellationToken);
+        repository.Remove(record);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<ErrorRetentionSettingsDto> GetRetentionSettingsAsync(CancellationToken cancellationToken = default)
     {
         var settings = await retentionSettingsRepository.GetAsync(cancellationToken);

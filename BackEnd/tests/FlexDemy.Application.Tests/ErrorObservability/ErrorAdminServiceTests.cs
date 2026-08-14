@@ -197,6 +197,33 @@ public class ErrorAdminServiceTests
             () => service.IncreasePriorityAsync("missing", "admin_1", CancellationToken.None));
     }
 
+    // Explicit admin delete: unlike Archive/Resolve, this hard-removes the row via
+    // IErrorRecordRepository.Remove -- irreversible, so it's the repository's Remove (not
+    // RemoveRange, the purge job's own path) that must be called exactly once.
+    [Fact]
+    public async Task DeleteAsync_removes_the_record_and_saves_once()
+    {
+        var (service, repository, unitOfWork, _) = MakeService();
+        var record = MakeRecord("err_1");
+        repository.GetByIdAsync("err_1", Arg.Any<CancellationToken>()).Returns(record);
+
+        await service.DeleteAsync("err_1", CancellationToken.None);
+
+        repository.Received(1).Remove(record);
+        await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_throws_NotFoundException_for_a_missing_id()
+    {
+        var (service, repository, unitOfWork, _) = MakeService();
+        repository.GetByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((ErrorRecord?)null);
+
+        await Assert.ThrowsAsync<FlexDemy.Application.Common.NotFoundException>(
+            () => service.DeleteAsync("missing", CancellationToken.None));
+        await unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // AC #5: retention window, default 180 days.
     [Fact]
     public async Task GetRetentionSettingsAsync_returns_the_existing_row_s_value()

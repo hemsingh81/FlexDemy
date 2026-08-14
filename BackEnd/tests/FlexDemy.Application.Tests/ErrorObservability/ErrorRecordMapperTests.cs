@@ -35,11 +35,11 @@ public class ErrorRecordMapperTests
         var dto = record.ToSummaryDto();
 
         Assert.Equal("err_1", dto.Id);
-        Assert.Equal(ErrorCategory.ExternalIntegrationError, dto.Category);
-        Assert.Equal(ErrorPriority.P1, dto.Priority);
-        Assert.Equal(ErrorStatus.New, dto.Status);
+        Assert.Equal(ErrorCategory.ExternalIntegrationError.ToString(), dto.Category);
+        Assert.Equal(ErrorPriority.P1.ToString(), dto.Priority);
+        Assert.Equal(ErrorStatus.New.ToString(), dto.Status);
         Assert.Equal("boom", dto.Message);
-        Assert.Equal(ErrorSource.Backend, dto.Source);
+        Assert.Equal(ErrorSource.Backend.ToString(), dto.Source);
         Assert.Equal(3, dto.OccurrenceCount);
         Assert.Equal(record.LastOccurredAt, dto.LastOccurredAt);
     }

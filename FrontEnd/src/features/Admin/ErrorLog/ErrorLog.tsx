@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import React, { useRef, useState } from 'react';
 import { Spinner } from '../../../ui/Spinner';
 import { Pagination } from '../../../ui/Pagination';
 import { useErrorLog, PAGE_SIZE } from './useErrorLog';
@@ -11,8 +10,20 @@ import { ErrorDetailPanel } from './ErrorDetailPanel';
 // Epic 4 release checkpoint (Dev Notes) -- the first point an admin can see anything Stories
 // 4.1-4.4 have been capturing, including Story 4.4's anonymous endpoint's own reports (AC #5).
 export const ErrorLog: React.FC = () => {
-  const { data, totalCount, isLoading, error, filters, setFilters, page, setPage } = useErrorLog();
+  const { data, totalCount, isLoading, error, filters, setFilters, page, setPage, refetch } = useErrorLog();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Set by ErrorDetailPanel.onActionSuccess while the panel is open, read once on close -- a ref
+  // (not state) since it's only ever consulted at the single moment the panel closes, not
+  // something that should trigger its own re-render.
+  const detailChangedRef = useRef(false);
+
+  const handleDetailClose = () => {
+    setSelectedId(null);
+    if (detailChangedRef.current) {
+      detailChangedRef.current = false;
+      refetch();
+    }
+  };
 
   // Story 4.7/AC #1, #3: filters to exactly the records sharing this trace. useErrorLog's own
   // setFilters already resets to page 1 on any filter change, so no extra handling needed here.
@@ -31,11 +42,6 @@ export const ErrorLog: React.FC = () => {
   return (
     <div className="space-y-6">
       <section className="bg-white border border-[#E1DED4] rounded-2xl p-8 shadow-xs">
-        <div className="flex items-center gap-2.5 mb-4">
-          <AlertTriangle className="w-5 h-5 text-[#BA5012]" aria-hidden="true" />
-          <h3 className="font-serif text-xl font-bold text-[#142030]">Error Log</h3>
-        </div>
-
         <div className="space-y-4">
           <ErrorLogFilters filters={filters} onChange={setFilters} />
 
@@ -59,7 +65,14 @@ export const ErrorLog: React.FC = () => {
       </section>
 
       {selectedId && (
-        <ErrorDetailPanel id={selectedId} onClose={() => setSelectedId(null)} onCorrelationIdClick={handleCorrelationIdClick} />
+        <ErrorDetailPanel
+          id={selectedId}
+          onClose={handleDetailClose}
+          onCorrelationIdClick={handleCorrelationIdClick}
+          onActionSuccess={() => {
+            detailChangedRef.current = true;
+          }}
+        />
       )}
     </div>
   );

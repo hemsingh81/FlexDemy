@@ -12,6 +12,7 @@ vi.mock('@/src/services/errorsService', async () => {
     archiveError: vi.fn(),
     resolveError: vi.fn(),
     increasePriority: vi.fn(),
+    deleteError: vi.fn(),
   };
 });
 
@@ -185,5 +186,64 @@ describe('ErrorDetailPanel', () => {
     await screen.findByText('boom');
 
     expect(screen.queryByText('Correlation ID')).not.toBeInTheDocument();
+  });
+
+  it('clicking Delete asks for confirmation before calling deleteError', async () => {
+    vi.mocked(errorsService.getErrorDetail).mockResolvedValue(makeDetail());
+    const user = userEvent.setup();
+    render(<ErrorDetailPanel id="err_1" onClose={vi.fn()} onCorrelationIdClick={vi.fn()} />);
+    await screen.findByText('boom');
+
+    await user.click(screen.getByRole('button', { name: /delete/i }));
+
+    expect(screen.getByText('Delete permanently?')).toBeInTheDocument();
+    expect(errorsService.deleteError).not.toHaveBeenCalled();
+  });
+
+  it('confirming Delete calls deleteError, notifies onActionSuccess, and closes the panel', async () => {
+    vi.mocked(errorsService.getErrorDetail).mockResolvedValue(makeDetail());
+    vi.mocked(errorsService.deleteError).mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    const onActionSuccess = vi.fn();
+    const user = userEvent.setup();
+    render(<ErrorDetailPanel id="err_1" onClose={onClose} onCorrelationIdClick={vi.fn()} onActionSuccess={onActionSuccess} />);
+    await screen.findByText('boom');
+
+    await user.click(screen.getByRole('button', { name: /delete/i }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(errorsService.deleteError).toHaveBeenCalledWith('err_1'));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onActionSuccess).toHaveBeenCalled();
+  });
+
+  it('cancelling the delete confirmation leaves the record intact', async () => {
+    vi.mocked(errorsService.getErrorDetail).mockResolvedValue(makeDetail());
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<ErrorDetailPanel id="err_1" onClose={onClose} onCorrelationIdClick={vi.fn()} />);
+    await screen.findByText('boom');
+
+    await user.click(screen.getByRole('button', { name: /delete/i }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('Delete permanently?')).not.toBeInTheDocument();
+    expect(errorsService.deleteError).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows an inline error and leaves the panel open when Delete fails', async () => {
+    vi.mocked(errorsService.getErrorDetail).mockResolvedValue(makeDetail());
+    vi.mocked(errorsService.deleteError).mockRejectedValue(new Error('Could not delete this error.'));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<ErrorDetailPanel id="err_1" onClose={onClose} onCorrelationIdClick={vi.fn()} />);
+    await screen.findByText('boom');
+
+    await user.click(screen.getByRole('button', { name: /delete/i }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not delete this error.');
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

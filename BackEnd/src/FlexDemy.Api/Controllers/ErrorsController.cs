@@ -57,6 +57,16 @@ public class ErrorsController(IErrorAdminService errorAdminService, ICurrentUser
         return NoContent();
     }
 
+    // Permanent hard delete -- unlike Archive/Resolve, there's no undo. The frontend confirms
+    // before calling this; [Authorize(Policy = FeatureKeys.ErrorsManage)] (class-level, Master
+    // only per AC #1) is the only backend gate, same as every other action on this controller.
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken)
+    {
+        await errorAdminService.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     // AC #5
     [HttpGet("retention-settings")]
     public async Task<ActionResult<ErrorRetentionSettingsDto>> GetRetentionSettings(CancellationToken cancellationToken)

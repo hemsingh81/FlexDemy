@@ -21,6 +21,11 @@ public interface IErrorAdminService
     // UI button (defense in depth; the frontend disabling the action is UX only).
     Task IncreasePriorityAsync(string id, string increasedByUserId, CancellationToken cancellationToken = default);
 
+    // Explicit admin-triggered hard delete -- unlike Archive/Resolve above, this permanently
+    // removes the row (IErrorRecordRepository.Remove, same hard-delete mechanism the retention
+    // purge job uses). Irreversible; the frontend is expected to confirm before calling this.
+    Task DeleteAsync(string id, CancellationToken cancellationToken = default);
+
     // AC #5: the purge job's retention window. Falls back to FR-18's stated 180-day default if
     // the settings row is somehow missing, rather than throwing.
     Task<ErrorRetentionSettingsDto> GetRetentionSettingsAsync(CancellationToken cancellationToken = default);

@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Check, Copy, Trash2 } from 'lucide-react';
 import * as errorsService from '../../../services/errorsService';
 import { SidePanel } from '../../../ui/SidePanel';
 import { Spinner } from '../../../ui/Spinner';
 import { Button } from '../../../ui/Button';
+import { ConfirmDialog } from '../../../ui/ConfirmDialog';
 import { PRIORITY_BADGE_CLASSES, STATUS_BADGE_CLASSES, humanizeEnumValue } from './errorLogConstants';
 
 interface ErrorDetailPanelProps {
@@ -12,6 +14,10 @@ interface ErrorDetailPanelProps {
   // records sharing that exact trace. Lifted up rather than owned here -- ErrorLog.tsx holds the
   // filter state (useErrorLog), so this component just reports the click.
   onCorrelationIdClick: (correlationId: string) => void;
+  // Fired once a lifecycle action (Archive/Resolve/Increase Priority) actually succeeds -- lets
+  // ErrorLog.tsx know the row this panel is showing is now stale in the list behind it, so it can
+  // refetch when the panel closes instead of leaving the admin looking at pre-action data.
+  onActionSuccess?: () => void;
 }
 
 // Story 4.6/AC #1, #2, #4. Keyed by action name so at most one action's button shows its own
@@ -25,18 +31,35 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
   </div>
 );
 
+// Deliberately NOT the same rounded-full solid-pill shape ErrorLogTable's badges use: sitting
+// right above the Archive/Resolve/Increase Priority buttons, a visually-identical pill read as
+// "another button" and was easy to mis-click. A bordered, dotted chip reads as status-only, no
+// matter how close it sits to real action buttons.
+const Tag: React.FC<{ label: string; value: string; colorClasses: string }> = ({ label, value, colorClasses }) => (
+  <div>
+    <div className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide mb-1">{label}</div>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-current/20 text-xs font-bold ${colorClasses}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" aria-hidden="true" />
+      {value}
+    </span>
+  </div>
+);
+
 // AC #4: full untruncated StackTrace, RequestPath/Route, OriginContext, occurrence timeline,
 // plus a related-entity link when RelatedEntityType/RelatedEntityId is set. [ASSUMPTION per the
 // story's own Task 10 note: the exact deep-link target per RelatedEntityType isn't specified by
 // the PRD -- rendered here as plain text with the id, not a live link, until a concrete route is
 // confirmed.] Self-contained fetch (own loading/error state) rather than requiring the parent to
 // pre-fetch, so ErrorLog.tsx only needs to pass the id of whichever row was clicked.
-export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose, onCorrelationIdClick }) => {
+export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose, onCorrelationIdClick, onActionSuccess }) => {
   const [detail, setDetail] = useState<errorsService.ErrorRecordDetailDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<LifecycleAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [stackTraceCopied, setStackTraceCopied] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Code-review patch: idRef/mountedRef guard every fetch (initial load AND the post-action
   // silent refetch below) against applying a stale result -- either because the panel was
@@ -91,7 +114,10 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
     setPendingAction(action);
     setActionError(null);
     run()
-      .then(() => fetchDetail({ silent: true }))
+      .then(() => {
+        fetchDetail({ silent: true });
+        onActionSuccess?.();
+      })
       .catch((err: unknown) => {
         if (mountedRef.current) setActionError(err instanceof Error ? err.message : 'Could not complete this action.');
       })
@@ -100,8 +126,42 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
       });
   };
 
+  // Unlike runAction's targets, a successful delete leaves nothing here to silently re-fetch --
+  // the record is gone, so this closes the panel outright (after telling ErrorLog.tsx to refetch
+  // the list behind it) instead of following runAction's in-place-refresh pattern.
+  const handleDelete = (recordId: string) => {
+    setIsDeleting(true);
+    setActionError(null);
+    errorsService
+      .deleteError(recordId)
+      .then(() => {
+        onActionSuccess?.();
+        onClose();
+      })
+      .catch((err: unknown) => {
+        if (mountedRef.current) {
+          setActionError(err instanceof Error ? err.message : 'Could not delete this error.');
+          setIsDeleting(false);
+          setIsConfirmingDelete(false);
+        }
+      });
+  };
+
+  const copyStackTrace = (stackTrace: string) => {
+    navigator.clipboard
+      .writeText(stackTrace)
+      .then(() => {
+        setStackTraceCopied(true);
+        setTimeout(() => setStackTraceCopied(false), 2000);
+      })
+      .catch(() => {
+        // Clipboard access can be denied by the browser -- not worth surfacing as a hard error
+        // over a copy convenience button; the admin can still select the text manually.
+      });
+  };
+
   return (
-    <SidePanel title="Error Detail" onClose={onClose} closeOnBackdropClick width="lg">
+    <SidePanel title="Error Detail" onClose={onClose} closeOnBackdropClick width="lg" resizable>
       {isLoading ? (
         <div className="flex items-center justify-center py-12 text-[#5E6A79]">
           <Spinner size="lg" className="mr-2" />
@@ -113,20 +173,12 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
         </p>
       ) : detail ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${PRIORITY_BADGE_CLASSES[detail.priority] ?? 'bg-slate-100 text-slate-600'}`}>
-              {detail.priority}
-            </span>
-            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${STATUS_BADGE_CLASSES[detail.status] ?? 'bg-slate-100 text-slate-600'}`}>
-              {detail.status}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
               isLoading={pendingAction === 'archive'}
-              disabled={detail.status === 'Archived' || pendingAction !== null}
+              disabled={detail.status === 'Archived' || pendingAction !== null || isConfirmingDelete || isDeleting}
               onClick={() => runAction('archive', () => errorsService.archiveError(detail.id))}
             >
               Archive
@@ -135,7 +187,7 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
               variant="secondary"
               size="sm"
               isLoading={pendingAction === 'resolve'}
-              disabled={detail.status === 'Resolved' || pendingAction !== null}
+              disabled={detail.status === 'Resolved' || pendingAction !== null || isConfirmingDelete || isDeleting}
               onClick={() => runAction('resolve', () => errorsService.resolveError(detail.id))}
             >
               Mark Resolved
@@ -144,17 +196,46 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
               variant="primary"
               size="sm"
               isLoading={pendingAction === 'increase-priority'}
-              disabled={detail.priority === 'P0' || pendingAction !== null}
+              disabled={detail.priority === 'P0' || pendingAction !== null || isConfirmingDelete || isDeleting}
               onClick={() => runAction('increase-priority', () => errorsService.increasePriority(detail.id))}
             >
               Increase Priority
             </Button>
+            {/* Visually separated (border + own spacing) from the lifecycle actions above --
+                this is the one irreversible action in the row and shouldn't blend in with
+                Archive/Resolve/Increase Priority, which are all reversible state transitions. */}
+            <div className="ml-auto pl-2 border-l border-[#E1DED4]">
+              {isConfirmingDelete ? (
+                <ConfirmDialog
+                  message="Delete permanently?"
+                  confirmLabel="Delete"
+                  variant="danger"
+                  isConfirming={isDeleting}
+                  onConfirm={() => handleDelete(detail.id)}
+                  onCancel={() => setIsConfirmingDelete(false)}
+                />
+              ) : (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<Trash2 className="w-3.5 h-3.5" />}
+                  disabled={pendingAction !== null}
+                  onClick={() => setIsConfirmingDelete(true)}
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
           </div>
           {actionError && (
             <p role="alert" className="text-xs font-semibold text-red-600">
               {actionError}
             </p>
           )}
+          <div className="grid grid-cols-2 gap-4">
+            <Tag label="Priority" value={detail.priority} colorClasses={PRIORITY_BADGE_CLASSES[detail.priority] ?? 'bg-slate-100 text-slate-600'} />
+            <Tag label="Status" value={detail.status} colorClasses={STATUS_BADGE_CLASSES[detail.status] ?? 'bg-slate-100 text-slate-600'} />
+          </div>
           <Field label="Category">{humanizeEnumValue(detail.category)}</Field>
           <Field label="Message">{detail.message}</Field>
           {detail.exceptionType && <Field label="Exception Type">{detail.exceptionType}</Field>}
@@ -187,7 +268,28 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
             </Field>
           )}
           <div>
-            <div className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide mb-1">Stack Trace</div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide">Stack Trace</div>
+              {detail.stackTrace && (
+                <button
+                  type="button"
+                  onClick={() => copyStackTrace(detail.stackTrace!)}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-[#5E6A79] hover:text-[#142030] transition-colors cursor-pointer"
+                >
+                  {stackTraceCopied ? (
+                    <>
+                      <Check className="w-3 h-3 text-green-600" aria-hidden="true" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" aria-hidden="true" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
             <pre className="whitespace-pre-wrap text-xs bg-[#F3F0E6] rounded-lg p-3 overflow-x-auto text-[#142030]">
               {detail.stackTrace ?? 'No stack trace captured.'}
             </pre>

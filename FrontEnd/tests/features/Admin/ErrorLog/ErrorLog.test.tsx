@@ -6,7 +6,7 @@ import * as errorsService from '@/src/services/errorsService';
 
 vi.mock('@/src/services/errorsService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/errorsService')>('@/src/services/errorsService');
-  return { ...actual, getErrorList: vi.fn(), getErrorDetail: vi.fn() };
+  return { ...actual, getErrorList: vi.fn(), getErrorDetail: vi.fn(), archiveError: vi.fn() };
 });
 
 const makeRow = (id: string, overrides: Partial<errorsService.ErrorRecordSummaryDto> = {}): errorsService.ErrorRecordSummaryDto => ({
@@ -89,6 +89,58 @@ describe('ErrorLog', () => {
 
     expect(await screen.findByText('at Foo.Bar()')).toBeInTheDocument();
     expect(errorsService.getErrorDetail).toHaveBeenCalledWith('err_1');
+  });
+
+  it('closing the detail panel after a successful lifecycle action refetches the list behind it', async () => {
+    vi.mocked(errorsService.getErrorList).mockResolvedValue(makePagedResult([makeRow('err_1', { status: 'New' })]));
+    vi.mocked(errorsService.getErrorDetail).mockResolvedValue({
+      ...makeRow('err_1'),
+      stackTrace: null,
+      requestPath: null,
+      originContext: null,
+      firstOccurredAt: '2026-08-14T00:00:00Z',
+      relatedEntityType: null,
+      relatedEntityId: null,
+      correlationId: null,
+      exceptionType: null,
+    });
+    vi.mocked(errorsService.archiveError).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<ErrorLog />);
+    await user.click(await screen.findByText('boom err_1'));
+    await screen.findByRole('button', { name: 'Archive' });
+
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await waitFor(() => expect(errorsService.archiveError).toHaveBeenCalledWith('err_1'));
+    expect(errorsService.getErrorList).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Close panel' }));
+
+    await waitFor(() => expect(errorsService.getErrorList).toHaveBeenCalledTimes(2));
+  });
+
+  it('closing the detail panel without taking any action does not refetch the list', async () => {
+    vi.mocked(errorsService.getErrorList).mockResolvedValue(makePagedResult([makeRow('err_1')]));
+    vi.mocked(errorsService.getErrorDetail).mockResolvedValue({
+      ...makeRow('err_1'),
+      stackTrace: null,
+      requestPath: null,
+      originContext: null,
+      firstOccurredAt: '2026-08-14T00:00:00Z',
+      relatedEntityType: null,
+      relatedEntityId: null,
+      correlationId: null,
+      exceptionType: null,
+    });
+    const user = userEvent.setup();
+    render(<ErrorLog />);
+    await user.click(await screen.findByText('boom err_1'));
+    await screen.findByRole('button', { name: 'Archive' });
+    expect(errorsService.getErrorList).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Close panel' }));
+
+    expect(errorsService.getErrorList).toHaveBeenCalledTimes(1);
   });
 
   // Code-review patch (AC #1/#3): clicking a Correlation ID must show every record sharing that

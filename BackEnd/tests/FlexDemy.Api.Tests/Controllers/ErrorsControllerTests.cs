@@ -24,7 +24,7 @@ namespace FlexDemy.Api.Tests.Controllers;
 public class ErrorsControllerTests
 {
     private static ErrorRecordSummaryDto MakeSummary(string id) => new(
-        id, ErrorCategory.SystemInfrastructureError, ErrorPriority.P2, ErrorStatus.New, "boom", ErrorSource.Backend, 1, DateTimeOffset.UtcNow);
+        id, ErrorCategory.SystemInfrastructureError.ToString(), ErrorPriority.P2.ToString(), ErrorStatus.New.ToString(), "boom", ErrorSource.Backend.ToString(), 1, DateTimeOffset.UtcNow);
 
     private static ErrorsController MakeController(IErrorAdminService errorAdminService, string? currentUserId = "admin_1")
     {
@@ -66,8 +66,8 @@ public class ErrorsControllerTests
     {
         var errorAdminService = Substitute.For<IErrorAdminService>();
         var detail = new ErrorRecordDetailDto(
-            "err_1", ErrorCategory.SystemInfrastructureError, ErrorPriority.P2, ErrorStatus.New, "boom",
-            ErrorSource.Backend, 1, DateTimeOffset.UtcNow, null, null, null, DateTimeOffset.UtcNow, null, null, null, null);
+            "err_1", ErrorCategory.SystemInfrastructureError.ToString(), ErrorPriority.P2.ToString(), ErrorStatus.New.ToString(), "boom",
+            ErrorSource.Backend.ToString(), 1, DateTimeOffset.UtcNow, null, null, null, DateTimeOffset.UtcNow, null, null, null, null);
         errorAdminService.GetByIdAsync("err_1", Arg.Any<CancellationToken>()).Returns(detail);
         var controller = MakeController(errorAdminService);
 
@@ -195,6 +195,29 @@ public class ErrorsControllerTests
         var controller = MakeController(errorAdminService);
 
         await Assert.ThrowsAsync<NotFoundException>(() => controller.IncreasePriority("missing", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Delete_calls_the_service_and_returns_204()
+    {
+        var errorAdminService = Substitute.For<IErrorAdminService>();
+        var controller = MakeController(errorAdminService);
+
+        var result = await controller.Delete("err_1", CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(result);
+        await errorAdminService.Received(1).DeleteAsync("err_1", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Delete_propagates_NotFoundException_from_the_service()
+    {
+        var errorAdminService = Substitute.For<IErrorAdminService>();
+        errorAdminService.DeleteAsync("missing", Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new NotFoundException(nameof(ErrorRecord), "missing"));
+        var controller = MakeController(errorAdminService);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => controller.Delete("missing", CancellationToken.None));
     }
 
     // AC #5

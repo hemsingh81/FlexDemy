@@ -22,7 +22,12 @@ public interface IErrorRecordRepository
     Task<IReadOnlyList<ErrorRecord>> GetPurgeCandidatesAsync(DateTimeOffset cutoffDate, CancellationToken cancellationToken = default);
 
     // AD-11: stages the removal only -- IUnitOfWork.SaveChangesAsync (called by the job) commits
-    // it. The one true hard-delete path in this feature -- deliberately bypasses the soft-delete
-    // convention every other repository in this codebase follows.
+    // it. Previously the one true hard-delete path in this feature (the retention purge job);
+    // Remove below is now a second, admin-triggered one -- see ErrorAdminService.DeleteAsync.
     void RemoveRange(IEnumerable<ErrorRecord> records);
+
+    // Single-record counterpart to RemoveRange above, for the admin's explicit "Delete" action
+    // (as opposed to the purge job's batch cleanup of aged Resolved/Archived rows). Same
+    // stage-only/commit-via-SaveChangesAsync contract.
+    void Remove(ErrorRecord record);
 }

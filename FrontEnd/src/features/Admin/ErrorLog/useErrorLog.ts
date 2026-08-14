@@ -22,6 +22,9 @@ interface UseErrorLogResult {
   setFilters: (filters: errorsService.ErrorListFilters) => void;
   page: number;
   setPage: (page: number) => void;
+  // Re-runs the current filters/page fetch in place -- e.g. after the detail side panel's
+  // Archive/Resolve/Increase Priority actions change a record this list is already showing.
+  refetch: () => void;
 }
 
 // Feature-local hook (AD-2). Story 4.5: this app's first server-side-paginated list -- unlike
@@ -32,11 +35,15 @@ interface UseErrorLogResult {
 export const useErrorLog = (): UseErrorLogResult => {
   const [filters, setFiltersState] = useState<errorsService.ErrorListFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
+  // Bumped by refetch() to force useAsync's effect to re-run even though filters/page haven't
+  // changed -- useAsync only re-fetches on a deps change, and a lifecycle action taken in the
+  // detail panel doesn't touch either of those.
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const { data: pageResult, isLoading, error } = useAsync<ErrorLogPage>(
     () => errorsService.getErrorList(filters, page, PAGE_SIZE),
     EMPTY_PAGE,
-    [filters, page],
+    [filters, page, refreshToken],
     (err) => (err instanceof Error ? err.message : 'Could not load the error log.')
   );
 
@@ -47,5 +54,7 @@ export const useErrorLog = (): UseErrorLogResult => {
     setPage(1);
   };
 
-  return { data: pageResult.items, totalCount: pageResult.totalCount, isLoading, error, filters, setFilters, page, setPage };
+  const refetch = () => setRefreshToken((token) => token + 1);
+
+  return { data: pageResult.items, totalCount: pageResult.totalCount, isLoading, error, filters, setFilters, page, setPage, refetch };
 };

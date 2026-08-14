@@ -102,4 +102,6 @@ public class ErrorRecordRepository(FlexDemyDbContext db) : IErrorRecordRepositor
             .ToListAsync(cancellationToken);
 
     public void RemoveRange(IEnumerable<ErrorRecord> records) => db.ErrorRecords.RemoveRange(records);
+
+    public void Remove(ErrorRecord record) => db.ErrorRecords.Remove(record);
 }
