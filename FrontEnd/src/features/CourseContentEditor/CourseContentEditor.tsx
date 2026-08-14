@@ -1,11 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, RotateCcw, X } from 'lucide-react';
+import { Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { useFileUpload, type FileUploadEntry, type FileUploadStatus } from './useFileUpload';
-import { useCourseContentTree, type Chapter, type NodeConfirmation } from './useCourseContentTree';
-import { ContentTree, type TreeMutators } from './ContentTreeNode';
 import { ConfirmModal } from '../../ui/ConfirmModal';
 import { PublishLifecycleBar } from './PublishLifecycleBar';
-import { ReviewAsStudentPreview } from './ReviewAsStudentPreview';
 
 interface CourseContentEditorProps {
   isOpen: boolean;
@@ -16,23 +13,17 @@ interface CourseContentEditorProps {
 const STATUS_LABEL: Record<FileUploadStatus, string> = {
   queued: 'Queued',
   parsing: 'Parsing',
-  extracting: 'Extracting',
   done: 'Done',
   failed: 'Failed',
 };
 
 // Reuses the exact badge-pill shape already used by TutorEducatorHubView.tsx's slot-status
 // pills (text-[10px] font-extrabold px-2.5 py-0.5 rounded-full) -- no new visual pattern. Navy
-// solid fill for the three in-progress states, per DESIGN.md's extraction-status-badge token
+// solid fill for in-progress states, per DESIGN.md's extraction-status-badge token
 // ("navy = in-progress... signal-green = done... error = failed. No new color language.").
-// Every state uses the raw-hex convention (matching Dev Notes' "existing-code hex, not CSS
-// variables" tradeoff) -- including `failed`, which colors.error (#DC2626) resolves to Tailwind's
-// stock red-600, so `bg-red-50 text-red-600 border-red-200` are exactly `#FEF2F2`/`#DC2626`/
-// `#FECACA` already; spelled out in hex here purely for internal consistency with the other rows.
 const STATUS_BADGE_CLASSES: Record<FileUploadStatus, string> = {
   queued: 'bg-[#143358] text-white',
   parsing: 'bg-[#143358] text-white',
-  extracting: 'bg-[#143358] text-white',
   done: 'bg-[#179765]/10 text-[#179765] border border-[#179765]/20',
   failed: 'bg-[#FEF2F2] text-[#DC2626] border border-[#DC2626]/20',
 };
@@ -48,35 +39,6 @@ const STATUS_ANNOUNCE_MAX_WAIT_MS = 2000;
 // Caps how many file-status messages join into one announcement -- an unusually large
 // simultaneous batch summarizes past this point instead of producing an unbounded string.
 const MAX_BATCHED_ANNOUNCEMENT_MESSAGES = 10;
-
-// Flattens the whole tree into { id, label, confirmation } entries -- used only to detect
-// confirmation-reset transitions for the shared aria-live announcer (see the useEffect below);
-// the tree itself stays nested for rendering (see useCourseContentTree.ts's own Dev Notes on why).
-interface FlatNodeConfirmation {
-  id: string;
-  label: string;
-  confirmation: NodeConfirmation;
-}
-
-const flattenConfirmations = (chapters: Chapter[]): FlatNodeConfirmation[] => {
-  const out: FlatNodeConfirmation[] = [];
-  chapters.forEach((chapter) => {
-    out.push({ id: chapter.id, label: chapter.title, confirmation: chapter.confirmation });
-    chapter.topics.forEach((topic) => {
-      out.push({ id: topic.id, label: topic.title, confirmation: topic.confirmation });
-      topic.contentBlocks.forEach((block, i) => {
-        out.push({ id: block.id, label: `${topic.title} content block ${i + 1}`, confirmation: block.confirmation });
-      });
-      topic.subtopics.forEach((subtopic) => {
-        out.push({ id: subtopic.id, label: subtopic.title, confirmation: subtopic.confirmation });
-        subtopic.contentBlocks.forEach((block, i) => {
-          out.push({ id: block.id, label: `${subtopic.title} content block ${i + 1}`, confirmation: block.confirmation });
-        });
-      });
-    });
-  });
-  return out;
-};
 
 interface FileRowProps {
   file: FileUploadEntry;
@@ -113,27 +75,46 @@ const FileRow: React.FC<FileRowProps> = ({ file, index, onRetry }) => (
   </div>
 );
 
+interface FileContentCardProps {
+  file: FileUploadEntry;
+  onDelete: () => void;
+}
+
+// The raw text Docling parsed from this file, shown as-is -- no AI structuring step in between.
+const FileContentCard: React.FC<FileContentCardProps> = ({ file, onDelete }) => (
+  <div className="rounded-xl border border-[#E1DED4] bg-white overflow-hidden">
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[#E1DED4] bg-[#FAF7EC]">
+      <span className="text-xs font-bold text-[#142030] truncate" title={file.name}>
+        {file.name}
+      </span>
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete ${file.name}`}
+        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors shrink-0"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+    <pre className="whitespace-pre-wrap break-words text-xs text-[#142030] p-4 max-h-96 overflow-y-auto font-sans">
+      {file.parsedContent || 'No text was extracted from this file.'}
+    </pre>
+  </div>
+);
+
 // Full-width surface (a takeover, not a SidePanel blade) per UX-DR5 -- Course Content Editor's
-// real shell going forward. This story builds only the file-upload/status-list slice of it;
-// Story 2.3 extends this same top component with the Chapter/Topic/Subtopic tree beneath the
-// file list.
+// real shell. Shows each uploaded file's raw parsed text directly, with no AI structuring step
+// in between, and a permanent delete action per file.
 export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen, onClose, draftId }) => {
-  const { data, error: fileUploadError, addFiles, retryFile, resetFiles } = useFileUpload(draftId);
+  const { data, error: fileUploadError, addFiles, retryFile, deleteFile, resetFiles } = useFileUpload(draftId);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const contentTree = useCourseContentTree(draftId);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{ id: string; name: string } | null>(null);
   // Visual feedback only while a native OS drag is over the dropzone below -- not persisted
   // anywhere, reset unconditionally on drop/leave.
   const [isDraggingFilesOver, setIsDraggingFilesOver] = useState(false);
-  // Story 3.9/Task 5: opened by PublishLifecycleBar's "Review as Student" button, the instant
-  // Task 1's move-to-review call actually succeeds server-side (see useCourseLifecycle.ts's own
-  // onReviewAsStudentReady callback) -- not on click alone, since the button is a no-op unless
-  // the course was actually Draft.
-  const [isReviewingAsStudent, setIsReviewingAsStudent] = useState(false);
 
   const [announcement, setAnnouncement] = useState('');
   const prevStatusesRef = useRef<Map<string, FileUploadStatus>>(new Map());
-  const prevConfirmationsRef = useRef<Map<string, NodeConfirmation>>(new Map());
   const pendingMessagesRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,12 +144,6 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
       if (prevStatuses.get(file.id) !== file.status) {
         changed = true;
         pendingMessagesRef.current.push(`${file.name}: ${STATUS_LABEL[file.status]}`);
-        // A file reaching 'done' means the backend has already materialized its extracted
-        // structure into real chapters (ContentTreeService.GetTreeAsync does this on every call)
-        // -- but useCourseContentTree's own tree fetch only runs on mount/courseId-change, with
-        // nothing else telling it a file it doesn't know about just finished. Without this, the
-        // newly extracted content silently never appears until the editor is closed and reopened.
-        if (file.status === 'done') contentTree.refetch();
         prevStatuses.set(file.id, file.status);
       }
     });
@@ -182,41 +157,6 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
-
-  // Same diff-previous-vs-current pattern as the file-status effect above, applied to each
-  // node's confirmation instead -- announces only the confirmed -> unconfirmed transition (an
-  // auto-revert), not every confirmation state on every render. Shares the same
-  // pendingMessagesRef/flushAnnouncement mechanism, so both kinds of announcements batch together
-  // through the one aria-live region.
-  useEffect(() => {
-    const prevConfirmations = prevConfirmationsRef.current;
-    const currentIds = new Set<string>();
-    let changed = false;
-    flattenConfirmations(contentTree.data).forEach(({ id, label, confirmation }) => {
-      currentIds.add(id);
-      if (prevConfirmations.get(id) === 'confirmed' && confirmation === 'unconfirmed') {
-        changed = true;
-        pendingMessagesRef.current.push(`${label}: confirmation reset`);
-      }
-      prevConfirmations.set(id, confirmation);
-    });
-    // Prune entries for nodes that no longer exist (deleted since the last run) -- otherwise this
-    // Map only ever grows for the life of the mounted component.
-    const staleIds: string[] = [];
-    prevConfirmations.forEach((_value, id) => {
-      if (!currentIds.has(id)) staleIds.push(id);
-    });
-    staleIds.forEach((id) => prevConfirmations.delete(id));
-
-    if (changed) {
-      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = setTimeout(flushAnnouncement, STATUS_ANNOUNCE_DEBOUNCE_MS);
-      if (!maxWaitTimerRef.current) {
-        maxWaitTimerRef.current = setTimeout(flushAnnouncement, STATUS_ANNOUNCE_MAX_WAIT_MS);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contentTree.data]);
 
   useEffect(
     () => () => {
@@ -234,12 +174,9 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
   // uploaded files. Also covers first mount (a no-op reset against already-empty state).
   useEffect(() => {
     resetFiles();
-    contentTree.resetTree();
     prevStatusesRef.current.clear();
-    prevConfirmationsRef.current.clear();
     pendingMessagesRef.current = [];
     setAnnouncement('');
-    setIsReviewingAsStudent(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 
@@ -247,12 +184,9 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
   // close, rather than waiting for the next open to catch up.
   const handleClose = () => {
     resetFiles();
-    contentTree.resetTree();
     prevStatusesRef.current.clear();
-    prevConfirmationsRef.current.clear();
     pendingMessagesRef.current = [];
     setAnnouncement('');
-    setIsReviewingAsStudent(false);
     onClose();
   };
 
@@ -264,38 +198,18 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
     if (!isOpen) return undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
       // While ConfirmModal is open, its own Escape handler owns this key -- without this guard,
-      // both handlers fire on the same keypress (they're two independent document-level
-      // listeners), cancelling the delete confirmation AND closing/resetting the whole editor at
-      // once. Same reasoning for the Review-as-Student preview (Story 3.9/Task 5): Escape exits
-      // just the preview first, not the whole editor underneath it.
-      if (event.key === 'Escape' && deleteTarget) return;
-      if (event.key === 'Escape' && isReviewingAsStudent) {
-        setIsReviewingAsStudent(false);
-        return;
-      }
+      // both handlers fire on the same keypress (two independent document-level listeners),
+      // cancelling the delete confirmation AND closing/resetting the whole editor at once.
+      if (event.key === 'Escape' && deleteFileTarget) return;
       if (event.key === 'Escape') handleClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, deleteTarget, isReviewingAsStudent]);
+  }, [isOpen, deleteFileTarget]);
 
   if (!isOpen) return null;
 
-  // Bug fix: in real browsers `input.files` is a *live* FileList tied to the input's own value --
-  // resetting `e.target.value` clears that same FileList object immediately, in the same
-  // synchronous tick, before any code below it runs. The previous version read `e.target.files`
-  // into a variable, then reset `.value`, then checked that variable's length -- by then it was
-  // already emptied, so this always hit the early return and addFiles() never ran, no matter what
-  // file was picked. jsdom's mock file input doesn't reproduce this live-clearing behavior, which
-  // is why no existing test caught it. Fix: snapshot into a real array FIRST, then reset `.value`.
-  // Bug fix: in real browsers `input.files` is a *live* FileList tied to the input's own value --
-  // resetting `e.target.value` clears that same FileList object immediately, in the same
-  // synchronous tick, before any code below it runs. The previous version read `e.target.files`
-  // into a variable, then reset `.value`, then checked that variable's length -- by then it was
-  // already emptied, so this always hit the early return and addFiles() never ran, no matter what
-  // file was picked. jsdom's mock file input doesn't reproduce this live-clearing behavior, which
-  // is why no existing test caught it. Fix: snapshot into a real array FIRST, then reset `.value`.
   // Bug fix: in real browsers `input.files` is a *live* FileList tied to the input's own value --
   // resetting `e.target.value` clears that same FileList object immediately, in the same
   // synchronous tick, before any code below it runs. The previous version read `e.target.files`
@@ -324,6 +238,8 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
     addFiles(files);
   };
 
+  const doneFiles = data.filter((file) => file.status === 'done');
+
   return (
     <div
       className="fixed inset-0 z-[55] bg-white flex flex-col"
@@ -342,23 +258,13 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
         </button>
       </div>
 
-      {/* Story 3.4/Task 2: tutor-facing publishing lifecycle surface -- mounted here, the
-          minimal integration point, without otherwise restructuring this file. Keyed by draftId:
-          this editor can stay open and mounted while draftId itself changes (switching drafts),
-          and useCourseLifecycle has no effect watching courseId to reset its own state on that
-          change -- without this key, a publish batch already in progress (or a stale terminal
-          state) for the PREVIOUS draft would keep rendering under the newly-selected draft's
-          header instead of a fresh draft/no-checklist state. */}
-      <PublishLifecycleBar key={draftId} courseId={draftId} onReviewAsStudentReady={() => setIsReviewingAsStudent(true)} />
+      <PublishLifecycleBar key={draftId} courseId={draftId} />
 
-      {/* Widened from Story 2.2's max-w-3xl (sized for a plain file list) -- the nested tree
-          added by Story 2.3 needs more horizontal room. Intentional layout change, not a
-          regression of the file list's centered look. */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 max-w-5xl w-full mx-auto">
         <div>
           <h3 className="text-sm font-bold text-[#142030]">Uploaded Files</h3>
           <p className="text-xs text-[#5E6A79] mt-0.5">
-            Upload PDF, Word, TXT, or Excel files — each is parsed and extracted independently.
+            Upload PDF, Word, TXT, or Excel files — each is parsed independently.
           </p>
         </div>
 
@@ -404,44 +310,29 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
           data-testid="file-upload-input"
         />
 
-        <div className="pt-4 border-t border-[#E1DED4]">
-          <h3 className="text-sm font-bold text-[#142030] mb-2">Course Content</h3>
-          <ContentTree
-            chapters={contentTree.data}
-            onAddChapter={contentTree.addChapter}
-            mutators={
-              {
-                addNode: contentTree.addNode,
-                editNodeTitle: contentTree.editNodeTitle,
-                editContentBlock: contentTree.editContentBlock,
-                deleteNode: contentTree.deleteNode,
-                reorderNode: contentTree.reorderNode,
-                moveNode: contentTree.moveNode,
-                confirmNode: contentTree.confirmNode,
-                requestDelete: (id, label) => setDeleteTarget({ id, label }),
-              } satisfies TreeMutators
-            }
-          />
-        </div>
+        {doneFiles.length > 0 && (
+          <div className="pt-4 border-t border-[#E1DED4] space-y-3">
+            <h3 className="text-sm font-bold text-[#142030]">Course Content</h3>
+            {doneFiles.map((file) => (
+              <FileContentCard key={file.id} file={file} onDelete={() => setDeleteFileTarget({ id: file.id, name: file.name })} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div aria-live="polite" aria-atomic="false" className="sr-only" data-testid="content-editor-announcer">
         {announcement}
       </div>
 
-      {deleteTarget && (
+      {deleteFileTarget && (
         <ConfirmModal
-          message={`Delete "${deleteTarget.label.trim() || 'this item'}" and everything inside it? This can't be undone.`}
+          message={`Delete "${deleteFileTarget.name}" and its content? This can't be undone.`}
           onConfirm={() => {
-            contentTree.deleteNode(deleteTarget.id);
-            setDeleteTarget(null);
+            deleteFile(deleteFileTarget.id);
+            setDeleteFileTarget(null);
           }}
-          onCancel={() => setDeleteTarget(null)}
+          onCancel={() => setDeleteFileTarget(null)}
         />
-      )}
-
-      {isReviewingAsStudent && draftId && (
-        <ReviewAsStudentPreview courseId={draftId} chapters={contentTree.data} onClose={() => setIsReviewingAsStudent(false)} />
       )}
     </div>
   );

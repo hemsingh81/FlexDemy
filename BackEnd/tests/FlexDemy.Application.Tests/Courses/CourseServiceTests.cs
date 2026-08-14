@@ -34,7 +34,7 @@ public class CourseServiceTests
     private sealed record Sut(
         CourseService Service,
         ICourseRepository Repository,
-        IContentTreeRepository ContentTreeRepository,
+        ICourseFileRepository CourseFileRepository,
         IUnitOfWork UnitOfWork,
         IIdGenerator IdGenerator,
         IFileStorageService FileStorage,
@@ -43,14 +43,14 @@ public class CourseServiceTests
     private static Sut MakeSut(string? currentUserId = "tutor_1")
     {
         var repository = Substitute.For<ICourseRepository>();
-        var contentTreeRepository = Substitute.For<IContentTreeRepository>();
+        var courseFileRepository = Substitute.For<ICourseFileRepository>();
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var idGenerator = Substitute.For<IIdGenerator>();
         var fileStorage = Substitute.For<IFileStorageService>();
         var currentUser = Substitute.For<ICurrentUserService>();
         currentUser.UserId.Returns(currentUserId);
-        var service = new CourseService(repository, contentTreeRepository, unitOfWork, idGenerator, fileStorage, currentUser);
-        return new Sut(service, repository, contentTreeRepository, unitOfWork, idGenerator, fileStorage, currentUser);
+        var service = new CourseService(repository, courseFileRepository, unitOfWork, idGenerator, fileStorage, currentUser);
+        return new Sut(service, repository, courseFileRepository, unitOfWork, idGenerator, fileStorage, currentUser);
     }
 
     [Fact]
@@ -702,55 +702,17 @@ public class CourseServiceTests
         await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.MarkPublishedAsync("missing"));
     }
 
-    // -- MoveToReviewAsync / ConfirmReviewAsync (Story 3.9/Task 1) ------------------------------
+    // -- MoveToReviewAsync / ConfirmReviewAsync ---------------------------------------------------
 
-    private static Chapter MakeChapter(NodeConfirmation confirmation, params Topic[] topics) => new()
+    private static CourseFile MakeCourseFile(string id, FlexDemy.Domain.Jobs.JobItemStatus status) => new()
     {
-        Id = "chapter_1",
+        Id = id,
         CourseId = "draft_1",
-        Title = "Chapter 1",
-        Confirmation = confirmation,
-        Topics = topics.ToList(),
+        FileName = $"{id}.pdf",
+        ContentType = "application/pdf",
+        StoredUrl = $"/uploads/course-files/{id}.pdf",
+        Status = status,
     };
-
-    private static Topic MakeTopic(string id, NodeConfirmation confirmation, ContentBlock[]? contentBlocks = null, Subtopic[]? subtopics = null) => new()
-    {
-        Id = id,
-        ChapterId = "chapter_1",
-        Title = $"Topic {id}",
-        Confirmation = confirmation,
-        ContentBlocks = contentBlocks?.ToList() ?? [],
-        Subtopics = subtopics?.ToList() ?? [],
-    };
-
-    private static Subtopic MakeSubtopic(string id, NodeConfirmation confirmation, ContentBlock[]? contentBlocks = null) => new()
-    {
-        Id = id,
-        TopicId = "topic_1",
-        Title = $"Subtopic {id}",
-        Confirmation = confirmation,
-        ContentBlocks = contentBlocks?.ToList() ?? [],
-    };
-
-    private static ContentBlock MakeBlock(string id, NodeConfirmation confirmation) => new()
-    {
-        Id = id,
-        TopicId = "topic_1",
-        Confirmation = confirmation,
-    };
-
-    // Every-node-confirmed fixture: one Chapter -> one Topic (with its own confirmed ContentBlock)
-    // -> one Subtopic (with its own confirmed ContentBlock) -- exercises all 4 entity types at once.
-    private static List<Chapter> MakeFullyConfirmedTree() =>
-    [
-        MakeChapter(
-            NodeConfirmation.Confirmed,
-            MakeTopic(
-                "topic_1",
-                NodeConfirmation.Confirmed,
-                contentBlocks: [MakeBlock("block_topic", NodeConfirmation.Confirmed)],
-                subtopics: [MakeSubtopic("subtopic_1", NodeConfirmation.Confirmed, [MakeBlock("block_subtopic", NodeConfirmation.Confirmed)])]))
-    ];
 
     [Fact]
     public async Task MoveToReviewAsync_throws_ValidationException_when_the_course_is_not_Draft()
@@ -782,97 +744,39 @@ public class CourseServiceTests
     }
 
     [Fact]
-    public async Task MoveToReviewAsync_throws_ValidationException_naming_the_unconfirmed_Chapter()
+    public async Task MoveToReviewAsync_throws_ValidationException_when_no_file_has_finished_parsing()
     {
         var sut = MakeSut();
         sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>())
-            .Returns([MakeChapter(NodeConfirmation.Unconfirmed)]);
+        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>())
+            .Returns([MakeCourseFile("file_1", FlexDemy.Domain.Jobs.JobItemStatus.Parsing), MakeCourseFile("file_2", FlexDemy.Domain.Jobs.JobItemStatus.Failed)]);
 
-        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
-        Assert.Contains("Chapter 1", ex.Message);
+        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
     }
 
     [Fact]
-    public async Task MoveToReviewAsync_throws_ValidationException_naming_the_unconfirmed_Topic()
+    public async Task MoveToReviewAsync_throws_ValidationException_when_no_file_has_been_uploaded_at_all()
     {
         var sut = MakeSut();
         sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>())
-            .Returns([MakeChapter(NodeConfirmation.Confirmed, MakeTopic("topic_1", NodeConfirmation.Unconfirmed))]);
+        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns([]);
 
-        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
-        Assert.Contains("Topic topic_1", ex.Message);
+        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
     }
 
     [Fact]
-    public async Task MoveToReviewAsync_throws_ValidationException_for_an_unconfirmed_ContentBlock_directly_under_a_Topic()
-    {
-        var sut = MakeSut();
-        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([
-            MakeChapter(NodeConfirmation.Confirmed,
-                MakeTopic("topic_1", NodeConfirmation.Confirmed, contentBlocks: [MakeBlock("block_1", NodeConfirmation.Unconfirmed)]))
-        ]);
-
-        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
-        Assert.Contains("content block", ex.Message);
-    }
-
-    [Fact]
-    public async Task MoveToReviewAsync_throws_ValidationException_naming_the_unconfirmed_Subtopic()
-    {
-        var sut = MakeSut();
-        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([
-            MakeChapter(NodeConfirmation.Confirmed,
-                MakeTopic("topic_1", NodeConfirmation.Confirmed, subtopics: [MakeSubtopic("subtopic_1", NodeConfirmation.Unconfirmed)]))
-        ]);
-
-        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
-        Assert.Contains("Subtopic subtopic_1", ex.Message);
-    }
-
-    [Fact]
-    public async Task MoveToReviewAsync_throws_ValidationException_for_an_unconfirmed_ContentBlock_under_a_Subtopic()
-    {
-        var sut = MakeSut();
-        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([
-            MakeChapter(NodeConfirmation.Confirmed,
-                MakeTopic("topic_1", NodeConfirmation.Confirmed,
-                    subtopics: [MakeSubtopic("subtopic_1", NodeConfirmation.Confirmed, [MakeBlock("block_1", NodeConfirmation.Unconfirmed)])]))
-        ]);
-
-        var ex = await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
-        Assert.Contains("content block", ex.Message);
-    }
-
-    [Fact]
-    public async Task MoveToReviewAsync_sets_LifecycleState_InReview_when_every_node_across_all_4_types_is_confirmed()
+    public async Task MoveToReviewAsync_sets_LifecycleState_InReview_when_at_least_one_file_has_finished_parsing()
     {
         var sut = MakeSut();
         var course = MakeDraft();
         sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeFullyConfirmedTree());
+        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>())
+            .Returns([MakeCourseFile("file_1", FlexDemy.Domain.Jobs.JobItemStatus.Parsing), MakeCourseFile("file_2", FlexDemy.Domain.Jobs.JobItemStatus.Done)]);
 
         await sut.Service.MoveToReviewAsync("draft_1");
 
         Assert.Equal(LifecycleState.InReview, course.LifecycleState);
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task MoveToReviewAsync_with_an_empty_content_tree_succeeds_vacuously()
-    {
-        var sut = MakeSut();
-        var course = MakeDraft();
-        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>()).Returns([]);
-
-        await sut.Service.MoveToReviewAsync("draft_1");
-
-        Assert.Equal(LifecycleState.InReview, course.LifecycleState);
     }
 
     [Fact]
@@ -934,8 +838,8 @@ public class CourseServiceTests
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
         // Positively proves "content untouched" (a state transition only, distinct from
         // IVersionService.RestoreVersionAsync's genuine rollback) rather than just never
-        // referencing the content-tree mock at all.
-        await sut.ContentTreeRepository.DidNotReceiveWithAnyArgs().GetTreeAsync(default!, default);
+        // referencing the course-file mock at all.
+        await sut.CourseFileRepository.DidNotReceiveWithAnyArgs().GetByCourseIdAsync(default!, default);
     }
 
     [Theory]
@@ -973,17 +877,17 @@ public class CourseServiceTests
     }
 
     // A course returned to Draft has no bypass back to Published -- MoveToReviewAsync's own
-    // precondition (LifecycleState == Draft) applies identically regardless of whether the course
-    // was ever Published before; there is no separate "re-publish" code path to special-case.
+    // precondition (LifecycleState == Draft, at least one file Done) applies identically
+    // regardless of whether the course was ever Published before; there is no separate
+    // "re-publish" code path to special-case.
     [Fact]
-    public async Task after_ReturnToDraftAsync_MoveToReviewAsync_still_requires_the_normal_all_nodes_confirmed_precondition()
+    public async Task after_ReturnToDraftAsync_MoveToReviewAsync_still_requires_the_normal_at_least_one_file_done_precondition()
     {
         var sut = MakeSut();
         var course = MakeDraft();
         course.LifecycleState = LifecycleState.Draft; // as ReturnToDraftAsync would have left it
         sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
-        sut.ContentTreeRepository.GetTreeAsync("draft_1", Arg.Any<CancellationToken>())
-            .Returns([new Chapter { Id = "chapter_1", CourseId = "draft_1", Title = "Chapter 1", Confirmation = NodeConfirmation.Unconfirmed }]);
+        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns([]);
 
         await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
     }

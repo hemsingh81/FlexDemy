@@ -23,22 +23,7 @@ public sealed class PortkeyAiGateway(HttpClient httpClient, IOptions<AiGatewayOp
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public Task<AiGatewayResponse> ExtractStructureAsync(AiGatewayRequest request, CancellationToken cancellationToken = default) =>
-        SendChatCompletionAsync(request, cancellationToken);
-
-    public Task<AiGatewayResponse> ExplainTopicAsync(AiGatewayRequest request, CancellationToken cancellationToken = default) =>
-        SendChatCompletionAsync(request, cancellationToken);
-
-    public Task<AiGatewayResponse> RewriteExplanationAsync(AiGatewayRequest request, CancellationToken cancellationToken = default) =>
-        SendChatCompletionAsync(request, cancellationToken);
-
-    public Task<AiGatewayResponse> GenerateExerciseAsync(AiGatewayRequest request, CancellationToken cancellationToken = default) =>
-        SendChatCompletionAsync(request, cancellationToken);
-
     public Task<AiGatewayResponse> DefineKeywordAsync(AiGatewayRequest request, CancellationToken cancellationToken = default) =>
-        SendChatCompletionAsync(request, cancellationToken);
-
-    public Task<AiGatewayResponse> DescribeNotationAsync(AiGatewayRequest request, CancellationToken cancellationToken = default) =>
         SendChatCompletionAsync(request, cancellationToken);
 
     public async Task<AiEmbeddingResponse> GenerateEmbeddingAsync(AiEmbeddingRequest request, CancellationToken cancellationToken = default)

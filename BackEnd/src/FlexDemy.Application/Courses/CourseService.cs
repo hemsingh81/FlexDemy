@@ -1,11 +1,12 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Domain.Courses;
+using FlexDemy.Domain.Jobs;
 
 namespace FlexDemy.Application.Courses;
 
 public class CourseService(
     ICourseRepository repository,
-    IContentTreeRepository contentTreeRepository,
+    ICourseFileRepository courseFileRepository,
     IUnitOfWork unitOfWork,
     IIdGenerator idGenerator,
     IFileStorageService fileStorage,
@@ -222,21 +223,19 @@ public class CourseService(
             throw new UnauthorizedAppException("You do not have permission to modify this course.");
     }
 
-    // Story 3.9/Task 1: real Draft -> InReview transition, replacing Story 3.4's mock hook.
-    // FR-15's confirmation scope is all 4 content-tree entity types, deliberately wider than
-    // Stories 3.5-3.8's Topic/Subtopic-only generation-target scope (see this epic's own
-    // Story 3.1 Dev Notes) -- an unconfirmed Chapter or ContentBlock must block Review exactly
-    // the same as an unconfirmed Topic or Subtopic.
+    // Real Draft -> InReview transition. The old confirmation-scoped gate (every Chapter/Topic/
+    // Subtopic/ContentBlock must be Confirmed) was removed along with the tree itself -- the
+    // simplest honest replacement is "there's real content here": at least one uploaded file has
+    // successfully parsed.
     public async Task MoveToReviewAsync(string courseId, CancellationToken cancellationToken = default)
     {
         var course = await LoadOwnedCourseAsync(courseId, cancellationToken);
         if (course.LifecycleState != LifecycleState.Draft)
             throw new ValidationException("A course can only move to review from Draft.");
 
-        var chapters = await contentTreeRepository.GetTreeAsync(courseId, cancellationToken);
-        var unconfirmedReason = FindFirstUnconfirmedNodeReason(chapters);
-        if (unconfirmedReason is not null)
-            throw new ValidationException(unconfirmedReason);
+        var files = await courseFileRepository.GetByCourseIdAsync(courseId, cancellationToken);
+        if (!files.Any(f => f.Status == JobItemStatus.Done))
+            throw new ValidationException("Upload at least one file before this course can move to review.");
 
         course.LifecycleState = LifecycleState.InReview;
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -312,40 +311,6 @@ public class CourseService(
             throw new UnauthorizedAppException("You do not have permission to modify this course.");
 
         return course;
-    }
-
-    // Walks all 4 content-tree entity types depth-first, returning a ready-to-throw message for
-    // the first Unconfirmed node found (or null if every node is Confirmed). ContentBlock has no
-    // Title field, so its message names the parent Topic/Subtopic instead.
-    private static string? FindFirstUnconfirmedNodeReason(List<Chapter> chapters)
-    {
-        foreach (var chapter in chapters)
-        {
-            if (chapter.Confirmation != NodeConfirmation.Confirmed)
-                return $"Chapter '{chapter.Title}' must be confirmed before this course can move to review.";
-
-            foreach (var topic in chapter.Topics)
-            {
-                if (topic.Confirmation != NodeConfirmation.Confirmed)
-                    return $"Topic '{topic.Title}' must be confirmed before this course can move to review.";
-
-                foreach (var block in topic.ContentBlocks)
-                    if (block.Confirmation != NodeConfirmation.Confirmed)
-                        return $"A content block under Topic '{topic.Title}' must be confirmed before this course can move to review.";
-
-                foreach (var subtopic in topic.Subtopics)
-                {
-                    if (subtopic.Confirmation != NodeConfirmation.Confirmed)
-                        return $"Subtopic '{subtopic.Title}' must be confirmed before this course can move to review.";
-
-                    foreach (var block in subtopic.ContentBlocks)
-                        if (block.Confirmation != NodeConfirmation.Confirmed)
-                            return $"A content block under Subtopic '{subtopic.Title}' must be confirmed before this course can move to review.";
-                }
-            }
-        }
-
-        return null;
     }
 
     private async Task<Course> LoadOwnedDraftAsync(string courseId, CancellationToken cancellationToken)

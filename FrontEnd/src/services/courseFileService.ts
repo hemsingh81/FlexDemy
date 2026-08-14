@@ -11,6 +11,7 @@ export interface CourseFileDto {
   sizeBytes: number;
   status: string;
   failureReason: string | null;
+  parsedContent: string | null;
 }
 
 export class CourseFileError extends Error {}
@@ -32,3 +33,12 @@ export const uploadFile = (courseId: string, file: File): Promise<CourseFileDto>
 
 export const getFiles = (courseId: string): Promise<CourseFileDto[]> =>
   call(() => request<CourseFileDto[]>(`/api/v1/courses/${encodeURIComponent(courseId)}/files`, 'GET'));
+
+export const deleteFile = (courseId: string, fileId: string): Promise<void> =>
+  call(() => request<void>(`/api/v1/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(fileId)}`, 'DELETE'));
+
+// Student-facing read: a published course's uploaded files and their raw parsed text -- no AI
+// structuring step in between. Unlike getFiles above, this isn't ownership-gated (mirrors
+// coursesService.ts's own open-read GetCourseById shape).
+export const getCourseContent = (courseId: string): Promise<CourseFileDto[]> =>
+  call(() => request<CourseFileDto[]>(`/api/v1/courses/${encodeURIComponent(courseId)}/content`, 'GET'));

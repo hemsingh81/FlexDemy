@@ -5,17 +5,7 @@ namespace FlexDemy.Application.AiGateway;
 // FlexDemy.Infrastructure.AiGateway.PortkeyAiGateway.
 public interface IAiGateway
 {
-    Task<AiGatewayResponse> ExtractStructureAsync(AiGatewayRequest request, CancellationToken cancellationToken = default);
-
-    Task<AiGatewayResponse> ExplainTopicAsync(AiGatewayRequest request, CancellationToken cancellationToken = default);
-
-    Task<AiGatewayResponse> RewriteExplanationAsync(AiGatewayRequest request, CancellationToken cancellationToken = default);
-
-    Task<AiGatewayResponse> GenerateExerciseAsync(AiGatewayRequest request, CancellationToken cancellationToken = default);
-
     Task<AiGatewayResponse> DefineKeywordAsync(AiGatewayRequest request, CancellationToken cancellationToken = default);
-
-    Task<AiGatewayResponse> DescribeNotationAsync(AiGatewayRequest request, CancellationToken cancellationToken = default);
 
     Task<AiEmbeddingResponse> GenerateEmbeddingAsync(AiEmbeddingRequest request, CancellationToken cancellationToken = default);
 }

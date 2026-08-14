@@ -3,12 +3,6 @@ import { useCourseLifecycle, type LifecycleState } from './useCourseLifecycle';
 
 interface PublishLifecycleBarProps {
   courseId: string | null;
-  // Story 3.9/Task 5: fires the instant "Review as Student" actually succeeds server-side, so
-  // CourseContentEditor.tsx can open its cross-feature preview -- this component owns the one
-  // useCourseLifecycle instance wired to that button, so it's the natural place to thread this
-  // through rather than duplicating a second lifecycle-tracking hook instance elsewhere. Optional
-  // and additive -- omitting it leaves every other consumer of this component unaffected.
-  onReviewAsStudentReady?: () => void;
 }
 
 const STAGES: { key: LifecycleState; label: string }[] = [
@@ -18,18 +12,16 @@ const STAGES: { key: LifecycleState; label: string }[] = [
   { key: 'published', label: 'Published' },
 ];
 
-// Story 3.4/Task 2+3: sticky lifecycle stage indicator + action buttons, plus (while a mock
-// publish batch is running) the publishing banner/progress bar/checklist -- all in one component,
-// mirroring mockups/key-publishing-state.html's own single sticky-header block structure.
-export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ courseId, onReviewAsStudentReady }) => {
+// Story 3.4/Task 2+3: sticky lifecycle stage indicator + action buttons. Publish is a single,
+// immediate, synchronous transition -- no per-node generation batch/checklist to show progress
+// for anymore, so this is just the stage nav plus a Version History drawer.
+export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ courseId }) => {
   const {
     state,
-    isPublishing,
-    checklist,
-    triggerReviewAsStudent,
+    triggerMoveToReview,
     triggerConfirmReview,
+    isPublishing,
     triggerPublish,
-    retryFailedNode,
     triggerReturnToDraft,
     isReturningToDraft,
     versions,
@@ -37,7 +29,7 @@ export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ course
     fetchVersions,
     triggerRestoreVersion,
     isRestoringVersion,
-  } = useCourseLifecycle(courseId, onReviewAsStudentReady);
+  } = useCourseLifecycle(courseId);
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
 
   const stageIndex = STAGES.findIndex((stage) => stage.key === state);
@@ -50,11 +42,6 @@ export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ course
     setIsVersionHistoryOpen(opening);
     if (opening) fetchVersions();
   };
-
-  const countableRows = (checklist ?? []).filter((row) => row.nodeKind !== 'chapter');
-  const doneCount = countableRows.filter((row) => row.statusKind === 'done').length;
-  const totalCount = countableRows.length;
-  const progressPct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
   return (
     <div className="border-b border-[#E1DED4] bg-white px-5 py-4">
@@ -92,18 +79,13 @@ export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ course
       </nav>
 
       <div className="flex items-center gap-2">
-        {/* Code-review patch: enabled through every pre-Published state, not just 'draft' -- the
-            backend's own EnsureViewableForGenerationAsync gate (AdaptiveLearningService.cs et al)
-            was widened to allow the owning tutor to preview repeatedly through InReview/
-            ReviewConfirmed, not just once at the instant Draft -> InReview happens. Disabled only
-            once actually Published, when a real CoursePlayer view already serves this content live. */}
         <button
           type="button"
-          onClick={triggerReviewAsStudent}
-          disabled={state === 'published'}
+          onClick={triggerMoveToReview}
+          disabled={state !== 'draft'}
           className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF7EC] text-[#143358] border border-[#E1DED4] hover:bg-[#143358] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#FAF7EC] disabled:hover:text-[#143358] transition-all cursor-pointer"
         >
-          Review as Student
+          Move to Review
         </button>
         <button
           type="button"
@@ -115,16 +97,15 @@ export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ course
         </button>
         {/* AC#2: disabled at every state other than reviewConfirmed -- a visible, disabled
             <button>, not hidden, so a tutor can see Publish exists but isn't available yet. Also
-            disabled while isPublishing: `state` itself stays 'reviewConfirmed' for the whole
-            publishing duration (it only flips to 'published' once the batch finishes), so without
-            this a double-click/re-click mid-batch would re-seed the checklist from scratch. */}
+            disabled while isPublishing, guarding against a double-click firing two concurrent
+            publish requests. */}
         <button
           type="button"
           onClick={triggerPublish}
           disabled={state !== 'reviewConfirmed' || isPublishing}
           className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#143358] text-white hover:bg-[#143358]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
         >
-          Publish
+          {isPublishing ? 'Publishing…' : 'Publish'}
         </button>
         {/* Story 3.10/Task 2: visible only once Published -- a tutor can iterate on a live course
             by returning it to Draft; the prior published state is retained as a version (Task 1,
@@ -162,8 +143,7 @@ export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ course
                 <span className="text-slate-800">
                   {new Date(version.publishedAt).toLocaleString()}
                   <span className="text-slate-500 ml-1.5">
-                    · {version.chapterCount} chapter{version.chapterCount === 1 ? '' : 's'}, {version.topicCount} topic
-                    {version.topicCount === 1 ? '' : 's'}
+                    · {version.fileCount} file{version.fileCount === 1 ? '' : 's'}
                   </span>
                 </span>
                 <button
@@ -176,85 +156,6 @@ export const PublishLifecycleBar: React.FC<PublishLifecycleBarProps> = ({ course
                 </button>
               </div>
             ))}
-        </div>
-      )}
-
-      {isPublishing && (
-        <div className="mt-3.5 space-y-3">
-          {/* AC#3: not a spinner -- a role="status" aria-live="polite" banner stating the batch
-              is running and safe to leave the tab, plus the derived "N of M" figure computed here
-              from the checklist itself, not a separate hook-supplied counter. */}
-          <div
-            role="status"
-            aria-live="polite"
-            className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#143358]/5 border border-[#143358]/10"
-          >
-            <span className="text-xs text-[#143358] font-medium">
-              Publishing — generating Drill-Down &amp; Ways content for every confirmed node
-              <span className="text-slate-500"> · safe to close this tab, it keeps running server-side</span>
-            </span>
-            <span className="text-xs font-bold text-[#143358] whitespace-nowrap">
-              {doneCount} of {totalCount} confirmed nodes generated
-            </span>
-          </div>
-
-          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <div className="h-full bg-[#179765] transition-all motion-reduce:transition-none" style={{ width: `${progressPct}%` }} />
-          </div>
-
-          {/* AC#3: node-by-node checklist, never a spinner; the whole container is its own
-              aria-live="polite" region announcing meaningful increments/terminal states -- not
-              Epic 2's debounced-batching announcer (that pattern exists there for a realistic
-              many-files-within-milliseconds flood risk this slower, one-row-per-tick mock
-              progression doesn't have). */}
-          <div aria-live="polite" className="space-y-1.5 max-h-72 overflow-y-auto">
-            {(checklist ?? []).map((row) =>
-              row.nodeKind === 'chapter' ? (
-                <p key={row.nodeId} className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 pt-1.5">
-                  {row.title}
-                </p>
-              ) : (
-                <div key={row.nodeId} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                  <span
-                    aria-hidden="true"
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                      row.statusKind === 'done'
-                        ? 'bg-[#179765] text-white'
-                        : row.statusKind === 'inProgress'
-                          ? 'bg-[#143358] text-white'
-                          : row.statusKind === 'failed'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-slate-100 text-slate-400 border border-[#E1DED4]'
-                    }`}
-                  >
-                    {row.statusKind === 'done' ? '✓' : row.statusKind === 'inProgress' ? '…' : row.statusKind === 'failed' ? '!' : '·'}
-                  </span>
-                  <span className="flex-1 text-slate-800">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500 mr-1.5">
-                      {row.nodeKind === 'topic' ? 'Topic' : 'Subtopic'}
-                    </span>
-                    {row.title}
-                  </span>
-                  <span
-                    className={`text-[11px] font-medium whitespace-nowrap ${
-                      row.statusKind === 'failed' ? 'text-red-600' : row.statusKind === 'inProgress' ? 'text-[#143358]' : 'text-slate-500'
-                    }`}
-                  >
-                    {row.statusText}
-                    {row.statusKind === 'failed' && (
-                      <button
-                        type="button"
-                        onClick={() => retryFailedNode(row.nodeId)}
-                        className="ml-2 text-[11px] font-bold text-red-600 underline cursor-pointer"
-                      >
-                        Retry
-                      </button>
-                    )}
-                  </span>
-                </div>
-              )
-            )}
-          </div>
         </div>
       )}
     </div>

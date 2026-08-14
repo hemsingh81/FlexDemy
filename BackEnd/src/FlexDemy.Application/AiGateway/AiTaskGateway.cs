@@ -34,23 +34,8 @@ public sealed class AiTaskGateway(
     // trued up to the exact real cost the moment the call finishes.
     private const int DefaultEstimatedCompletionTokens = 2000;
 
-    public Task<AiTaskResult> ExtractStructureAsync(AiTaskRequest request, CancellationToken cancellationToken = default) =>
-        DispatchAsync(AiTaskIds.ExtractStructure, request, gateway.ExtractStructureAsync, cancellationToken);
-
-    public Task<AiTaskResult> ExplainTopicAsync(AiTaskRequest request, CancellationToken cancellationToken = default) =>
-        DispatchAsync(AiTaskIds.ExplainTopic, request, gateway.ExplainTopicAsync, cancellationToken);
-
-    public Task<AiTaskResult> RewriteExplanationAsync(AiTaskRequest request, CancellationToken cancellationToken = default) =>
-        DispatchAsync(AiTaskIds.RewriteExplanation, request, gateway.RewriteExplanationAsync, cancellationToken);
-
-    public Task<AiTaskResult> GenerateExerciseAsync(AiTaskRequest request, CancellationToken cancellationToken = default) =>
-        DispatchAsync(AiTaskIds.GenerateExercise, request, gateway.GenerateExerciseAsync, cancellationToken);
-
     public Task<AiTaskResult> DefineKeywordAsync(AiTaskRequest request, CancellationToken cancellationToken = default) =>
         DispatchAsync(AiTaskIds.DefineKeyword, request, gateway.DefineKeywordAsync, cancellationToken);
-
-    public Task<AiTaskResult> DescribeNotationAsync(AiTaskRequest request, CancellationToken cancellationToken = default) =>
-        DispatchAsync(AiTaskIds.DescribeNotation, request, gateway.DescribeNotationAsync, cancellationToken);
 
     // Prices BOTH the prompt (input) and completion (output) side -- omitting the prompt entirely
     // was a review-caught gap: for a prompt-heavy task (e.g. extractStructure, fed a large chunk

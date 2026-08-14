@@ -29,7 +29,7 @@ public class AiTaskBudgetRepositoryTests
     public async Task GetAllAsync_returns_every_row()
     {
         await using var db = NewContext();
-        db.AiTaskBudgets.AddRange(MakeBudget(AiTaskIds.ExplainTopic), MakeBudget(AiTaskIds.DefineKeyword));
+        db.AiTaskBudgets.AddRange(MakeBudget(AiTaskIds.DefineKeyword), MakeBudget(AiTaskIds.Embeddings));
         await db.SaveChangesAsync();
         var repository = new AiTaskBudgetRepository(db);
 
@@ -42,11 +42,11 @@ public class AiTaskBudgetRepositoryTests
     public async Task GetByTaskIdAsync_returns_the_matching_row()
     {
         await using var db = NewContext();
-        db.AiTaskBudgets.Add(MakeBudget(AiTaskIds.ExplainTopic, spent: 12.5m));
+        db.AiTaskBudgets.Add(MakeBudget(AiTaskIds.DefineKeyword, spent: 12.5m));
         await db.SaveChangesAsync();
         var repository = new AiTaskBudgetRepository(db);
 
-        var found = await repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic);
+        var found = await repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword);
 
         Assert.NotNull(found);
         Assert.Equal(12.5m, found!.Spent);

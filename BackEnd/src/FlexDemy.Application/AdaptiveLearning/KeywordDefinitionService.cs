@@ -48,7 +48,7 @@ public class KeywordDefinitionService(
         {
             var result = await aiTaskGateway.DefineKeywordAsync(new AiTaskRequest(messages, CourseId: courseId, TutorId: tutorId), cancellationToken);
 
-            if (!AdaptiveLearningResponseParser.TryParseKeywordDefinition(result.Content, out var definition, out var parseError))
+            if (!KeywordDefinitionResponseParser.TryParseKeywordDefinition(result.Content, out var definition, out var parseError))
                 throw new AiResponseValidationException($"Keyword definition generation produced an unusable response: {parseError}");
 
             generatedText = definition!;

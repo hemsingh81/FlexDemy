@@ -17,10 +17,6 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<CourseThumbnail> CourseThumbnails => Set<CourseThumbnail>();
     public DbSet<CourseFile> CourseFiles => Set<CourseFile>();
-    public DbSet<Chapter> Chapters => Set<Chapter>();
-    public DbSet<Topic> Topics => Set<Topic>();
-    public DbSet<Subtopic> Subtopics => Set<Subtopic>();
-    public DbSet<ContentBlock> ContentBlocks => Set<ContentBlock>();
     public DbSet<User> Users => Set<User>();
 
     public DbSet<Country> Countries => Set<Country>();
@@ -42,12 +38,7 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
 
     public DbSet<Tag> Tags => Set<Tag>();
 
-    public DbSet<DrilldownLevel> DrilldownLevels => Set<DrilldownLevel>();
-    public DbSet<WayContent> WayContents => Set<WayContent>();
-    public DbSet<Exercise> Exercises => Set<Exercise>();
     public DbSet<KeywordDefinition> KeywordDefinitions => Set<KeywordDefinition>();
-    public DbSet<PublishBatch> PublishBatches => Set<PublishBatch>();
-    public DbSet<PublishBatchItem> PublishBatchItems => Set<PublishBatchItem>();
     public DbSet<CourseVersion> CourseVersions => Set<CourseVersion>();
 
     public DbSet<ErrorRecord> ErrorRecords => Set<ErrorRecord>();

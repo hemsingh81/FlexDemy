@@ -3,7 +3,6 @@ import confetti from 'canvas-confetti';
 import { Course } from '../../types';
 import { ReaderCanvas } from './ReaderCanvas';
 import { PlaybackControls } from './PlaybackControls';
-import { DrilldownPanel } from './DrilldownPanel';
 import { ScratchpadPanel } from './ScratchpadPanel';
 import { FocusSessionTimer } from './FocusSessionTimer';
 import { FlashcardsModal } from './FlashcardsModal';
@@ -16,7 +15,7 @@ import { ExportSummaryModal } from './ExportSummaryModal';
 import { useLessonNavigation } from './useLessonNavigation';
 import { useNarrationPlayback } from './useNarrationPlayback';
 import { useLessonSummaryExport } from './useLessonSummaryExport';
-import { useContentTreeNavigation } from './useContentTreeNavigation';
+import { useCourseFileNavigation } from './useCourseFileNavigation';
 
 interface CoursePlayerProps {
   course: Course;
@@ -63,15 +62,10 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   const { generateLessonSummaryMarkdown, handleDownloadMarkdown, handleCopyMarkdown, isCopied } =
     useLessonSummaryExport(course, currentLesson, sentences);
 
-  const { contentChapters, selectedNodeId, setSelectedNodeId, selectedContentNode } =
-    useContentTreeNavigation();
+  const { files, selectedFileId, setSelectedFileId, selectedFile } = useCourseFileNavigation(course.id);
 
   // Export Summary modal state
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
-
-  // Active Drilldown Drawer -- a real content-tree node id (Story 1's stable hook interface),
-  // not a legacy topicKey.
-  const [activeDrillTopic, setActiveDrillTopic] = useState<string | null>(null);
 
   // Scratchpad Side-Panel state
   const [isScratchpadOpen, setIsScratchpadOpen] = useState<boolean>(false);
@@ -128,22 +122,18 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
             goToLesson(lessonId);
             setIsPlaying(false);
           }}
-          contentChapters={contentChapters}
-          selectedNodeId={selectedNodeId}
-          onSelectNode={setSelectedNodeId}
+          files={files}
+          selectedFileId={selectedFileId}
+          onSelectFile={setSelectedFileId}
         />
 
         {/* Central Reader Canvas */}
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-8 bg-slate-50">
 
-          {selectedContentNode ? (
-            // Story 3.9/Task 5: extracted to ContentNodeReadingPane.tsx so CourseContentEditor's
-            // Review-as-Student preview reuses this exact rendering instead of duplicating it.
-            // Keyed by node id -- without a key, navigating between two nodes both carrying an
-            // exercise/keyword state would otherwise reuse the same ExerciseRunner/keyword-state
-            // instance, letting stale per-node local state (a typed answer, an open popover)
-            // survive the switch.
-            <ContentNodeReadingPane key={selectedContentNode.id} courseId={course.id} node={selectedContentNode} onOpenDrilldown={setActiveDrillTopic} />
+          {selectedFile ? (
+            // Keyed by file id so switching between two files never shows stale content from the
+            // previous selection mid-render.
+            <ContentNodeReadingPane key={selectedFile.id} file={selectedFile} />
           ) : (
           <div className="w-full max-w-4xl mx-auto">
             <ReaderCanvas
@@ -165,22 +155,6 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
           )}
 
         </main>
-
-        {/* Slide-over Drilldown Drawer -- activeDrillTopic is now a real content-tree node id
-            (Story 3.1's stable hook interface), not a legacy topicKey. Keyed by nodeId: the panel
-            is a non-blocking slide-over (no backdrop), so the sidebar stays clickable behind it and
-            activeDrillTopic can change directly from one node id to another without unmounting --
-            the key forces a fresh instance per node so DrilldownPanel's own local state
-            (selectedLevelNum/expandedSolutions/customExamples) never leaks across nodes. */}
-        {activeDrillTopic && (
-          <DrilldownPanel
-            key={activeDrillTopic}
-            courseId={course.id}
-            nodeId={activeDrillTopic}
-            onClose={() => setActiveDrillTopic(null)}
-            onReturnToLesson={() => setActiveDrillTopic(null)}
-          />
-        )}
 
         {/* Side-Panel Scratchpad Drawer */}
         <ScratchpadPanel

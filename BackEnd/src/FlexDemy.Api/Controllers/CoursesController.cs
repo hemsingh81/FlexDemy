@@ -10,7 +10,11 @@ namespace FlexDemy.Api.Controllers;
 // AD-5: thin controller -- HTTP <-> DTO mapping and one Application service call, nothing else.
 [ApiController]
 [Route("api/v1/courses")]
-public class CoursesController(ICourseService courseService, IPublishService publishService, IVersionService versionService) : ControllerBase
+public class CoursesController(
+    ICourseService courseService,
+    IPublishService publishService,
+    IVersionService versionService,
+    ICourseFileService courseFileService) : ControllerBase
 {
     // Code-review patch: the public catalog previously had no paging at all -- page/pageSize are
     // ordinary optional [FromQuery] parameters (ASP.NET Core model binding applies the C# default
@@ -35,6 +39,16 @@ public class CoursesController(ICourseService courseService, IPublishService pub
     {
         var course = await courseService.GetCourseByIdAsync(id, cancellationToken);
         return Ok(course);
+    }
+
+    // Student-facing read of this course's uploaded files and their raw parsed text -- no AI
+    // structuring step in between, replacing the old Chapter/Topic/Subtopic tree. Same open-read
+    // shape as GetCourseById above: no [Authorize] attribute.
+    [HttpGet("{id}/content")]
+    public async Task<ActionResult<IReadOnlyList<CourseFileDto>>> GetCourseContent(string id, CancellationToken cancellationToken)
+    {
+        var files = await courseFileService.GetPublishedFilesAsync(id, cancellationToken);
+        return Ok(files);
     }
 
     // Policy-based auth (plan §3, Phase 4 proof point): backed by the FeatureKeys.CoursesCreate
@@ -178,10 +192,9 @@ public class CoursesController(ICourseService courseService, IPublishService pub
         return NoContent();
     }
 
-    // No [Authorize(Policy = ...)] attribute -- same student-facing-read auth-shape decision this
-    // epic's AdaptiveLearningController/ExerciseController/KeywordDefinitionController each make
-    // (Stories 3.5-3.7); a tutor watching their own course's publish progress reads through the
-    // same open endpoint.
+    // No [Authorize(Policy = ...)] attribute -- same student-facing-read auth-shape decision
+    // KeywordDefinitionController makes; a tutor watching their own course's lifecycle state
+    // reads through the same open endpoint.
     [HttpGet("{id}/publish-status")]
     public async Task<ActionResult<PublishStatusDto>> GetPublishStatus(string id, CancellationToken cancellationToken)
     {

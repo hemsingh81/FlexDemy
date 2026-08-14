@@ -19,12 +19,9 @@ public class CourseFileConfiguration : IEntityTypeConfiguration<CourseFile>
         builder.Property(f => f.StoredUrl).HasMaxLength(1024).IsRequired();
         builder.Property(f => f.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(f => f.FailureReason).HasMaxLength(1024);
-        // Story 2.7: deliberately unbounded (no HasMaxLength) -- a parsed document's text has no
-        // natural cap, unlike every other CourseFile column. Maps to Postgres `text`, not
-        // `character varying(n)`.
+        // Deliberately unbounded (no HasMaxLength) -- a parsed document's text has no natural cap,
+        // unlike every other CourseFile column. Maps to Postgres `text`, not `character varying(n)`.
         builder.Property(f => f.ParsedContent);
-        // Story 2.8: same reasoning -- a staged JSON structure proposal has no natural cap either.
-        builder.Property(f => f.ExtractedStructureJson);
 
         builder.HasIndex(f => f.CourseId);
 

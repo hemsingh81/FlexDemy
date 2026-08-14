@@ -85,12 +85,12 @@ public class PortkeyAiGatewayTests
         MaxTokens: 500);
 
     [Fact]
-    public async Task ExplainTopicAsync_sends_portkey_provider_and_bearer_auth_headers()
+    public async Task DefineKeywordAsync_sends_portkey_provider_and_bearer_auth_headers()
     {
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler);
 
-        await sut.ExplainTopicAsync(ChatRequest());
+        await sut.DefineKeywordAsync(ChatRequest());
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal("groq", handler.LastRequest!.Headers.GetValues("x-portkey-provider").Single());
@@ -99,12 +99,12 @@ public class PortkeyAiGatewayTests
     }
 
     [Fact]
-    public async Task ExplainTopicAsync_sends_correctly_shaped_openai_compatible_body()
+    public async Task DefineKeywordAsync_sends_correctly_shaped_openai_compatible_body()
     {
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler);
 
-        await sut.ExplainTopicAsync(ChatRequest());
+        await sut.DefineKeywordAsync(ChatRequest());
 
         Assert.NotNull(handler.LastRequestBody);
         using var doc = JsonDocument.Parse(handler.LastRequestBody!);
@@ -119,12 +119,12 @@ public class PortkeyAiGatewayTests
     }
 
     [Fact]
-    public async Task ExplainTopicAsync_maps_a_successful_response_to_AiGatewayResponse()
+    public async Task DefineKeywordAsync_maps_a_successful_response_to_AiGatewayResponse()
     {
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler);
 
-        var result = await sut.ExplainTopicAsync(ChatRequest());
+        var result = await sut.DefineKeywordAsync(ChatRequest());
 
         Assert.Equal("Generated text", result.Content);
         Assert.Equal("groq", result.Provider);
@@ -134,30 +134,13 @@ public class PortkeyAiGatewayTests
         Assert.Equal(15, result.Usage.TotalTokens);
     }
 
-    [Theory]
-    [InlineData(nameof(PortkeyAiGateway.ExtractStructureAsync))]
-    [InlineData(nameof(PortkeyAiGateway.ExplainTopicAsync))]
-    [InlineData(nameof(PortkeyAiGateway.RewriteExplanationAsync))]
-    [InlineData(nameof(PortkeyAiGateway.GenerateExerciseAsync))]
-    [InlineData(nameof(PortkeyAiGateway.DefineKeywordAsync))]
-    [InlineData(nameof(PortkeyAiGateway.DescribeNotationAsync))]
-    public async Task every_chat_style_method_posts_to_chat_completions(string methodName)
+    [Fact]
+    public async Task DefineKeywordAsync_posts_to_chat_completions()
     {
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler);
 
-        Task<AiGatewayResponse> Invoke() => methodName switch
-        {
-            nameof(PortkeyAiGateway.ExtractStructureAsync) => sut.ExtractStructureAsync(ChatRequest()),
-            nameof(PortkeyAiGateway.ExplainTopicAsync) => sut.ExplainTopicAsync(ChatRequest()),
-            nameof(PortkeyAiGateway.RewriteExplanationAsync) => sut.RewriteExplanationAsync(ChatRequest()),
-            nameof(PortkeyAiGateway.GenerateExerciseAsync) => sut.GenerateExerciseAsync(ChatRequest()),
-            nameof(PortkeyAiGateway.DefineKeywordAsync) => sut.DefineKeywordAsync(ChatRequest()),
-            nameof(PortkeyAiGateway.DescribeNotationAsync) => sut.DescribeNotationAsync(ChatRequest()),
-            _ => throw new InvalidOperationException(),
-        };
-
-        await Invoke();
+        await sut.DefineKeywordAsync(ChatRequest());
 
         Assert.Equal("/v1/chat/completions", handler.LastRequest!.RequestUri!.AbsolutePath);
     }
@@ -168,7 +151,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.InternalServerError, "{\"error\":\"upstream failure\"}");
         var sut = CreateSut(handler);
 
-        await Assert.ThrowsAsync<AiGatewayException>(() => sut.ExplainTopicAsync(ChatRequest()));
+        await Assert.ThrowsAsync<AiGatewayException>(() => sut.DefineKeywordAsync(ChatRequest()));
     }
 
     [Fact]
@@ -177,7 +160,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(new HttpRequestException("connection refused"));
         var sut = CreateSut(handler);
 
-        await Assert.ThrowsAsync<AiGatewayException>(() => sut.ExplainTopicAsync(ChatRequest()));
+        await Assert.ThrowsAsync<AiGatewayException>(() => sut.DefineKeywordAsync(ChatRequest()));
     }
 
     [Fact]
@@ -186,7 +169,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler, providerApiKeys: new Dictionary<string, string>());
 
-        await Assert.ThrowsAsync<AiGatewayException>(() => sut.ExplainTopicAsync(ChatRequest()));
+        await Assert.ThrowsAsync<AiGatewayException>(() => sut.DefineKeywordAsync(ChatRequest()));
         Assert.Null(handler.LastRequest);
     }
 
@@ -214,7 +197,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, "{not valid json");
         var sut = CreateSut(handler);
 
-        await Assert.ThrowsAsync<AiGatewayException>(() => sut.ExplainTopicAsync(ChatRequest()));
+        await Assert.ThrowsAsync<AiGatewayException>(() => sut.DefineKeywordAsync(ChatRequest()));
     }
 
     [Fact]
@@ -223,7 +206,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{ "choices": [{ "message": { "content": "hi" } }] }""");
         var sut = CreateSut(handler);
 
-        var result = await sut.ExplainTopicAsync(ChatRequest());
+        var result = await sut.DefineKeywordAsync(ChatRequest());
 
         Assert.Equal("hi", result.Content);
         Assert.Equal(0, result.Usage.TotalTokens);
@@ -237,7 +220,7 @@ public class PortkeyAiGatewayTests
             """{ "usage": { "prompt_tokens": 1, "completion_tokens": 0, "total_tokens": 1 } }""");
         var sut = CreateSut(handler);
 
-        var result = await sut.ExplainTopicAsync(ChatRequest());
+        var result = await sut.DefineKeywordAsync(ChatRequest());
 
         Assert.Equal(string.Empty, result.Content);
     }
@@ -260,7 +243,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.InternalServerError, sensitiveBody);
         var sut = CreateSut(handler);
 
-        var ex = await Assert.ThrowsAsync<AiGatewayException>(() => sut.ExplainTopicAsync(ChatRequest()));
+        var ex = await Assert.ThrowsAsync<AiGatewayException>(() => sut.DefineKeywordAsync(ChatRequest()));
 
         Assert.DoesNotContain("secret-token-abc123", ex.Message);
         Assert.Contains("500", ex.Message);
@@ -275,7 +258,7 @@ public class PortkeyAiGatewayTests
         aiGatewayOptions.ProviderApiKeys["groq"] = "test-groq-key";
         var sut = new PortkeyAiGateway(client, Options.Create(aiGatewayOptions), NullLogger<PortkeyAiGateway>.Instance);
 
-        await sut.ExplainTopicAsync(ChatRequest() with { Provider = "GROQ" });
+        await sut.DefineKeywordAsync(ChatRequest() with { Provider = "GROQ" });
 
         Assert.NotNull(handler.LastRequest);
         // Bug found live against a real Portkey gateway (2026-08-14): the x-portkey-provider
@@ -296,7 +279,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler);
 
-        await Assert.ThrowsAsync<AiGatewayException>(() => sut.ExplainTopicAsync(ChatRequest() with { Provider = provider! }));
+        await Assert.ThrowsAsync<AiGatewayException>(() => sut.DefineKeywordAsync(ChatRequest() with { Provider = provider! }));
         Assert.Null(handler.LastRequest);
     }
 
@@ -306,7 +289,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler);
 
-        await Assert.ThrowsAsync<AiGatewayException>(() => sut.ExplainTopicAsync(ChatRequest() with { Messages = [] }));
+        await Assert.ThrowsAsync<AiGatewayException>(() => sut.DefineKeywordAsync(ChatRequest() with { Messages = [] }));
         Assert.Null(handler.LastRequest);
     }
 
@@ -316,7 +299,7 @@ public class PortkeyAiGatewayTests
         var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, SuccessfulChatResponse);
         var sut = CreateSut(handler);
 
-        await sut.ExplainTopicAsync(ChatRequest() with { Temperature = null, MaxTokens = null });
+        await sut.DefineKeywordAsync(ChatRequest() with { Temperature = null, MaxTokens = null });
 
         using var doc = JsonDocument.Parse(handler.LastRequestBody!);
         Assert.False(doc.RootElement.TryGetProperty("temperature", out _));

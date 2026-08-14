@@ -14,7 +14,7 @@ public class AiUsageServiceTests
 {
     private static AiTaskConfigDto MakeConfig(
         decimal priceIn = 2m, decimal priceOut = 4m, decimal fallbackPriceIn = 10m, decimal fallbackPriceOut = 20m) => new(
-        AiTaskIds.ExplainTopic, "Groq", "llama-4-maverick", "OpenRouter", "claude-4-haiku", 80m, CurrentSpend: 0m,
+        AiTaskIds.DefineKeyword, "Groq", "llama-4-maverick", "OpenRouter", "claude-4-haiku", 80m, CurrentSpend: 0m,
         PricePerMillionInputTokens: priceIn, PricePerMillionOutputTokens: priceOut,
         FallbackPricePerMillionInputTokens: fallbackPriceIn, FallbackPricePerMillionOutputTokens: fallbackPriceOut);
 
@@ -40,13 +40,13 @@ public class AiUsageServiceTests
     {
         var repository = Substitute.For<IAiTaskUsageRepository>();
         var configService = Substitute.For<IAiConfigService>();
-        configService.GetTaskConfigAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns(MakeConfig(priceIn: 2m, priceOut: 4m));
+        configService.GetTaskConfigAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns(MakeConfig(priceIn: 2m, priceOut: 4m));
         var sut = CreateSut(repository, configService);
 
         // 1,000,000 prompt tokens * $2/M = $2.00; 500,000 completion tokens * $4/M = $2.00 -> $4.00 total.
-        var returnedCost = await sut.RecordUsageAsync(AiTaskIds.ExplainTopic, "Groq", "llama-4-maverick", new AiGatewayUsage(1_000_000, 500_000, 1_500_000), isFallbackServed: false, courseId: null, tutorId: null);
+        var returnedCost = await sut.RecordUsageAsync(AiTaskIds.DefineKeyword, "Groq", "llama-4-maverick", new AiGatewayUsage(1_000_000, 500_000, 1_500_000), isFallbackServed: false, courseId: null, tutorId: null);
 
-        repository.Received(1).Add(Arg.Is<AiTaskUsage>(u => u.Cost == 4.0m && u.TaskId == AiTaskIds.ExplainTopic));
+        repository.Received(1).Add(Arg.Is<AiTaskUsage>(u => u.Cost == 4.0m && u.TaskId == AiTaskIds.DefineKeyword));
         // Story 1.8: the caller (AiTaskGateway) settles its budget reservation using this return
         // value -- it must match the exact cost that was actually persisted, not just be non-zero.
         Assert.Equal(4.0m, returnedCost);
@@ -59,12 +59,12 @@ public class AiUsageServiceTests
         var configService = Substitute.For<IAiConfigService>();
         // Primary is priced at $2/$4 per million; fallback at $10/$20 per million -- a
         // fallback-served call must use the fallback rate, not silently reuse the primary's.
-        configService.GetTaskConfigAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>())
+        configService.GetTaskConfigAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>())
             .Returns(MakeConfig(priceIn: 2m, priceOut: 4m, fallbackPriceIn: 10m, fallbackPriceOut: 20m));
         var sut = CreateSut(repository, configService);
 
         // 1,000,000 prompt tokens * $10/M = $10.00; 500,000 completion tokens * $20/M = $10.00 -> $20.00 total.
-        await sut.RecordUsageAsync(AiTaskIds.ExplainTopic, "OpenRouter", "claude-4-haiku", new AiGatewayUsage(1_000_000, 500_000, 1_500_000), isFallbackServed: true, courseId: null, tutorId: null);
+        await sut.RecordUsageAsync(AiTaskIds.DefineKeyword, "OpenRouter", "claude-4-haiku", new AiGatewayUsage(1_000_000, 500_000, 1_500_000), isFallbackServed: true, courseId: null, tutorId: null);
 
         repository.Received(1).Add(Arg.Is<AiTaskUsage>(u => u.Cost == 20.0m));
     }
@@ -75,7 +75,7 @@ public class AiUsageServiceTests
         var repository = Substitute.For<IAiTaskUsageRepository>();
         var sut = CreateSut(repository);
 
-        await sut.RecordUsageAsync(AiTaskIds.ExplainTopic, "OpenRouter", "claude-4-haiku", new AiGatewayUsage(10, 5, 15), isFallbackServed: true, courseId: "course_1", tutorId: "tutor_1");
+        await sut.RecordUsageAsync(AiTaskIds.DefineKeyword, "OpenRouter", "claude-4-haiku", new AiGatewayUsage(10, 5, 15), isFallbackServed: true, courseId: "course_1", tutorId: "tutor_1");
 
         repository.Received(1).Add(Arg.Is<AiTaskUsage>(u =>
             u.Id == "usage_1" &&
@@ -95,7 +95,7 @@ public class AiUsageServiceTests
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var sut = CreateSut(unitOfWork: unitOfWork);
 
-        await sut.RecordUsageAsync(AiTaskIds.ExplainTopic, "Groq", "llama-4-maverick", new AiGatewayUsage(1, 1, 2), isFallbackServed: false, courseId: null, tutorId: null);
+        await sut.RecordUsageAsync(AiTaskIds.DefineKeyword, "Groq", "llama-4-maverick", new AiGatewayUsage(1, 1, 2), isFallbackServed: false, courseId: null, tutorId: null);
 
         await unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
@@ -159,14 +159,14 @@ public class AiUsageServiceTests
         var createdAt = new DateTimeOffset(2026, 8, 11, 10, 0, 0, TimeSpan.Zero);
         repository.GetSinceAsync(Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>()).Returns(
         [
-            new AiTaskUsage { Id = "u1", TaskId = AiTaskIds.ExplainTopic, Provider = "Groq", Model = "llama-4-maverick", Cost = 1.5m, IsFallbackServed = true, CreatedAt = createdAt },
+            new AiTaskUsage { Id = "u1", TaskId = AiTaskIds.DefineKeyword, Provider = "Groq", Model = "llama-4-maverick", Cost = 1.5m, IsFallbackServed = true, CreatedAt = createdAt },
         ]);
         var sut = CreateSut(repository);
 
         var result = await sut.GetUsageAsync("all");
 
         var entry = Assert.Single(result);
-        Assert.Equal(AiTaskIds.ExplainTopic, entry.TaskId);
+        Assert.Equal(AiTaskIds.DefineKeyword, entry.TaskId);
         Assert.Equal(new DateOnly(2026, 8, 11), entry.Date);
         Assert.Equal(1.5m, entry.Cost);
         Assert.True(entry.IsFallbackServed);

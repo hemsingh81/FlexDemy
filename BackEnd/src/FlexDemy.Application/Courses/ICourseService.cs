@@ -46,12 +46,9 @@ public interface ICourseService
     // isn't its owner (same "don't leak existence to a non-owner" shape as GetCourseByIdAsync).
     Task EnsureOwnedAsync(string courseId, CancellationToken cancellationToken = default);
 
-    // Story 3.9/Task 1: the real Draft -> InReview -> ReviewConfirmed transitions Story 3.4's mock
-    // hook simulated. MoveToReviewAsync requires LifecycleState == Draft and every node in the
-    // content tree (all 4 entity types -- Chapter/Topic/Subtopic/ContentBlock, per FR-15's
-    // broader confirmation scope, deliberately wider than Stories 3.5-3.8's Topic/Subtopic-only
-    // generation-target scope) Confirmed; throws ValidationException naming the first unconfirmed
-    // node found. ConfirmReviewAsync requires LifecycleState == InReview.
+    // The real Draft -> InReview -> ReviewConfirmed transitions. MoveToReviewAsync requires
+    // LifecycleState == Draft and at least one uploaded file successfully parsed (Status == Done);
+    // throws ValidationException otherwise. ConfirmReviewAsync requires LifecycleState == InReview.
     Task MoveToReviewAsync(string courseId, CancellationToken cancellationToken = default);
     Task ConfirmReviewAsync(string courseId, CancellationToken cancellationToken = default);
 
@@ -68,15 +65,8 @@ public interface ICourseService
     // of its own: a restore from Draft, InReview, ReviewConfirmed, or Published all land in Draft.
     Task MarkDraftAsync(string courseId, CancellationToken cancellationToken = default);
 
-    // Story 3.8/Task 3: called only from PublishNodeContentJob's own batch-completion finalize
-    // step (a system/Hangfire caller, not an end-user HTTP request) -- no ownership/precondition
-    // check, mirroring GetOwningTutorIdAsync's own "the job itself is the trusted caller" shape.
-    // The tutor-facing ReviewConfirmed -> Publishing trigger lives on IPublishService instead
-    // (Application/AdaptiveLearning) -- AD-12: that trigger's own orchestration needs to write
-    // PublishBatch/PublishBatchItem rows (native AdaptiveLearning-feature writes), so it can't
-    // live on ICourseService without ICourseService reaching into another feature's repository.
-    // This method only performs the terminal Publishing -> Published flip once the batch has
-    // actually finished -- the one piece that genuinely must live here, since only Courses' own
-    // service may mutate a Course entity.
+    // Called only from IPublishService.PublishAsync (Application/AdaptiveLearning) -- AD-12: the
+    // tutor-facing ReviewConfirmed -> Published trigger lives there, but only Courses' own service
+    // may mutate a Course entity, so the terminal flip itself lives here.
     Task MarkPublishedAsync(string courseId, CancellationToken cancellationToken = default);
 }

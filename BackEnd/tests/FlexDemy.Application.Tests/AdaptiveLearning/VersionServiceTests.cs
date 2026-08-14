@@ -9,15 +9,14 @@ using Xunit;
 
 namespace FlexDemy.Application.Tests.AdaptiveLearning;
 
-// Story 3.8/Task 4: CreateSnapshotAsync walks the confirmed content tree and every
-// DrilldownLevel/WayContent row via plain repository reads (not GetOrGenerate*Async -- a snapshot
-// must never trigger fresh generation), then serializes the whole thing into one CourseVersion row.
+// A snapshot now archives each of the course's uploaded files' raw parsed text (id/fileName/
+// ParsedContent), not the Chapter/Topic/Subtopic tree -- see VersionService.cs's own header
+// comment for why.
 public class VersionServiceTests
 {
     private sealed record Sut(
         VersionService Service,
-        IContentTreeRepository ContentTreeRepository,
-        IAdaptiveLearningRepository AdaptiveLearningRepository,
+        ICourseFileRepository CourseFileRepository,
         IVersionRepository Repository,
         ICourseService CourseService,
         IIdGenerator IdGenerator,
@@ -25,8 +24,7 @@ public class VersionServiceTests
 
     private static Sut MakeSut()
     {
-        var contentTreeRepository = Substitute.For<IContentTreeRepository>();
-        var adaptiveLearningRepository = Substitute.For<IAdaptiveLearningRepository>();
+        var courseFileRepository = Substitute.For<ICourseFileRepository>();
         var repository = Substitute.For<IVersionRepository>();
         var courseService = Substitute.For<ICourseService>();
         var idGenerator = Substitute.For<IIdGenerator>();
@@ -38,38 +36,27 @@ public class VersionServiceTests
         unitOfWork.ExecuteInTransactionAsync(Arg.Any<Func<Task>>(), Arg.Any<CancellationToken>())
             .Returns(async callInfo => await callInfo.Arg<Func<Task>>()());
 
-        var service = new VersionService(contentTreeRepository, adaptiveLearningRepository, repository, courseService, idGenerator, unitOfWork);
-        return new Sut(service, contentTreeRepository, adaptiveLearningRepository, repository, courseService, idGenerator, unitOfWork);
+        var service = new VersionService(courseFileRepository, repository, courseService, idGenerator, unitOfWork);
+        return new Sut(service, courseFileRepository, repository, courseService, idGenerator, unitOfWork);
     }
 
-    private static Chapter MakeChapter(params Topic[] topics) => new()
+    private static CourseFile MakeCourseFile(string id, string? parsedContent) => new()
     {
-        Id = "chapter_1",
+        Id = id,
         CourseId = "course_1",
-        Title = "Chapter 1",
-        Topics = topics.ToList(),
+        FileName = $"{id}.pdf",
+        ContentType = "application/pdf",
+        StoredUrl = $"/uploads/course-files/{id}.pdf",
+        ParsedContent = parsedContent,
     };
 
-    private static Topic MakeTopic(string id, params Subtopic[] subtopics) => new()
-    {
-        Id = id,
-        ChapterId = "chapter_1",
-        Title = $"Topic {id}",
-        Subtopics = subtopics.ToList(),
-    };
-
-    private static Subtopic MakeSubtopic(string id) => new()
-    {
-        Id = id,
-        TopicId = "topic_1",
-        Title = $"Subtopic {id}",
-    };
+    // -- CreateSnapshotAsync ---------------------------------------------------------------------
 
     [Fact]
     public async Task CreateSnapshotAsync_persists_one_CourseVersion_row_with_a_new_id_and_the_courseId()
     {
         var sut = MakeSut();
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
 
         await sut.Service.CreateSnapshotAsync("course_1");
 
@@ -78,54 +65,11 @@ public class VersionServiceTests
     }
 
     [Fact]
-    public async Task CreateSnapshotAsync_reads_generated_and_override_content_via_plain_repository_reads_not_GetOrGenerate()
+    public async Task CreateSnapshotAsync_serializes_each_files_id_name_and_parsed_content_into_SnapshotJson()
     {
         var sut = MakeSut();
-        var topic = MakeTopic("topic_1");
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([MakeChapter(topic)]);
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync("topic_1", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
-
-        await sut.Service.CreateSnapshotAsync("course_1");
-
-        for (var level = 1; level <= 5; level++)
-            await sut.AdaptiveLearningRepository.Received(1).GetLevelAsync("topic_1", null, level, Arg.Any<CancellationToken>());
-        for (var wayNumber = 1; wayNumber <= 5; wayNumber++)
-            await sut.AdaptiveLearningRepository.Received(1).GetWayAsync("topic_1", null, wayNumber, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task CreateSnapshotAsync_collects_content_for_both_topics_and_subtopics()
-    {
-        var sut = MakeSut();
-        var subtopic = MakeSubtopic("subtopic_1");
-        var topic = MakeTopic("topic_1", subtopic);
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([MakeChapter(topic)]);
-        sut.AdaptiveLearningRepository.GetLevelAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
-
-        await sut.Service.CreateSnapshotAsync("course_1");
-
-        await sut.AdaptiveLearningRepository.Received(5).GetLevelAsync("topic_1", null, Arg.Any<int>(), Arg.Any<CancellationToken>());
-        await sut.AdaptiveLearningRepository.Received(5).GetLevelAsync(null, "subtopic_1", Arg.Any<int>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task CreateSnapshotAsync_serializes_the_confirmed_tree_and_generated_or_override_content_into_SnapshotJson()
-    {
-        var sut = MakeSut();
-        var topic = MakeTopic("topic_1");
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([MakeChapter(topic)]);
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, 1, Arg.Any<CancellationToken>())
-            .Returns(new DrilldownLevel { Id = "level_1", TopicId = "topic_1", LevelNumber = 1, GeneratedContentJson = "{\"title\":\"generated\"}", OverrideContentJson = "{\"title\":\"overridden\"}" });
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, Arg.Is<int>(l => l != 1), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>())
+            .Returns([MakeCourseFile("file_1", "Some parsed text")]);
 
         CourseVersion? captured = null;
         sut.Repository.When(r => r.Add(Arg.Any<CourseVersion>())).Do(call => captured = call.Arg<CourseVersion>());
@@ -134,47 +78,18 @@ public class VersionServiceTests
 
         Assert.NotNull(captured);
         using var document = JsonDocument.Parse(captured!.SnapshotJson);
-        var adaptiveContent = document.RootElement.GetProperty("adaptiveContent");
-        var topicNode = adaptiveContent.EnumerateArray().Single(n => n.GetProperty("topicId").GetString() == "topic_1");
-        var level1 = topicNode.GetProperty("levels").EnumerateArray().Single(l => l.GetProperty("number").GetInt32() == 1);
-        Assert.Equal("{\"title\":\"generated\"}", level1.GetProperty("generatedContentJson").GetString());
-        Assert.Equal("{\"title\":\"overridden\"}", level1.GetProperty("overrideContentJson").GetString());
-        Assert.Contains("Chapter 1", document.RootElement.GetProperty("chapters").ToString());
-    }
-
-    [Fact]
-    public async Task CreateSnapshotAsync_omits_levels_and_ways_that_were_never_generated()
-    {
-        var sut = MakeSut();
-        var topic = MakeTopic("topic_1");
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([MakeChapter(topic)]);
-        sut.AdaptiveLearningRepository.GetLevelAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
-
-        CourseVersion? captured = null;
-        sut.Repository.When(r => r.Add(Arg.Any<CourseVersion>())).Do(call => captured = call.Arg<CourseVersion>());
-
-        await sut.Service.CreateSnapshotAsync("course_1");
-
-        using var document = JsonDocument.Parse(captured!.SnapshotJson);
-        var topicNode = document.RootElement.GetProperty("adaptiveContent").EnumerateArray().Single(n => n.GetProperty("topicId").GetString() == "topic_1");
-        Assert.Empty(topicNode.GetProperty("levels").EnumerateArray());
-        Assert.Empty(topicNode.GetProperty("ways").EnumerateArray());
+        var file = document.RootElement.GetProperty("files").EnumerateArray().Single();
+        Assert.Equal("file_1", file.GetProperty("id").GetString());
+        Assert.Equal("file_1.pdf", file.GetProperty("fileName").GetString());
+        Assert.Equal("Some parsed text", file.GetProperty("parsedContent").GetString());
     }
 
     [Fact]
     public async Task CreateSnapshotAsync_calls_SaveChangesAsync_exactly_once()
     {
         var sut = MakeSut();
-        var subtopic = MakeSubtopic("subtopic_1");
-        var topic = MakeTopic("topic_1", subtopic);
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([MakeChapter(topic)]);
-        sut.AdaptiveLearningRepository.GetLevelAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>())
+            .Returns([MakeCourseFile("file_1", "text")]);
 
         await sut.Service.CreateSnapshotAsync("course_1");
 
@@ -186,13 +101,9 @@ public class VersionServiceTests
     // correct even if the private SnapshotContent shape changes. Clears call tracking on the
     // shared mocks afterward so this setup call doesn't inflate the real test's own Received()
     // assertions.
-    private static async Task<string> CaptureRealSnapshotJsonAsync(Sut sut, Chapter chapter)
+    private static async Task<string> CaptureRealSnapshotJsonAsync(Sut sut, params CourseFile[] files)
     {
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([chapter]);
-        sut.AdaptiveLearningRepository.GetLevelAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(files);
 
         CourseVersion? captured = null;
         sut.Repository.When(r => r.Add(Arg.Any<CourseVersion>())).Do(call => captured = call.Arg<CourseVersion>());
@@ -200,13 +111,13 @@ public class VersionServiceTests
 
         sut.UnitOfWork.ClearReceivedCalls();
         sut.Repository.ClearReceivedCalls();
-        sut.ContentTreeRepository.ClearReceivedCalls();
+        sut.CourseFileRepository.ClearReceivedCalls();
         sut.CourseService.ClearReceivedCalls();
 
         return captured!.SnapshotJson;
     }
 
-    // -- GetVersionsAsync (Story 3.10/Task 3) ---------------------------------------------------
+    // -- GetVersionsAsync -----------------------------------------------------------------------
 
     [Fact]
     public async Task GetVersionsAsync_requires_ownership()
@@ -220,10 +131,10 @@ public class VersionServiceTests
     }
 
     [Fact]
-    public async Task GetVersionsAsync_returns_a_dto_per_version_with_counts_derived_from_the_snapshot()
+    public async Task GetVersionsAsync_returns_a_dto_per_version_with_the_file_count_derived_from_the_snapshot()
     {
         var sut = MakeSut();
-        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeChapter(MakeTopic("topic_1")));
+        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeCourseFile("file_1", "text"));
         var publishedAt = DateTimeOffset.UtcNow;
         sut.Repository.GetAllByCourseIdAsync("course_1", Arg.Any<CancellationToken>())
             .Returns([new CourseVersion { Id = "version_x", CourseId = "course_1", SnapshotJson = snapshotJson, PublishedAt = publishedAt }]);
@@ -233,20 +144,19 @@ public class VersionServiceTests
         var dto = Assert.Single(dtos);
         Assert.Equal("version_x", dto.Id);
         Assert.Equal(publishedAt, dto.PublishedAt);
-        Assert.Equal(1, dto.ChapterCount);
-        Assert.Equal(1, dto.TopicCount);
+        Assert.Equal(1, dto.FileCount);
     }
 
-    // -- RestoreVersionAsync (Story 3.10/Task 3) ------------------------------------------------
+    // -- RestoreVersionAsync --------------------------------------------------------------------
 
     [Fact]
     public async Task RestoreVersionAsync_requires_ownership()
     {
         var sut = MakeSut();
-        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeChapter());
+        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut);
         sut.Repository.GetByIdAsync("version_x", Arg.Any<CancellationToken>())
             .Returns(new CourseVersion { Id = "version_x", CourseId = "course_1", SnapshotJson = snapshotJson, PublishedAt = DateTimeOffset.UtcNow });
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
 
         await sut.Service.RestoreVersionAsync("course_1", "version_x");
 
@@ -273,123 +183,47 @@ public class VersionServiceTests
     }
 
     [Fact]
-    public async Task RestoreVersionAsync_removes_every_current_chapter_and_adds_back_the_snapshots_chapters()
+    public async Task RestoreVersionAsync_writes_the_snapshots_text_back_onto_the_matching_still_existing_file()
     {
         var sut = MakeSut();
-        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeChapter(MakeTopic("topic_1")));
+        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeCourseFile("file_1", "archived text"));
         sut.Repository.GetByIdAsync("version_x", Arg.Any<CancellationToken>())
             .Returns(new CourseVersion { Id = "version_x", CourseId = "course_1", SnapshotJson = snapshotJson, PublishedAt = DateTimeOffset.UtcNow });
-        var currentChapter = new Chapter { Id = "current_chapter", CourseId = "course_1", Title = "Current" };
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([currentChapter]);
+        // Simulate drift: the file's text changed (re-parsed, or otherwise edited) since this
+        // version was published.
+        var liveFile = MakeCourseFile("file_1", "newer text");
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>()).Returns([liveFile]);
 
         await sut.Service.RestoreVersionAsync("course_1", "version_x");
 
-        sut.ContentTreeRepository.Received(1).RemoveChapter(currentChapter);
-        sut.ContentTreeRepository.Received(1).AddChapter(Arg.Is<Chapter>(c => c.Id == "chapter_1" && c.Title == "Chapter 1"));
-        // Code-review patch: the remove/add/adaptive-content-restore all stage into one commit
-        // (verified safe against a real DbContext -- ContentTreeRepositoryTests.cs's own
-        // RemoveChapter_then_AddChapter_reusing_the_same_id... tests), wrapped in one transaction
-        // together with the separate MarkDraftAsync commit below.
+        Assert.Equal("archived text", liveFile.ParsedContent);
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
         await sut.UnitOfWork.Received(1).ExecuteInTransactionAsync(Arg.Any<Func<Task>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task RestoreVersionAsync_reuses_the_snapshots_original_node_ids_not_new_ones()
+    public async Task RestoreVersionAsync_leaves_a_file_added_since_the_snapshot_untouched()
     {
         var sut = MakeSut();
-        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeChapter(MakeTopic("original_topic_id")));
+        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeCourseFile("file_1", "archived text"));
         sut.Repository.GetByIdAsync("version_x", Arg.Any<CancellationToken>())
             .Returns(new CourseVersion { Id = "version_x", CourseId = "course_1", SnapshotJson = snapshotJson, PublishedAt = DateTimeOffset.UtcNow });
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
+        var newerFile = MakeCourseFile("file_2", "uploaded after this version");
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>()).Returns([newerFile]);
 
-        Chapter? addedChapter = null;
-        sut.ContentTreeRepository.When(r => r.AddChapter(Arg.Any<Chapter>())).Do(call => addedChapter = call.Arg<Chapter>());
+        await sut.Service.RestoreVersionAsync("course_1", "version_x"); // must not throw
 
-        await sut.Service.RestoreVersionAsync("course_1", "version_x");
-
-        Assert.NotNull(addedChapter);
-        Assert.Equal("original_topic_id", addedChapter!.Topics.Single().Id);
+        Assert.Equal("uploaded after this version", newerFile.ParsedContent);
     }
 
     [Fact]
-    public async Task RestoreVersionAsync_restores_the_archived_Level_content_overwriting_newer_edits_made_since_publish()
+    public async Task RestoreVersionAsync_calls_MarkDraftAsync_after_restoring_file_content()
     {
         var sut = MakeSut();
-        var topic = MakeTopic("topic_1");
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([MakeChapter(topic)]);
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, 1, Arg.Any<CancellationToken>())
-            .Returns(new DrilldownLevel { Id = "level_1", TopicId = "topic_1", LevelNumber = 1, GeneratedContentJson = "archived-content" });
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, Arg.Is<int>(l => l != 1), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
-
-        CourseVersion? captured = null;
-        sut.Repository.When(r => r.Add(Arg.Any<CourseVersion>())).Do(call => captured = call.Arg<CourseVersion>());
-        await sut.Service.CreateSnapshotAsync("course_1");
-        sut.UnitOfWork.ClearReceivedCalls();
-        sut.Repository.ClearReceivedCalls();
-        sut.ContentTreeRepository.ClearReceivedCalls();
-        sut.CourseService.ClearReceivedCalls();
-
-        sut.Repository.GetByIdAsync("version_x", Arg.Any<CancellationToken>())
-            .Returns(new CourseVersion { Id = "version_x", CourseId = "course_1", SnapshotJson = captured!.SnapshotJson, PublishedAt = DateTimeOffset.UtcNow });
-
-        // Simulate drift: the tutor regenerated Level 1 AFTER this version was published, so the
-        // live row now holds newer content than what this version actually archived.
-        var liveRow = new DrilldownLevel { Id = "level_1", TopicId = "topic_1", LevelNumber = 1, GeneratedContentJson = "newer-content" };
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, 1, Arg.Any<CancellationToken>()).Returns(liveRow);
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
-
-        await sut.Service.RestoreVersionAsync("course_1", "version_x");
-
-        Assert.Equal("archived-content", liveRow.GeneratedContentJson);
-    }
-
-    [Fact]
-    public async Task RestoreVersionAsync_creates_a_new_Level_row_if_none_currently_exists_for_that_node_and_number()
-    {
-        var sut = MakeSut();
-        var topic = MakeTopic("topic_1");
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([MakeChapter(topic)]);
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, 1, Arg.Any<CancellationToken>())
-            .Returns(new DrilldownLevel { Id = "level_1", TopicId = "topic_1", LevelNumber = 1, GeneratedContentJson = "archived-content" });
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, Arg.Is<int>(l => l != 1), Arg.Any<CancellationToken>())
-            .Returns((DrilldownLevel?)null);
-        sut.AdaptiveLearningRepository.GetWayAsync(Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns((WayContent?)null);
-
-        CourseVersion? captured = null;
-        sut.Repository.When(r => r.Add(Arg.Any<CourseVersion>())).Do(call => captured = call.Arg<CourseVersion>());
-        await sut.Service.CreateSnapshotAsync("course_1");
-        sut.UnitOfWork.ClearReceivedCalls();
-        sut.Repository.ClearReceivedCalls();
-        sut.ContentTreeRepository.ClearReceivedCalls();
-        sut.CourseService.ClearReceivedCalls();
-
-        sut.Repository.GetByIdAsync("version_x", Arg.Any<CancellationToken>())
-            .Returns(new CourseVersion { Id = "version_x", CourseId = "course_1", SnapshotJson = captured!.SnapshotJson, PublishedAt = DateTimeOffset.UtcNow });
-
-        // The live row was deleted entirely (e.g. a later edit cleared it) since this version was
-        // published -- restore must re-create it, not silently skip it because nothing exists yet.
-        sut.AdaptiveLearningRepository.GetLevelAsync("topic_1", null, 1, Arg.Any<CancellationToken>()).Returns((DrilldownLevel?)null);
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
-
-        await sut.Service.RestoreVersionAsync("course_1", "version_x");
-
-        sut.AdaptiveLearningRepository.Received(1).AddLevel(Arg.Is<DrilldownLevel>(
-            l => l.TopicId == "topic_1" && l.LevelNumber == 1 && l.GeneratedContentJson == "archived-content"));
-    }
-
-    [Fact]
-    public async Task RestoreVersionAsync_calls_MarkDraftAsync_after_replacing_the_tree()
-    {
-        var sut = MakeSut();
-        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut, MakeChapter());
+        var snapshotJson = await CaptureRealSnapshotJsonAsync(sut);
         sut.Repository.GetByIdAsync("version_x", Arg.Any<CancellationToken>())
             .Returns(new CourseVersion { Id = "version_x", CourseId = "course_1", SnapshotJson = snapshotJson, PublishedAt = DateTimeOffset.UtcNow });
-        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
+        sut.CourseFileRepository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>()).Returns([]);
 
         await sut.Service.RestoreVersionAsync("course_1", "version_x");
 

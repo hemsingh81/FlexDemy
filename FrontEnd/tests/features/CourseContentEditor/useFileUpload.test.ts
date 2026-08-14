@@ -6,7 +6,7 @@ import type { CourseFileDto } from '@/src/services/courseFileService';
 
 vi.mock('@/src/services/courseFileService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/courseFileService')>('@/src/services/courseFileService');
-  return { ...actual, uploadFile: vi.fn(), getFiles: vi.fn() };
+  return { ...actual, uploadFile: vi.fn(), getFiles: vi.fn(), deleteFile: vi.fn() };
 });
 
 const makeFile = (name: string) => new File(['content'], name, { type: 'application/pdf' });
@@ -18,6 +18,7 @@ const makeDto = (overrides: Partial<CourseFileDto> = {}): CourseFileDto => ({
   sizeBytes: 7,
   status: 'Queued',
   failureReason: null,
+  parsedContent: null,
   ...overrides,
 });
 
@@ -179,6 +180,35 @@ describe('useFileUpload', () => {
 
     expect(result.current.error).toBe('Your course draft has not been saved yet. Please try again.');
     expect(courseFileService.uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('deleteFile optimistically removes the row and calls the server', async () => {
+    vi.mocked(courseFileService.uploadFile).mockResolvedValue(makeDto());
+    vi.mocked(courseFileService.deleteFile).mockResolvedValue(undefined);
+    const { result } = renderHook(() => useFileUpload('draft_1'));
+
+    act(() => result.current.addFiles([makeFile('a.pdf')]));
+    await waitFor(() => expect(result.current.data[0].id).toBe('file_1'));
+
+    act(() => result.current.deleteFile('file_1'));
+
+    expect(result.current.data).toEqual([]);
+    await waitFor(() => expect(courseFileService.deleteFile).toHaveBeenCalledWith('draft_1', 'file_1'));
+  });
+
+  it('deleteFile restores the row and sets an error if the server call fails', async () => {
+    vi.mocked(courseFileService.uploadFile).mockResolvedValue(makeDto());
+    vi.mocked(courseFileService.deleteFile).mockRejectedValue(new Error('boom'));
+    const { result } = renderHook(() => useFileUpload('draft_1'));
+
+    act(() => result.current.addFiles([makeFile('a.pdf')]));
+    await waitFor(() => expect(result.current.data[0].id).toBe('file_1'));
+
+    act(() => result.current.deleteFile('file_1'));
+    expect(result.current.data).toEqual([]);
+
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    expect(result.current.error).toBe('Could not delete this file. Please try again.');
   });
 
   it('resetFiles clears the list and cancels the poll', async () => {

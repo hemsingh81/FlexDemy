@@ -10,7 +10,7 @@ namespace FlexDemy.Application.Tests.AiConfig;
 
 public class AiConfigServiceTests
 {
-    private static AiTaskConfig MakeConfig(string taskId = AiTaskIds.ExplainTopic) => new()
+    private static AiTaskConfig MakeConfig(string taskId = AiTaskIds.DefineKeyword) => new()
     {
         Id = $"cfg_{taskId}",
         TaskId = taskId,
@@ -45,28 +45,28 @@ public class AiConfigServiceTests
     public async Task GetAllTaskConfigsAsync_maps_real_per_task_spend_into_CurrentSpend()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns([MakeConfig(AiTaskIds.ExplainTopic), MakeConfig(AiTaskIds.DefineKeyword)]);
+        repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns([MakeConfig(AiTaskIds.DefineKeyword), MakeConfig(AiTaskIds.Embeddings)]);
         var budgetService = Substitute.For<IAiBudgetService>();
         budgetService.GetAllSpentAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyDictionary<string, decimal>)new Dictionary<string, decimal>
         {
-            [AiTaskIds.ExplainTopic] = 42.5m,
-            [AiTaskIds.DefineKeyword] = 3m,
+            [AiTaskIds.DefineKeyword] = 42.5m,
+            [AiTaskIds.Embeddings] = 3m,
         });
         var sut = CreateSut(repository, budgetService);
 
         var result = await sut.GetAllTaskConfigsAsync();
 
-        Assert.Equal(42.5m, result.Single(r => r.TaskId == AiTaskIds.ExplainTopic).CurrentSpend);
-        Assert.Equal(3m, result.Single(r => r.TaskId == AiTaskIds.DefineKeyword).CurrentSpend);
+        Assert.Equal(42.5m, result.Single(r => r.TaskId == AiTaskIds.DefineKeyword).CurrentSpend);
+        Assert.Equal(3m, result.Single(r => r.TaskId == AiTaskIds.Embeddings).CurrentSpend);
     }
 
     [Fact]
     public async Task GetAllTaskConfigsAsync_a_task_with_no_budget_row_defaults_CurrentSpend_to_zero_without_throwing()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns([MakeConfig(AiTaskIds.ExplainTopic)]);
+        repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns([MakeConfig(AiTaskIds.DefineKeyword)]);
         var budgetService = Substitute.For<IAiBudgetService>();
-        // No entry for explainTopic -- a budget-seeding gap, distinct from the AiTaskConfig one.
+        // No entry for defineKeyword -- a budget-seeding gap, distinct from the AiTaskConfig one.
         budgetService.GetAllSpentAsync(Arg.Any<CancellationToken>())
             .Returns((IReadOnlyDictionary<string, decimal>)new Dictionary<string, decimal>());
         var sut = CreateSut(repository, budgetService);
@@ -81,12 +81,12 @@ public class AiConfigServiceTests
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
         // Deliberately returned out of AiTaskIds.All order.
-        repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns([MakeConfig(AiTaskIds.Embeddings), MakeConfig(AiTaskIds.ExtractStructure)]);
+        repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns([MakeConfig(AiTaskIds.Embeddings), MakeConfig(AiTaskIds.DefineKeyword)]);
         var sut = CreateSut(repository);
 
         var result = await sut.GetAllTaskConfigsAsync();
 
-        Assert.Equal(AiTaskIds.ExtractStructure, result[0].TaskId);
+        Assert.Equal(AiTaskIds.DefineKeyword, result[0].TaskId);
         Assert.Equal(AiTaskIds.Embeddings, result[1].TaskId);
     }
 
@@ -94,13 +94,13 @@ public class AiConfigServiceTests
     public async Task GetAllTaskConfigsAsync_omits_a_missing_task_without_throwing()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        // Only 6 of 7 known tasks have a row -- a seeding gap.
+        // Only 1 of 2 known tasks has a row -- a seeding gap.
         repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(AiTaskIds.All.Where(id => id != AiTaskIds.Embeddings).Select(id => MakeConfig(id)).ToList());
         var sut = CreateSut(repository);
 
         var result = await sut.GetAllTaskConfigsAsync();
 
-        Assert.Equal(6, result.Count);
+        Assert.Equal(1, result.Count);
         Assert.DoesNotContain(result, dto => dto.TaskId == AiTaskIds.Embeddings);
     }
 
@@ -109,12 +109,12 @@ public class AiConfigServiceTests
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
         var existing = MakeConfig();
-        repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns(existing);
+        repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns(existing);
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var sut = CreateSut(repository, unitOfWork: unitOfWork);
         var request = new UpdateAiTaskConfigRequest("OpenRouter", "gpt-4o-mini", "Groq", "llama-4-scout", 100m);
 
-        var result = await sut.UpdateTaskConfigAsync(AiTaskIds.ExplainTopic, request);
+        var result = await sut.UpdateTaskConfigAsync(AiTaskIds.DefineKeyword, request);
 
         Assert.Equal("OpenRouter", result.Provider);
         Assert.Equal("gpt-4o-mini", result.Model);
@@ -136,7 +136,7 @@ public class AiConfigServiceTests
     {
         var sut = CreateSut();
 
-        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.ExplainTopic, ValidRequest(budgetThreshold: -5m)));
+        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.DefineKeyword, ValidRequest(budgetThreshold: -5m)));
     }
 
     [Theory]
@@ -146,7 +146,7 @@ public class AiConfigServiceTests
     {
         var sut = CreateSut();
 
-        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.ExplainTopic, ValidRequest(provider: blank)));
+        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.DefineKeyword, ValidRequest(provider: blank)));
     }
 
     [Theory]
@@ -156,7 +156,7 @@ public class AiConfigServiceTests
     {
         var sut = CreateSut();
 
-        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.ExplainTopic, ValidRequest(model: blank)));
+        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.DefineKeyword, ValidRequest(model: blank)));
     }
 
     [Theory]
@@ -166,7 +166,7 @@ public class AiConfigServiceTests
     {
         var sut = CreateSut();
 
-        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.ExplainTopic, ValidRequest(fallbackProvider: blank)));
+        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.DefineKeyword, ValidRequest(fallbackProvider: blank)));
     }
 
     [Theory]
@@ -176,29 +176,29 @@ public class AiConfigServiceTests
     {
         var sut = CreateSut();
 
-        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.ExplainTopic, ValidRequest(fallbackModel: blank)));
+        await Assert.ThrowsAsync<ValidationException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.DefineKeyword, ValidRequest(fallbackModel: blank)));
     }
 
     [Fact]
     public async Task UpdateTaskConfigAsync_missing_row_for_a_known_taskId_throws_NotFoundException()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns((AiTaskConfig?)null);
+        repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns((AiTaskConfig?)null);
         var sut = CreateSut(repository);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.ExplainTopic, ValidRequest()));
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.UpdateTaskConfigAsync(AiTaskIds.DefineKeyword, ValidRequest()));
     }
 
     [Fact]
     public async Task GetTaskConfigAsync_returns_the_mapped_dto_for_a_known_taskId()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns(MakeConfig());
+        repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns(MakeConfig());
         var sut = CreateSut(repository);
 
-        var result = await sut.GetTaskConfigAsync(AiTaskIds.ExplainTopic);
+        var result = await sut.GetTaskConfigAsync(AiTaskIds.DefineKeyword);
 
-        Assert.Equal(AiTaskIds.ExplainTopic, result.TaskId);
+        Assert.Equal(AiTaskIds.DefineKeyword, result.TaskId);
         Assert.Equal("Groq", result.Provider);
     }
 
@@ -206,12 +206,12 @@ public class AiConfigServiceTests
     public async Task GetTaskConfigAsync_maps_real_spend_into_CurrentSpend()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns(MakeConfig());
+        repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns(MakeConfig());
         var budgetService = Substitute.For<IAiBudgetService>();
-        budgetService.GetSpentAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns(17.25m);
+        budgetService.GetSpentAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns(17.25m);
         var sut = CreateSut(repository, budgetService);
 
-        var result = await sut.GetTaskConfigAsync(AiTaskIds.ExplainTopic);
+        var result = await sut.GetTaskConfigAsync(AiTaskIds.DefineKeyword);
 
         Assert.Equal(17.25m, result.CurrentSpend);
     }
@@ -220,13 +220,13 @@ public class AiConfigServiceTests
     public async Task GetTaskConfigAsync_a_missing_budget_row_defaults_CurrentSpend_to_zero_without_throwing()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns(MakeConfig());
+        repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns(MakeConfig());
         var budgetService = Substitute.For<IAiBudgetService>();
-        budgetService.GetSpentAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>())
-            .Returns(Task.FromException<decimal>(new NotFoundException(nameof(AiTaskConfig), AiTaskIds.ExplainTopic)));
+        budgetService.GetSpentAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<decimal>(new NotFoundException(nameof(AiTaskConfig), AiTaskIds.DefineKeyword)));
         var sut = CreateSut(repository, budgetService);
 
-        var result = await sut.GetTaskConfigAsync(AiTaskIds.ExplainTopic);
+        var result = await sut.GetTaskConfigAsync(AiTaskIds.DefineKeyword);
 
         Assert.Equal(0m, result.CurrentSpend);
     }
@@ -243,9 +243,9 @@ public class AiConfigServiceTests
     public async Task GetTaskConfigAsync_missing_row_for_a_known_taskId_throws_NotFoundException()
     {
         var repository = Substitute.For<IAiTaskConfigRepository>();
-        repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic, Arg.Any<CancellationToken>()).Returns((AiTaskConfig?)null);
+        repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword, Arg.Any<CancellationToken>()).Returns((AiTaskConfig?)null);
         var sut = CreateSut(repository);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => sut.GetTaskConfigAsync(AiTaskIds.ExplainTopic));
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.GetTaskConfigAsync(AiTaskIds.DefineKeyword));
     }
 }

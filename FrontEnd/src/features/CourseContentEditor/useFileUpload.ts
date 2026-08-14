@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { getFiles, uploadFile, type CourseFileDto } from '../../services/courseFileService';
+import { deleteFile as deleteFileRequest, getFiles, uploadFile, type CourseFileDto } from '../../services/courseFileService';
 
-export type FileUploadStatus = 'queued' | 'parsing' | 'extracting' | 'done' | 'failed';
+export type FileUploadStatus = 'queued' | 'parsing' | 'done' | 'failed';
 
-const KNOWN_STATUSES: readonly FileUploadStatus[] = ['queued', 'parsing', 'extracting', 'done', 'failed'];
+const KNOWN_STATUSES: readonly FileUploadStatus[] = ['queued', 'parsing', 'done', 'failed'];
 
 export interface FileUploadEntry {
   id: string;
@@ -13,6 +13,9 @@ export interface FileUploadEntry {
   // Story 2.6: populated only when status === 'failed' -- the server's specific rejection
   // reason (PRD FR-11), surfaced by CourseContentEditor.tsx's FileRow.
   failureReason?: string;
+  // Populated once status === 'done' -- the raw text Docling parsed from this file, with no AI
+  // structuring step in between. Undefined while pending/failed, or before the first server sync.
+  parsedContent?: string | null;
 }
 
 // How often to poll getFiles() for the async scan/parse outcome while any file is in a
@@ -20,7 +23,7 @@ export interface FileUploadEntry {
 // timing (e.g. ToastContext.tsx's TOAST_AUTO_DISMISS_MS).
 export const FILE_POLL_INTERVAL_MS = 3000;
 
-const NON_TERMINAL_STATUSES: readonly FileUploadStatus[] = ['queued', 'parsing', 'extracting'];
+const NON_TERMINAL_STATUSES: readonly FileUploadStatus[] = ['queued', 'parsing'];
 
 let pendingIdSeq = 0;
 const nextPendingId = () => `pending_${++pendingIdSeq}`;
@@ -41,6 +44,7 @@ const toEntry = (dto: CourseFileDto, name: string, sizeBytes: number): FileUploa
   sizeBytes,
   status: toStatus(dto.status),
   failureReason: dto.failureReason ?? undefined,
+  parsedContent: dto.parsedContent,
 });
 
 interface UseFileUploadResult {
@@ -49,6 +53,9 @@ interface UseFileUploadResult {
   error: string | null;
   addFiles: (files: File[]) => void;
   retryFile: (id: string) => void;
+  // Permanently deletes an uploaded file (server + local list). Optimistic: removes the row
+  // immediately, restoring it if the server call fails.
+  deleteFile: (id: string) => void;
   // Clears the file list, cancels the poll, and forgets every retained File -- called by the
   // caller when the screen closes or switches to a different draft.
   resetFiles: () => void;
@@ -87,13 +94,18 @@ export const useFileUpload = (courseId: string | null): UseFileUploadResult => {
         if (inFlightIdsRef.current.has(entry.id)) return entry;
         const match = dtos.find((d) => d.id === entry.id);
         if (!match) return entry;
-        return { ...entry, status: toStatus(match.status), failureReason: match.failureReason ?? undefined };
+        return {
+          ...entry,
+          status: toStatus(match.status),
+          failureReason: match.failureReason ?? undefined,
+          parsedContent: match.parsedContent,
+        };
       })
     );
   };
 
-  // Polls while any file is in a non-terminal status (queued/parsing/extracting) -- not just
-  // queued alone, since Stories 2.7/2.8 drive files through parsing/extracting too. Stops itself
+  // Polls while any file is in a non-terminal status (queued/parsing) -- not just queued alone,
+  // since Story 2.7 drives files through parsing too. Stops itself
   // once every file has reached a terminal status (done/failed). Matches useCourseDraft.ts's
   // useEffect-cascading-fetch idiom.
   useEffect(() => {
@@ -191,6 +203,18 @@ export const useFileUpload = (courseId: string | null): UseFileUploadResult => {
     uploadOne(id, file);
   };
 
+  const deleteFile = (id: string) => {
+    if (!courseId) return;
+    const removed = data.find((f) => f.id === id);
+    setData((prev) => prev.filter((f) => f.id !== id));
+    deleteFileRequest(courseId, id).catch(() => {
+      // Restore the row if the delete failed server-side, rather than leaving the UI silently
+      // out of sync with what's actually still there.
+      if (removed) setData((prev) => [...prev, removed]);
+      setError('Could not delete this file. Please try again.');
+    });
+  };
+
   const resetFiles = () => {
     stopPolling();
     filesRef.current.clear();
@@ -199,5 +223,5 @@ export const useFileUpload = (courseId: string | null): UseFileUploadResult => {
     setError(null);
   };
 
-  return { data, isLoading, error, addFiles, retryFile, resetFiles };
+  return { data, isLoading, error, addFiles, retryFile, deleteFile, resetFiles };
 };

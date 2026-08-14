@@ -28,7 +28,7 @@ public class AiTaskConfigRepositoryTests
     public async Task GetAllAsync_returns_every_row()
     {
         await using var db = NewContext();
-        db.AiTaskConfigs.AddRange(MakeConfig(AiTaskIds.ExplainTopic), MakeConfig(AiTaskIds.DefineKeyword));
+        db.AiTaskConfigs.AddRange(MakeConfig(AiTaskIds.DefineKeyword), MakeConfig(AiTaskIds.Embeddings));
         await db.SaveChangesAsync();
         var repository = new AiTaskConfigRepository(db);
 
@@ -41,14 +41,14 @@ public class AiTaskConfigRepositoryTests
     public async Task GetByTaskIdAsync_returns_the_matching_row()
     {
         await using var db = NewContext();
-        db.AiTaskConfigs.Add(MakeConfig(AiTaskIds.ExplainTopic));
+        db.AiTaskConfigs.Add(MakeConfig(AiTaskIds.DefineKeyword));
         await db.SaveChangesAsync();
         var repository = new AiTaskConfigRepository(db);
 
-        var found = await repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic);
+        var found = await repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword);
 
         Assert.NotNull(found);
-        Assert.Equal(AiTaskIds.ExplainTopic, found!.TaskId);
+        Assert.Equal(AiTaskIds.DefineKeyword, found!.TaskId);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class AiTaskConfigRepositoryTests
     {
         await using var db = NewContext();
         var repository = new AiTaskConfigRepository(db);
-        var config = MakeConfig(AiTaskIds.ExplainTopic);
+        var config = MakeConfig(AiTaskIds.DefineKeyword);
         db.AiTaskConfigs.Add(config);
         await db.SaveChangesAsync();
 
@@ -73,7 +73,7 @@ public class AiTaskConfigRepositoryTests
         repository.Update(config);
         await db.SaveChangesAsync();
 
-        var found = await repository.GetByTaskIdAsync(AiTaskIds.ExplainTopic);
+        var found = await repository.GetByTaskIdAsync(AiTaskIds.DefineKeyword);
         Assert.Equal(999m, found!.BudgetThreshold);
     }
 }

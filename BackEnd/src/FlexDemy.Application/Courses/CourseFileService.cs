@@ -106,6 +106,12 @@ public class CourseFileService(
         return files.Select(f => f.ToDto()).ToList();
     }
 
+    public async Task<IReadOnlyList<CourseFileDto>> GetPublishedFilesAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var files = await repository.GetByCourseIdAsync(courseId, cancellationToken);
+        return files.Where(f => f.Status == JobItemStatus.Done).Select(f => f.ToDto()).ToList();
+    }
+
     // Code-review patch: the authenticated read path for a course-file's bytes -- course-files
     // are no longer servable via app.UseStaticFiles() at all (LocalFileStorageService's
     // public/private category split), so this is the only way to retrieve one.
@@ -122,6 +128,33 @@ public class CourseFileService(
 
         var content = await fileStorage.OpenReadAsync(file.StoredUrl, cancellationToken);
         return new CourseFileDownload(content, file.ContentType, file.FileName);
+    }
+
+    // Tutor-facing "delete this file (and its content)" -- with no more Chapter/Topic tree to
+    // delete content from independently (Story removed), removing the CourseFile row is the
+    // entire operation; its ParsedContent goes with it. Deletes the underlying stored bytes too,
+    // best-effort -- a storage-delete failure must not block the row itself from being removed
+    // (the tutor asked for this file gone; an orphaned blob is a cheap, recoverable cost, an
+    // undeletable row is not).
+    public async Task DeleteFileAsync(string courseId, string fileId, CancellationToken cancellationToken = default)
+    {
+        await courseService.EnsureOwnedDraftAsync(courseId, cancellationToken);
+
+        var file = await repository.GetByIdAsync(fileId, cancellationToken);
+        if (file is null || file.CourseId != courseId)
+            throw new NotFoundException(nameof(CourseFile), fileId);
+
+        repository.Remove(file);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await fileStorage.DeleteAsync(file.StoredUrl, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Swallowed deliberately -- see this method's own header comment.
+        }
     }
 
     private static string NormalizeContentType(string contentType) =>

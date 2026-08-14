@@ -49,4 +49,14 @@ public class CourseFilesController(ICourseFileService courseFileService) : Contr
         var download = await courseFileService.DownloadFileAsync(courseId, fileId, cancellationToken);
         return File(download.Content, download.ContentType, download.FileName);
     }
+
+    // Tutor-facing "delete this file (and its content)" -- removing the row removes its
+    // ParsedContent with it; there's no separate Chapter/Topic tree to clean up anymore.
+    [HttpDelete("{fileId}")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<IActionResult> DeleteFile(string courseId, string fileId, CancellationToken cancellationToken)
+    {
+        await courseFileService.DeleteFileAsync(courseId, fileId, cancellationToken);
+        return NoContent();
+    }
 }

@@ -254,4 +254,26 @@ public class CourseFileServiceTests
         Assert.Equal(2, result.Count);
         Assert.Equal("Malware detected: Eicar-Test-Signature", result.Single(f => f.Id == "f2").FailureReason);
     }
+
+    // -- GetPublishedFilesAsync -------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetPublishedFilesAsync_returns_only_Done_files_and_skips_the_ownership_check()
+    {
+        var sut = MakeSut();
+        var files = new List<CourseFile>
+        {
+            new() { Id = "f1", CourseId = "course_1", FileName = "a.pdf", ContentType = "application/pdf", StoredUrl = "/u/a.pdf", Status = JobItemStatus.Done, ParsedContent = "Some text" },
+            new() { Id = "f2", CourseId = "course_1", FileName = "b.pdf", ContentType = "application/pdf", StoredUrl = "/u/b.pdf", Status = JobItemStatus.Parsing },
+            new() { Id = "f3", CourseId = "course_1", FileName = "c.pdf", ContentType = "application/pdf", StoredUrl = "/u/c.pdf", Status = JobItemStatus.Failed, FailureReason = "boom" },
+        };
+        sut.Repository.GetByCourseIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(files);
+
+        var result = await sut.Service.GetPublishedFilesAsync("course_1");
+
+        var file = Assert.Single(result);
+        Assert.Equal("f1", file.Id);
+        Assert.Equal("Some text", file.ParsedContent);
+        await sut.CourseService.DidNotReceiveWithAnyArgs().EnsureOwnedDraftAsync(default!, default);
+    }
 }

@@ -27,7 +27,7 @@ public class DatabaseSeederAiConfigTests
     }
 
     [Fact]
-    public async Task SeedAsync_seeds_all_7_AiTaskConfig_rows_on_a_fresh_database()
+    public async Task SeedAsync_seeds_all_AiTaskConfig_rows_on_a_fresh_database()
     {
         await using var db = NewContext();
 
@@ -45,7 +45,7 @@ public class DatabaseSeederAiConfigTests
         db.AiTaskConfigs.Add(new AiTaskConfig
         {
             Id = "existing",
-            TaskId = AiTaskIds.ExplainTopic,
+            TaskId = AiTaskIds.DefineKeyword,
             Provider = "Groq",
             Model = "llama-4-maverick",
             FallbackProvider = "OpenRouter",
@@ -67,7 +67,7 @@ public class DatabaseSeederAiConfigTests
         db.AiTaskConfigs.Add(new AiTaskConfig
         {
             Id = "existing",
-            TaskId = AiTaskIds.ExplainTopic,
+            TaskId = AiTaskIds.DefineKeyword,
             Provider = "CustomProvider",
             Model = "custom-model",
             FallbackProvider = "OpenRouter",
@@ -78,10 +78,10 @@ public class DatabaseSeederAiConfigTests
 
         await DatabaseSeeder.SeedAsync(db, FakeIdGenerator(), Substitute.For<IPasswordHasher>());
 
-        var explainTopicRows = await db.AiTaskConfigs.Where(c => c.TaskId == AiTaskIds.ExplainTopic).ToListAsync();
-        Assert.Single(explainTopicRows);
+        var defineKeywordRows = await db.AiTaskConfigs.Where(c => c.TaskId == AiTaskIds.DefineKeyword).ToListAsync();
+        Assert.Single(defineKeywordRows);
         // The pre-existing (admin-edited-looking) row is left untouched, not overwritten by the seed default.
-        Assert.Equal("CustomProvider", explainTopicRows[0].Provider);
+        Assert.Equal("CustomProvider", defineKeywordRows[0].Provider);
     }
 
     [Fact]

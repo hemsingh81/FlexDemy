@@ -13,7 +13,6 @@ public class ParseFileJob(
     IUnitOfWork unitOfWork,
     IFileStorageService fileStorage,
     IDocumentParser documentParser,
-    IExtractStructureJobEnqueuer extractStructureJobEnqueuer,
     ICorrelationIdAccessor correlationIdAccessor,
     IErrorCaptureService errorCaptureService) : IParseFileJob
 {
@@ -37,7 +36,7 @@ public class ParseFileJob(
         // execution) must not be reprocessed. Unlike ScanFileJob, `Parsing` itself is NOT a
         // terminal/skip state here -- it's this job's own legitimate in-progress marker, and a
         // retried execution after a transient failure will see it and must still continue.
-        if (courseFile.Status is JobItemStatus.Extracting or JobItemStatus.Failed or JobItemStatus.Done)
+        if (courseFile.Status is JobItemStatus.Failed or JobItemStatus.Done)
             return;
 
         try
@@ -60,44 +59,12 @@ public class ParseFileJob(
 
             if (result.IsSuccessful)
             {
-                // "Extracting" here means "ready for Story 2.8's extraction step," not that
-                // extraction is literally in progress -- same forward-looking marker convention
-                // Story 2.6 established for Queued.
-                courseFile.Status = JobItemStatus.Extracting;
+                // No AI structuring step anymore -- a clean parse goes straight to Done, and its
+                // raw ParsedContent is what the tutor/student actually see.
+                courseFile.Status = JobItemStatus.Done;
                 courseFile.ParsedContent = result.ParsedContent;
                 courseFile.FailureReason = null;
                 await unitOfWork.SaveChangesAsync(cancellationToken);
-
-                // Story 2.8: chains straight into ExtractStructureJob so a cleanly-parsed file
-                // proceeds into extraction automatically -- same "one background job per pipeline
-                // step, chained on success" shape as Story 2.6->2.7. Its own try/catch (not the
-                // outer one) so an enqueue failure isn't mislabeled as a parse failure -- the
-                // parse itself already succeeded and committed.
-                try
-                {
-                    extractStructureJobEnqueuer.Enqueue(courseFile.Id, correlationId);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    courseFile.Status = JobItemStatus.Failed;
-                    courseFile.FailureReason = Truncate($"Could not schedule extraction: {ex.Message}");
-                    await unitOfWork.SaveChangesAsync(cancellationToken);
-
-                    // Code-review patch: a Hangfire enqueue failure is exactly the backend
-                    // infrastructure failure this epic exists to surface.
-                    await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
-                    {
-                        ExceptionType = ex.GetType().Name,
-                        Message = ex.Message,
-                        StackTrace = ex.StackTrace,
-                        Source = ErrorSource.Backend,
-                        OriginContext = nameof(ParseFileJob),
-                        RelatedEntityType = nameof(Domain.Courses.CourseFile),
-                        RelatedEntityId = courseFile.Id,
-                        IsBackgroundJobFailure = true,
-                    }, cancellationToken);
-                }
-
                 return;
             }
 

@@ -118,21 +118,10 @@ export const moveToReview = (courseId: string): Promise<void> =>
 export const confirmReview = (courseId: string): Promise<void> =>
   write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/confirm-review`, 'POST');
 
-// Story 3.8/Task 5: the real publish trigger + checklist status read -- mirrors
-// PublishDtos.cs/ChecklistRowDto.cs exactly (camelCase, ASP.NET Core's default JSON policy, same
-// as every other DTO in this file).
-export interface ChecklistRowDto {
-  nodeId: string;
-  nodeKind: string;
-  title: string;
-  statusKind: string;
-  statusText: string;
-}
-
+// Publish is now a single, immediate, synchronous transition -- no per-node batch/checklist, no
+// isPublishing flag. Mirrors PublishDtos.cs's PublishStatusDto exactly (camelCase).
 export interface PublishStatusDto {
   lifecycleState: string;
-  isPublishing: boolean;
-  checklist: ChecklistRowDto[] | null;
 }
 
 // Story 3.10/Task 2-3: return-to-Draft (Published -> Draft, content untouched) plus version
@@ -143,8 +132,7 @@ export const returnToDraft = (courseId: string): Promise<void> =>
 export interface CourseVersionDto {
   id: string;
   publishedAt: string;
-  chapterCount: number;
-  topicCount: number;
+  fileCount: number;
 }
 
 export const getVersions = (courseId: string): Promise<CourseVersionDto[]> =>

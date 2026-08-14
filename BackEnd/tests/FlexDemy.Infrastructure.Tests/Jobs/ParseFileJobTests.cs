@@ -19,7 +19,7 @@ namespace FlexDemy.Infrastructure.Tests.Jobs;
 // correction for ScanFileJobTests.cs, this test lives in FlexDemy.Infrastructure.Tests/Jobs/ instead.
 public class ParseFileJobTests
 {
-    private sealed record Sut(ParseFileJob Job, ICourseFileRepository Repository, IUnitOfWork UnitOfWork, IFileStorageService FileStorage, IDocumentParser DocumentParser, IExtractStructureJobEnqueuer ExtractEnqueuer, ICorrelationIdAccessor CorrelationIdAccessor, IErrorCaptureService ErrorCaptureService);
+    private sealed record Sut(ParseFileJob Job, ICourseFileRepository Repository, IUnitOfWork UnitOfWork, IFileStorageService FileStorage, IDocumentParser DocumentParser, ICorrelationIdAccessor CorrelationIdAccessor, IErrorCaptureService ErrorCaptureService);
 
     private static Sut MakeSut()
     {
@@ -27,11 +27,10 @@ public class ParseFileJobTests
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var fileStorage = Substitute.For<IFileStorageService>();
         var documentParser = Substitute.For<IDocumentParser>();
-        var extractEnqueuer = Substitute.For<IExtractStructureJobEnqueuer>();
         var correlationIdAccessor = Substitute.For<ICorrelationIdAccessor>();
         var errorCaptureService = Substitute.For<IErrorCaptureService>();
-        var job = new ParseFileJob(repository, unitOfWork, fileStorage, documentParser, extractEnqueuer, correlationIdAccessor, errorCaptureService);
-        return new Sut(job, repository, unitOfWork, fileStorage, documentParser, extractEnqueuer, correlationIdAccessor, errorCaptureService);
+        var job = new ParseFileJob(repository, unitOfWork, fileStorage, documentParser, correlationIdAccessor, errorCaptureService);
+        return new Sut(job, repository, unitOfWork, fileStorage, documentParser, correlationIdAccessor, errorCaptureService);
     }
 
     private static CourseFile MakeQueuedFile(string id = "file_1") => new()
@@ -82,7 +81,7 @@ public class ParseFileJobTests
     }
 
     [Fact]
-    public async Task RunAsync_a_successful_parse_sets_Status_Extracting_and_ParsedContent_and_enqueues_the_extract_job()
+    public async Task RunAsync_a_successful_parse_sets_Status_Done_and_ParsedContent()
     {
         var sut = MakeSut();
         var file = MakeQueuedFile();
@@ -93,15 +92,14 @@ public class ParseFileJobTests
 
         await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
-        Assert.Equal(JobItemStatus.Extracting, file.Status);
+        Assert.Equal(JobItemStatus.Done, file.Status);
         Assert.Equal("# Parsed Notes", file.ParsedContent);
         Assert.Null(file.FailureReason);
-        sut.ExtractEnqueuer.Received(1).Enqueue("file_1", Arg.Any<string?>());
     }
 
     // Story 4.1/AC#4-5: mirrors ScanFileJobTests.cs's identical propagation test.
     [Fact]
-    public async Task RunAsync_sets_the_correlation_accessor_and_forwards_the_same_id_to_the_extract_enqueuer()
+    public async Task RunAsync_sets_the_correlation_accessor()
     {
         var sut = MakeSut();
         var file = MakeQueuedFile();
@@ -113,27 +111,6 @@ public class ParseFileJobTests
         await sut.Job.RunAsync("file_1", "corr-abc", CancellationToken.None);
 
         sut.CorrelationIdAccessor.Received(1).Set("corr-abc");
-        sut.ExtractEnqueuer.Received(1).Enqueue("file_1", "corr-abc");
-    }
-
-    // Story 2.8: a successful parse whose only failure is *scheduling* extraction must not be
-    // mislabeled as a parse failure -- the parse itself succeeded (mirrors ScanFileJob's identical
-    // enqueue-failure-message-accuracy fix from Story 2.6/2.7's own review).
-    [Fact]
-    public async Task RunAsync_a_successful_parse_whose_extract_enqueue_throws_marks_Failed_with_an_accurate_reason()
-    {
-        var sut = MakeSut();
-        var file = MakeQueuedFile();
-        sut.Repository.GetByIdAsync("file_1", Arg.Any<CancellationToken>()).Returns(file);
-        sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>()).Returns(new MemoryStream([1]));
-        sut.DocumentParser.ParseAsync(Arg.Any<Stream>(), file.FileName, file.ContentType, Arg.Any<CancellationToken>())
-            .Returns(new DocumentParseResult(true, "# Parsed Notes", null));
-        sut.ExtractEnqueuer.When(e => e.Enqueue(Arg.Any<string>(), Arg.Any<string?>())).Do(_ => throw new InvalidOperationException("Hangfire storage unavailable"));
-
-        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
-
-        Assert.Equal(JobItemStatus.Failed, file.Status);
-        Assert.Contains("schedule extraction", file.FailureReason);
     }
 
     [Fact]
@@ -227,7 +204,6 @@ public class ParseFileJobTests
     // Idempotency guard: unlike ScanFileJob, Parsing itself is a legitimate in-progress marker
     // (interim state committed at the start of every attempt) -- only a truly terminal row skips.
     [Theory]
-    [InlineData(JobItemStatus.Extracting)]
     [InlineData(JobItemStatus.Failed)]
     [InlineData(JobItemStatus.Done)]
     public async Task RunAsync_is_a_no_op_for_a_row_already_in_a_terminal_state(JobItemStatus status)
@@ -259,7 +235,7 @@ public class ParseFileJobTests
 
         await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
-        Assert.Equal(JobItemStatus.Extracting, file.Status);
+        Assert.Equal(JobItemStatus.Done, file.Status);
         // Only the final-state save -- no redundant Queued->Parsing save on a retry.
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }

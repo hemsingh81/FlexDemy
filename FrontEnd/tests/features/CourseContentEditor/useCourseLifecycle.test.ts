@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { useCourseLifecycle, PUBLISH_POLL_INTERVAL_MS } from '@/src/features/CourseContentEditor/useCourseLifecycle';
+import { useCourseLifecycle } from '@/src/features/CourseContentEditor/useCourseLifecycle';
 import * as courseDraftService from '@/src/services/courseDraftService';
 import type { CourseVersionDto, PublishStatusDto } from '@/src/services/courseDraftService';
 
@@ -24,13 +24,11 @@ vi.mock('@/src/context/ToastContext', async () => {
   return { ...actual, useToast: () => ({ showToast: mockShowToast }) };
 });
 
-// Story 3.9/Task 4: real-wires Story 3.4's own mock setInterval state machine -- this file
-// exercises the same state-machine behavior Story 3.4's own tests already established, just
-// sourced from mocked HTTP responses instead of the removed mock timers.
+// Publish is now a single, immediate, synchronous transition -- no per-node checklist/batch to
+// track, so this file no longer exercises a mock setInterval progression, just the plain
+// state-machine transitions sourced from mocked HTTP responses.
 const makeStatus = (overrides: Partial<PublishStatusDto> = {}): PublishStatusDto => ({
   lifecycleState: 'Draft',
-  isPublishing: false,
-  checklist: null,
   ...overrides,
 });
 
@@ -40,78 +38,52 @@ beforeEach(() => {
 });
 
 describe('useCourseLifecycle', () => {
-  it('starts in draft with no checklist and is not publishing, before the initial load resolves', () => {
+  it('starts in draft before the initial load resolves', () => {
     const { result } = renderHook(() => useCourseLifecycle('course_1'));
 
     expect(result.current.state).toBe('draft');
     expect(result.current.isPublishing).toBe(false);
-    expect(result.current.checklist).toBeNull();
   });
 
   it('the initial load picks up wherever this course already is, not always draft', async () => {
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'ReviewConfirmed', isPublishing: true, checklist: [] })
-    );
+    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'ReviewConfirmed' }));
 
     const { result } = renderHook(() => useCourseLifecycle('course_1'));
 
     await waitFor(() => expect(result.current.state).toBe('reviewConfirmed'));
-    expect(result.current.isPublishing).toBe(true);
     expect(courseDraftService.getPublishStatus).toHaveBeenCalledWith('course_1');
   });
 
-  it('triggerReviewAsStudent calls moveToReview and transitions draft -> inReview on success', async () => {
+  it('triggerMoveToReview calls moveToReview and transitions draft -> inReview on success', async () => {
     vi.mocked(courseDraftService.moveToReview).mockResolvedValue(undefined);
-    const onReady = vi.fn();
-    const { result } = renderHook(() => useCourseLifecycle('course_1', onReady));
+    const { result } = renderHook(() => useCourseLifecycle('course_1'));
 
-    await act(async () => result.current.triggerReviewAsStudent());
+    await act(async () => result.current.triggerMoveToReview());
 
     expect(courseDraftService.moveToReview).toHaveBeenCalledWith('course_1');
     expect(result.current.state).toBe('inReview');
-    expect(onReady).toHaveBeenCalledTimes(1);
   });
 
-  it('triggerReviewAsStudent surfaces a failure via the toast and leaves state unchanged', async () => {
+  it('triggerMoveToReview surfaces a failure via the toast and leaves state unchanged', async () => {
     vi.mocked(courseDraftService.moveToReview).mockRejectedValue(
-      new courseDraftService.CourseDraftError('At least one node is unconfirmed.')
+      new courseDraftService.CourseDraftError('The course has no parsed content yet.')
     );
     const { result } = renderHook(() => useCourseLifecycle('course_1'));
 
-    await act(async () => result.current.triggerReviewAsStudent());
+    await act(async () => result.current.triggerMoveToReview());
 
     expect(result.current.state).toBe('draft');
-    expect(mockShowToast).toHaveBeenCalledWith({ message: 'At least one node is unconfirmed.', variant: 'error' });
+    expect(mockShowToast).toHaveBeenCalledWith({ message: 'The course has no parsed content yet.', variant: 'error' });
   });
 
-  // Code-review patch: a tutor who already moved a course past Draft (in an earlier visit, or by
-  // closing the preview once already) must still be able to reopen the preview through InReview/
-  // ReviewConfirmed -- only the one-time Draft -> InReview transition itself is skipped.
-  it.each(['InReview', 'ReviewConfirmed'])(
-    'triggerReviewAsStudent reopens the preview without re-calling moveToReview when state is already %s',
-    async (lifecycleState) => {
-      vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState }));
-      const onReady = vi.fn();
-      const { result } = renderHook(() => useCourseLifecycle('course_1', onReady));
-      await waitFor(() => expect(result.current.state).not.toBe('draft'));
+  it('triggerMoveToReview is a no-op unless state is draft', async () => {
+    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'InReview' }));
+    const { result } = renderHook(() => useCourseLifecycle('course_1'));
+    await waitFor(() => expect(result.current.state).toBe('inReview'));
 
-      await act(async () => result.current.triggerReviewAsStudent());
-
-      expect(courseDraftService.moveToReview).not.toHaveBeenCalled();
-      expect(onReady).toHaveBeenCalledTimes(1);
-    }
-  );
-
-  it('triggerReviewAsStudent is a no-op once the course is published', async () => {
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'Published' }));
-    const onReady = vi.fn();
-    const { result } = renderHook(() => useCourseLifecycle('course_1', onReady));
-    await waitFor(() => expect(result.current.state).toBe('published'));
-
-    await act(async () => result.current.triggerReviewAsStudent());
+    await act(async () => result.current.triggerMoveToReview());
 
     expect(courseDraftService.moveToReview).not.toHaveBeenCalled();
-    expect(onReady).not.toHaveBeenCalled();
   });
 
   it('triggerConfirmReview calls confirmReview and transitions inReview -> reviewConfirmed on success', async () => {
@@ -135,27 +107,19 @@ describe('useCourseLifecycle', () => {
     expect(result.current.state).toBe('draft');
   });
 
-  it('triggerPublish calls publishCourse then re-fetches status, applying the checklist/isPublishing it returns', async () => {
+  it('triggerPublish calls publishCourse, sets isPublishing while in flight, then re-fetches status', async () => {
     vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'ReviewConfirmed' }));
     const { result } = renderHook(() => useCourseLifecycle('course_1'));
     await waitFor(() => expect(result.current.state).toBe('reviewConfirmed'));
 
     vi.mocked(courseDraftService.publishCourse).mockResolvedValue(undefined);
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({
-        lifecycleState: 'ReviewConfirmed',
-        isPublishing: true,
-        checklist: [{ nodeId: 'topic_1', nodeKind: 'topic', title: 'Topic 1', statusKind: 'inProgress', statusText: 'Generating Level 1 of 5…' }],
-      })
-    );
+    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'Published' }));
 
     await act(async () => result.current.triggerPublish());
 
     expect(courseDraftService.publishCourse).toHaveBeenCalledWith('course_1');
-    expect(result.current.isPublishing).toBe(true);
-    expect(result.current.checklist).toEqual([
-      { nodeId: 'topic_1', nodeKind: 'topic', title: 'Topic 1', statusKind: 'inProgress', statusText: 'Generating Level 1 of 5…' },
-    ]);
+    expect(result.current.state).toBe('published');
+    expect(result.current.isPublishing).toBe(false);
   });
 
   it('triggerPublish is a no-op unless state is reviewConfirmed', async () => {
@@ -166,62 +130,13 @@ describe('useCourseLifecycle', () => {
     expect(courseDraftService.publishCourse).not.toHaveBeenCalled();
   });
 
-  it('triggerPublish is a no-op while already publishing, so a re-click never discards existing progress', async () => {
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'ReviewConfirmed', isPublishing: true, checklist: [] })
-    );
-    const { result } = renderHook(() => useCourseLifecycle('course_1'));
-    await waitFor(() => expect(result.current.isPublishing).toBe(true));
-
-    await act(async () => result.current.triggerPublish());
-
-    expect(courseDraftService.publishCourse).not.toHaveBeenCalled();
-  });
-
-  it('polls getPublishStatus while isPublishing, and stops once it flips false', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'ReviewConfirmed', isPublishing: true, checklist: [] })
-    );
-    const { result } = renderHook(() => useCourseLifecycle('course_1'));
-    await waitFor(() => expect(result.current.isPublishing).toBe(true));
-
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'Published', isPublishing: false, checklist: [] })
-    );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(PUBLISH_POLL_INTERVAL_MS);
-    });
-
-    expect(result.current.isPublishing).toBe(false);
-    expect(result.current.state).toBe('published');
-
-    vi.mocked(courseDraftService.getPublishStatus).mockClear();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(PUBLISH_POLL_INTERVAL_MS * 3);
-    });
-    expect(courseDraftService.getPublishStatus).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
-  });
-
-  it('retryFailedNode re-fetches publish status immediately -- no dedicated backend retry endpoint exists', async () => {
-    const { result } = renderHook(() => useCourseLifecycle('course_1'));
-    await waitFor(() => expect(courseDraftService.getPublishStatus).toHaveBeenCalledTimes(1));
-
-    await act(async () => result.current.retryFailedNode('topic_1'));
-
-    expect(courseDraftService.getPublishStatus).toHaveBeenCalledTimes(2);
-  });
-
   it('every trigger is a no-op while courseId is null', async () => {
     const { result } = renderHook(() => useCourseLifecycle(null));
 
     await act(async () => {
-      result.current.triggerReviewAsStudent();
+      result.current.triggerMoveToReview();
       result.current.triggerConfirmReview();
       result.current.triggerPublish();
-      result.current.retryFailedNode('topic_1');
     });
 
     expect(result.current.state).toBe('draft');
@@ -236,8 +151,7 @@ describe('useCourseLifecycle', () => {
   const makeVersion = (overrides: Partial<CourseVersionDto> = {}): CourseVersionDto => ({
     id: 'version_1',
     publishedAt: '2026-08-01T00:00:00Z',
-    chapterCount: 2,
-    topicCount: 5,
+    fileCount: 3,
     ...overrides,
   });
 

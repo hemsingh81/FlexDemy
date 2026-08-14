@@ -20,20 +20,11 @@ vi.mock('@/src/services/courseDraftService', async () => {
 
 const makeStatus = (overrides: Partial<PublishStatusDto> = {}): PublishStatusDto => ({
   lifecycleState: 'Draft',
-  isPublishing: false,
-  checklist: null,
   ...overrides,
 });
 
-const CHECKLIST_IN_PROGRESS = [
-  { nodeId: 'chapter_1', nodeKind: 'chapter', title: 'Chapter 1: Waves & Chemistry', statusKind: 'done', statusText: '' },
-  { nodeId: 'topic_1', nodeKind: 'topic', title: 'Topic 1: Wave Motion', statusKind: 'inProgress', statusText: 'Generating Drill-Down Level 1 of 5…' },
-  { nodeId: 'subtopic_1', nodeKind: 'subtopic', title: 'Subtopic 1: Introduction', statusKind: 'failed', statusText: 'Generation failed — served on-demand for now' },
-] as const;
-
-// Story 3.9/Task 4: real-wires this component's hook against Story 3.8/3.9's real endpoints --
-// this file now mocks those HTTP calls instead of relying on the removed mock setInterval
-// progression, but exercises the identical AC#3/AC#4 UI behaviors Story 3.4's own tests established.
+// Publish is now a single, immediate, synchronous transition -- no per-node checklist/batch, so
+// this file mocks the plain HTTP calls and exercises the stage-nav/version-history UI only.
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus());
@@ -45,9 +36,9 @@ beforeEach(() => {
   vi.mocked(courseDraftService.restoreVersion).mockResolvedValue(undefined);
 });
 
-// Drives the bar through Draft -> InReview -> ReviewConfirmed, then optionally clicks Publish.
+// Drives the bar through Draft -> InReview -> ReviewConfirmed.
 const advanceToReviewConfirmed = async () => {
-  fireEvent.click(screen.getByRole('button', { name: 'Review as Student' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Move to Review' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Review' })).not.toBeDisabled());
   fireEvent.click(screen.getByRole('button', { name: 'Confirm Review' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).not.toBeDisabled());
@@ -60,7 +51,7 @@ describe('PublishLifecycleBar', () => {
     const publishButton = screen.getByRole('button', { name: 'Publish' });
     expect(publishButton).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review as Student' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to Review' }));
     await waitFor(() => expect(courseDraftService.moveToReview).toHaveBeenCalledWith('course_1'));
     expect(publishButton).toBeDisabled();
 
@@ -80,71 +71,29 @@ describe('PublishLifecycleBar', () => {
 
     expect(currentStageText()).toContain('Draft');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review as Student' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to Review' }));
     await waitFor(() => expect(currentStageText()).toContain('In Review'));
   });
 
-  it('the checklist container has aria-live="polite" while publishing', async () => {
+  it('Publish shows a pending label and is disabled while the request is in flight', async () => {
     render(<PublishLifecycleBar courseId="course_1" />);
     await advanceToReviewConfirmed();
 
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'ReviewConfirmed', isPublishing: true, checklist: [...CHECKLIST_IN_PROGRESS] })
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
-
-    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
-
-    const liveRegions = document.querySelectorAll('[aria-live="polite"]');
-    expect(liveRegions.length).toBeGreaterThan(0);
-  });
-
-  it('a failed row renders a Retry button that re-polls publish status', async () => {
-    render(<PublishLifecycleBar courseId="course_1" />);
-    await advanceToReviewConfirmed();
-
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'ReviewConfirmed', isPublishing: true, checklist: [...CHECKLIST_IN_PROGRESS] })
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
-
-    const retryButton = await screen.findByRole('button', { name: 'Retry' });
-    const callsBeforeRetry = vi.mocked(courseDraftService.getPublishStatus).mock.calls.length;
-
-    fireEvent.click(retryButton);
-
-    await waitFor(() => expect(vi.mocked(courseDraftService.getPublishStatus).mock.calls.length).toBeGreaterThan(callsBeforeRetry));
-  });
-
-  it('disables Publish once a batch is running, so a re-click cannot silently discard progress', async () => {
-    render(<PublishLifecycleBar courseId="course_1" />);
-    await advanceToReviewConfirmed();
-
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'ReviewConfirmed', isPublishing: true, checklist: [...CHECKLIST_IN_PROGRESS] })
+    let resolvePublish: () => void = () => undefined;
+    vi.mocked(courseDraftService.publishCourse).mockReturnValue(
+      new Promise((resolve) => {
+        resolvePublish = () => resolve(undefined);
+      })
     );
     const publishButton = screen.getByRole('button', { name: 'Publish' });
     fireEvent.click(publishButton);
 
-    // `state` itself stays 'reviewConfirmed' for the whole publishing duration -- only
-    // `isPublishing` distinguishes "running" from "ready to publish", so the button must reflect
-    // isPublishing too, not just state.
-    await waitFor(() => expect(publishButton).toBeDisabled());
-  });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled());
 
-  it('renders the checklist as a node-by-node list, not a spinner, while publishing', async () => {
-    render(<PublishLifecycleBar courseId="course_1" />);
-    await advanceToReviewConfirmed();
+    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'Published' }));
+    resolvePublish();
 
-    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(
-      makeStatus({ lifecycleState: 'ReviewConfirmed', isPublishing: true, checklist: [...CHECKLIST_IN_PROGRESS] })
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
-
-    await waitFor(() => expect(screen.getByText(/confirmed nodes generated/)).toBeInTheDocument());
-
-    expect(screen.getByText('Topic 1: Wave Motion')).toBeInTheDocument();
-    expect(screen.getByText('Subtopic 1: Introduction')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument());
   });
 
   // -- Story 3.10: Return to Draft + version history ------------------------------------------
@@ -178,7 +127,7 @@ describe('PublishLifecycleBar', () => {
 
   it('Version History toggles a fetched list of prior versions, closed by default', async () => {
     vi.mocked(courseDraftService.getVersions).mockResolvedValue([
-      { id: 'version_1', publishedAt: '2026-08-01T12:00:00Z', chapterCount: 2, topicCount: 5 },
+      { id: 'version_1', publishedAt: '2026-08-01T12:00:00Z', fileCount: 3 },
     ]);
     render(<PublishLifecycleBar courseId="course_1" />);
 
@@ -188,7 +137,7 @@ describe('PublishLifecycleBar', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Version history')).toBeInTheDocument());
     expect(courseDraftService.getVersions).toHaveBeenCalledWith('course_1');
-    expect(screen.getByText(/2 chapters, 5 topics/)).toBeInTheDocument();
+    expect(screen.getByText(/3 files/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide Version History' }));
     expect(screen.queryByLabelText('Version history')).not.toBeInTheDocument();
@@ -205,7 +154,7 @@ describe('PublishLifecycleBar', () => {
 
   it('clicking Restore on a version calls restoreVersion for that version id', async () => {
     vi.mocked(courseDraftService.getVersions).mockResolvedValue([
-      { id: 'version_1', publishedAt: '2026-08-01T12:00:00Z', chapterCount: 2, topicCount: 5 },
+      { id: 'version_1', publishedAt: '2026-08-01T12:00:00Z', fileCount: 3 },
     ]);
     render(<PublishLifecycleBar courseId="course_1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Version History' }));
