@@ -18,7 +18,8 @@ public class PublishService(
     IVersionService versionService,
     IIdGenerator idGenerator,
     IUnitOfWork unitOfWork,
-    IPublishNodeContentJobEnqueuer jobEnqueuer) : IPublishService
+    IPublishNodeContentJobEnqueuer jobEnqueuer,
+    ICorrelationIdAccessor correlationIdAccessor) : IPublishService
 {
     public async Task PublishAsync(string courseId, CancellationToken cancellationToken = default)
     {
@@ -74,8 +75,11 @@ public class PublishService(
 
         // Enqueued only after the items are committed -- a job that starts before its own
         // PublishBatchItem row exists would fail its GetItemByIdAsync lookup.
+        // Story 4.1/AD-23: read once -- every node-generation job spawned by this one publish
+        // trigger shares the same Correlation ID as the originating request.
+        var correlationId = correlationIdAccessor.Current;
         foreach (var item in items)
-            jobEnqueuer.Enqueue(item.Id);
+            jobEnqueuer.Enqueue(item.Id, correlationId);
     }
 
     public async Task<PublishStatusDto> GetStatusAsync(string courseId, CancellationToken cancellationToken = default)

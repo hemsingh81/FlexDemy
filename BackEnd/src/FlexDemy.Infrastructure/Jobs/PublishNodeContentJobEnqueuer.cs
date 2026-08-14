@@ -7,6 +7,6 @@ namespace FlexDemy.Infrastructure.Jobs;
 // ExtractStructureJobEnqueuer (2.8).
 public class PublishNodeContentJobEnqueuer : IPublishNodeContentJobEnqueuer
 {
-    public void Enqueue(string batchItemId) =>
-        BackgroundJob.Enqueue<IPublishNodeContentJob>(j => j.RunAsync(batchItemId, CancellationToken.None, null));
+    public void Enqueue(string batchItemId, string? correlationId) =>
+        BackgroundJob.Enqueue<IPublishNodeContentJob>(j => j.RunAsync(batchItemId, correlationId, CancellationToken.None, null));
 }

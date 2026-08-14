@@ -1,6 +1,7 @@
 using FlexDemy.Application.AdaptiveLearning;
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.ErrorObservability;
 using FlexDemy.Domain.AdaptiveLearning;
 using FlexDemy.Infrastructure.Jobs;
 using Hangfire;
@@ -22,7 +23,9 @@ public class PublishNodeContentJobTests
         IUnitOfWork UnitOfWork,
         IAdaptiveLearningService AdaptiveLearningService,
         IVersionService VersionService,
-        ICourseService CourseService);
+        ICourseService CourseService,
+        ICorrelationIdAccessor CorrelationIdAccessor,
+        IErrorCaptureService ErrorCaptureService);
 
     private static Sut MakeSut()
     {
@@ -31,13 +34,15 @@ public class PublishNodeContentJobTests
         var adaptiveLearningService = Substitute.For<IAdaptiveLearningService>();
         var versionService = Substitute.For<IVersionService>();
         var courseService = Substitute.For<ICourseService>();
+        var correlationIdAccessor = Substitute.For<ICorrelationIdAccessor>();
+        var errorCaptureService = Substitute.For<IErrorCaptureService>();
         // A single-item batch (Remaining=1) so DecrementRemainingAsync's default return value (0)
         // matches "this was the last item" for tests that don't care about the finalize branch
         // specifically -- tests that DO care override this explicitly.
         repository.DecrementRemainingAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(1);
 
-        var job = new PublishNodeContentJob(repository, unitOfWork, adaptiveLearningService, versionService, courseService);
-        return new Sut(job, repository, unitOfWork, adaptiveLearningService, versionService, courseService);
+        var job = new PublishNodeContentJob(repository, unitOfWork, adaptiveLearningService, versionService, courseService, correlationIdAccessor, errorCaptureService);
+        return new Sut(job, repository, unitOfWork, adaptiveLearningService, versionService, courseService, correlationIdAccessor, errorCaptureService);
     }
 
     private static PublishBatch MakeBatch(string id = "batch_1", string courseId = "course_1") =>
@@ -49,7 +54,7 @@ public class PublishNodeContentJobTests
     private static PerformContext MakePerformContext(int? retryCount)
     {
         var method = typeof(IPublishNodeContentJob).GetMethod(nameof(IPublishNodeContentJob.RunAsync))!;
-        var job = new Job(typeof(IPublishNodeContentJob), method, "item_1", CancellationToken.None, null!);
+        var job = new Job(typeof(IPublishNodeContentJob), method, "item_1", null!, CancellationToken.None, null!);
         var backgroundJob = new BackgroundJob("job_1", job, DateTime.UtcNow);
         var connection = Substitute.For<IStorageConnection>();
         connection.GetJobParameter("job_1", "RetryCount").Returns(retryCount?.ToString());
@@ -67,7 +72,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetItemByIdAsync("item_1", Arg.Any<CancellationToken>()).Returns(item);
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         Assert.Equal(PublishItemStatus.Done, item.Status);
         for (var level = 1; level <= 5; level++)
@@ -89,7 +94,7 @@ public class PublishNodeContentJobTests
         sut.AdaptiveLearningService.When(s => s.GenerateWayAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>()))
             .Do(_ => progressSnapshots.Add(item.ProgressText));
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         Assert.Equal(10, progressSnapshots.Count);
         Assert.Equal("Generating Level 1 of 5…", progressSnapshots[0]);
@@ -109,12 +114,16 @@ public class PublishNodeContentJobTests
             .Returns<DrilldownLevelDto>(_ => throw new AiResponseValidationException("unusable response"));
 
         // No exception should escape RunAsync -- the batch must not be blocked by one node's failure.
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         Assert.Equal(PublishItemStatus.Failed, item.Status);
         // Levels 1-3 were attempted (level 3 is the one that throws); level 4/5 and all 5 Ways never ran.
         await sut.AdaptiveLearningService.Received(3).GenerateLevelAsync("course_1", "topic_1", Arg.Any<int>(), Arg.Any<CancellationToken>());
         await sut.AdaptiveLearningService.DidNotReceiveWithAnyArgs().GenerateWayAsync(default!, default!, default, default);
+        await sut.ErrorCaptureService.Received(1).CaptureAsync(
+            Arg.Is<ErrorCaptureRequest>(r => r.ExceptionType == "AiResponseValidationException"
+                && r.RelatedEntityType == nameof(PublishBatchItem) && r.RelatedEntityId == "item_1" && r.IsBackgroundJobFailure),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -127,10 +136,14 @@ public class PublishNodeContentJobTests
         sut.AdaptiveLearningService.GenerateLevelAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns<DrilldownLevelDto>(_ => throw new AiTaskBudgetExceededException("explainTopic"));
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         Assert.Equal(PublishItemStatus.Failed, item.Status);
         Assert.Contains("budget", item.ProgressText, StringComparison.OrdinalIgnoreCase);
+        await sut.ErrorCaptureService.Received(1).CaptureAsync(
+            Arg.Is<ErrorCaptureRequest>(r => r.ExceptionType == "AiTaskBudgetExceededException"
+                && r.RelatedEntityType == nameof(PublishBatchItem) && r.RelatedEntityId == "item_1" && r.IsBackgroundJobFailure),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -144,11 +157,14 @@ public class PublishNodeContentJobTests
             .Returns<DrilldownLevelDto>(_ => throw new AiTaskUnavailableException("explainTopic"));
         var context = MakePerformContext(retryCount: 1); // attempt 2 of 5 -- not the last
 
-        await Assert.ThrowsAsync<AiTaskUnavailableException>(() => sut.Job.RunAsync("item_1", CancellationToken.None, context));
+        await Assert.ThrowsAsync<AiTaskUnavailableException>(() => sut.Job.RunAsync("item_1", null, CancellationToken.None, context));
 
         Assert.Equal(PublishItemStatus.InProgress, item.Status);
         // A retry-worthy failure must not decrement the batch counter -- only a terminal item does.
         await sut.Repository.DidNotReceiveWithAnyArgs().DecrementRemainingAsync(default!, default!, default);
+        // Story 4.3/AC #4: not yet a terminal failure -- CaptureAsync must not be called for a retry
+        // that still has attempts left.
+        await sut.ErrorCaptureService.DidNotReceiveWithAnyArgs().CaptureAsync(default!, default);
     }
 
     [Fact]
@@ -162,10 +178,27 @@ public class PublishNodeContentJobTests
             .Returns<DrilldownLevelDto>(_ => throw new AiTaskUnavailableException("explainTopic"));
         var context = MakePerformContext(retryCount: 4); // attempt 5 of 5 -- the last
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None, context);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None, context);
 
         Assert.Equal(PublishItemStatus.Failed, item.Status);
         Assert.Equal("AI generation unavailable — retries exhausted", item.ProgressText);
+        await sut.ErrorCaptureService.Received(1).CaptureAsync(
+            Arg.Is<ErrorCaptureRequest>(r => r.ExceptionType == "AiTaskUnavailableException" && r.IsBackgroundJobFailure),
+            Arg.Any<CancellationToken>());
+    }
+
+    // Story 4.3/AC #4: a job that succeeds outright never calls CaptureAsync.
+    [Fact]
+    public async Task RunAsync_success_never_calls_CaptureAsync()
+    {
+        var sut = MakeSut();
+        var item = MakeQueuedItem();
+        sut.Repository.GetItemByIdAsync("item_1", Arg.Any<CancellationToken>()).Returns(item);
+        sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
+
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
+
+        await sut.ErrorCaptureService.DidNotReceiveWithAnyArgs().CaptureAsync(default!, default);
     }
 
     // Code-review-lesson-applied-proactively / story-text-correction: Task 2's own literal text
@@ -190,7 +223,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetItemByIdAsync("item_1", Arg.Any<CancellationToken>()).Returns(item);
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         await sut.AdaptiveLearningService.DidNotReceiveWithAnyArgs().GenerateLevelAsync(default!, default!, default, default);
         // No interim-progress SaveChangesAsync from the (skipped) generation loop -- the only
@@ -208,7 +241,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetItemByIdAsync("item_1", Arg.Any<CancellationToken>()).Returns(item);
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         await sut.AdaptiveLearningService.DidNotReceiveWithAnyArgs().GenerateLevelAsync(default!, default!, default, default);
     }
@@ -222,7 +255,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetItemByIdAsync("item_1", Arg.Any<CancellationToken>()).Returns(item);
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         Assert.Equal(PublishItemStatus.Done, item.Status);
         await sut.AdaptiveLearningService.Received(5).GenerateLevelAsync("course_1", "topic_1", Arg.Any<int>(), Arg.Any<CancellationToken>());
@@ -237,7 +270,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
         sut.Repository.DecrementRemainingAsync("item_1", "batch_1", Arg.Any<CancellationToken>()).Returns(0);
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         await sut.VersionService.Received(1).CreateSnapshotAsync("course_1", Arg.Any<CancellationToken>());
         await sut.CourseService.Received(1).MarkPublishedAsync("course_1", Arg.Any<CancellationToken>());
@@ -252,7 +285,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
         sut.Repository.DecrementRemainingAsync("item_1", "batch_1", Arg.Any<CancellationToken>()).Returns(3);
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         await sut.VersionService.DidNotReceiveWithAnyArgs().CreateSnapshotAsync(default!, default);
         await sut.CourseService.DidNotReceive().MarkPublishedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -269,7 +302,7 @@ public class PublishNodeContentJobTests
         sut.AdaptiveLearningService.GenerateLevelAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns<DrilldownLevelDto>(_ => throw new AiTaskBudgetExceededException("explainTopic"));
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         Assert.Equal(PublishItemStatus.Failed, item.Status);
         await sut.Repository.Received(1).DecrementRemainingAsync("item_1", "batch_1", Arg.Any<CancellationToken>());
@@ -294,7 +327,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetItemByIdAsync("item_1", Arg.Any<CancellationToken>()).Returns(item);
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         await sut.Repository.Received(1).DecrementRemainingAsync("item_1", "batch_1", Arg.Any<CancellationToken>());
     }
@@ -313,7 +346,7 @@ public class PublishNodeContentJobTests
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
         sut.Repository.DecrementRemainingAsync("item_1", "batch_1", Arg.Any<CancellationToken>()).Returns(0);
 
-        await sut.Job.RunAsync("item_1", CancellationToken.None);
+        await sut.Job.RunAsync("item_1", null, CancellationToken.None);
 
         await sut.VersionService.Received(1).CreateSnapshotAsync("course_1", Arg.Any<CancellationToken>());
         await sut.CourseService.Received(1).MarkPublishedAsync("course_1", Arg.Any<CancellationToken>());
@@ -329,6 +362,6 @@ public class PublishNodeContentJobTests
         sut.Repository.GetItemByIdAsync("item_1", Arg.Any<CancellationToken>()).Returns(item);
         sut.Repository.GetByIdAsync("batch_1", Arg.Any<CancellationToken>()).Returns(MakeBatch());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.Job.RunAsync("item_1", CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.Job.RunAsync("item_1", null, CancellationToken.None));
     }
 }

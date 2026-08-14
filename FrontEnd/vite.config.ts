@@ -27,7 +27,7 @@ export default defineConfig(() => {
       // story's own golden-file screenshot tests, via @vitest/browser-playwright + real Chromium.
       projects: [
         {
-          extends: true,
+          extends: true as const,
           test: {
             name: 'unit',
             environment: 'jsdom',
@@ -42,7 +42,7 @@ export default defineConfig(() => {
           },
         },
         {
-          extends: true,
+          extends: true as const,
           test: {
             name: 'visual',
             include: ['tests/**/__screenshots__/**/*.test.{ts,tsx}'],
@@ -55,7 +55,7 @@ export default defineConfig(() => {
             browser: {
               enabled: true,
               provider: playwright(),
-              instances: [{browser: 'chromium'}],
+              instances: [{browser: 'chromium' as const}],
               headless: true,
               screenshotFailures: false,
             },

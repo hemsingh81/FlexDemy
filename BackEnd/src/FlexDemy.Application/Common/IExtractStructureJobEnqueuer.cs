@@ -7,5 +7,6 @@ namespace FlexDemy.Application.Common;
 // under the hood, per this story's Task 5.
 public interface IExtractStructureJobEnqueuer
 {
-    void Enqueue(string courseFileId);
+    // Story 4.1/AD-23: see IScanFileJobEnqueuer's own header comment for why this parameter exists.
+    void Enqueue(string courseFileId, string? correlationId);
 }

@@ -118,10 +118,13 @@ const FileRow: React.FC<FileRowProps> = ({ file, index, onRetry }) => (
 // Story 2.3 extends this same top component with the Chapter/Topic/Subtopic tree beneath the
 // file list.
 export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen, onClose, draftId }) => {
-  const { data, addFiles, retryFile, resetFiles } = useFileUpload(draftId);
+  const { data, error: fileUploadError, addFiles, retryFile, resetFiles } = useFileUpload(draftId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentTree = useCourseContentTree(draftId);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
+  // Visual feedback only while a native OS drag is over the dropzone below -- not persisted
+  // anywhere, reset unconditionally on drop/leave.
+  const [isDraggingFilesOver, setIsDraggingFilesOver] = useState(false);
   // Story 3.9/Task 5: opened by PublishLifecycleBar's "Review as Student" button, the instant
   // Task 1's move-to-review call actually succeeds server-side (see useCourseLifecycle.ts's own
   // onReviewAsStudentReady callback) -- not on click alone, since the button is a no-op unless
@@ -273,11 +276,45 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
 
   if (!isOpen) return null;
 
+  // Bug fix: in real browsers `input.files` is a *live* FileList tied to the input's own value --
+  // resetting `e.target.value` clears that same FileList object immediately, in the same
+  // synchronous tick, before any code below it runs. The previous version read `e.target.files`
+  // into a variable, then reset `.value`, then checked that variable's length -- by then it was
+  // already emptied, so this always hit the early return and addFiles() never ran, no matter what
+  // file was picked. jsdom's mock file input doesn't reproduce this live-clearing behavior, which
+  // is why no existing test caught it. Fix: snapshot into a real array FIRST, then reset `.value`.
+  // Bug fix: in real browsers `input.files` is a *live* FileList tied to the input's own value --
+  // resetting `e.target.value` clears that same FileList object immediately, in the same
+  // synchronous tick, before any code below it runs. The previous version read `e.target.files`
+  // into a variable, then reset `.value`, then checked that variable's length -- by then it was
+  // already emptied, so this always hit the early return and addFiles() never ran, no matter what
+  // file was picked. jsdom's mock file input doesn't reproduce this live-clearing behavior, which
+  // is why no existing test caught it. Fix: snapshot into a real array FIRST, then reset `.value`.
+  // Bug fix: in real browsers `input.files` is a *live* FileList tied to the input's own value --
+  // resetting `e.target.value` clears that same FileList object immediately, in the same
+  // synchronous tick, before any code below it runs. The previous version read `e.target.files`
+  // into a variable, then reset `.value`, then checked that variable's length -- by then it was
+  // already emptied, so this always hit the early return and addFiles() never ran, no matter what
+  // file was picked. jsdom's mock file input doesn't reproduce this live-clearing behavior, which
+  // is why no existing test caught it. Fix: snapshot into a real array FIRST, then reset `.value`.
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
+    const files: File[] = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!fileList || fileList.length === 0) return;
-    const files: File[] = Array.from(fileList);
+    if (files.length === 0) return;
+    addFiles(files);
+  };
+
+  // Bug fix: the dropzone below has always looked like a drag-and-drop target (dashed border,
+  // "+ Add files") but had no drop handling at all -- dragging files onto it silently did
+  // nothing. No client-side type filtering here: CourseFileService.UploadFileAsync already
+  // validates content-type server-side and rejects unsupported files with a specific reason,
+  // which surfaces as a normal "Failed" row (same path an invalid file picked via the native
+  // picker would take).
+  const handleFilesDropped = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setIsDraggingFilesOver(false);
+    const files: File[] = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
     addFiles(files);
   };
 
@@ -319,6 +356,12 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
           </p>
         </div>
 
+        {fileUploadError && (
+          <p role="alert" className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            {fileUploadError}
+          </p>
+        )}
+
         <div className="space-y-2">
           {data.map((file, index) => (
             <FileRow key={file.id} file={file} index={index} onRetry={retryFile} />
@@ -328,10 +371,20 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="w-full p-4 rounded-xl border-2 border-dashed border-[#E1DED4] flex items-center justify-center gap-2 text-[#5E6A79] hover:border-[#BA5012] hover:text-[#BA5012] transition-colors text-xs font-bold"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDraggingFilesOver(true);
+          }}
+          onDragLeave={() => setIsDraggingFilesOver(false)}
+          onDrop={handleFilesDropped}
+          className={`w-full p-4 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-colors text-xs font-bold ${
+            isDraggingFilesOver
+              ? 'border-[#BA5012] text-[#BA5012] bg-[#BA5012]/5'
+              : 'border-[#E1DED4] text-[#5E6A79] hover:border-[#BA5012] hover:text-[#BA5012]'
+          }`}
         >
           <Plus className="w-4 h-4" />
-          <span>Add files</span>
+          <span>Add files, or drag and drop them here</span>
         </button>
 
         <input

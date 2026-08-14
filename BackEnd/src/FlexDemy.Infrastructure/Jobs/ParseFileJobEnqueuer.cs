@@ -7,6 +7,6 @@ namespace FlexDemy.Infrastructure.Jobs;
 // ScanFileJobEnqueuer (Story 2.6).
 public class ParseFileJobEnqueuer : IParseFileJobEnqueuer
 {
-    public void Enqueue(string courseFileId) =>
-        BackgroundJob.Enqueue<IParseFileJob>(j => j.RunAsync(courseFileId, CancellationToken.None, null));
+    public void Enqueue(string courseFileId, string? correlationId) =>
+        BackgroundJob.Enqueue<IParseFileJob>(j => j.RunAsync(courseFileId, correlationId, CancellationToken.None, null));
 }

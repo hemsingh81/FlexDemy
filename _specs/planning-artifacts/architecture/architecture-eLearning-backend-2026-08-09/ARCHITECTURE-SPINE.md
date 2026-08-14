@@ -7,9 +7,9 @@ paradigm: 'Clean Architecture (Onion) — Domain at the center, Application/Infr
 scope: 'BackEnd/ — greenfield ASP.NET Web API (C#) service on PostgreSQL, Docker-deployed; project structure, layering rules, and coding conventions an AI assistant or new contributor can follow consistently'
 status: final
 created: '2026-08-09'
-updated: '2026-08-11'
+updated: '2026-08-13'
 binds: []
-sources: ['FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md']
+sources: ['FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md', '{planning_artifacts}/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md']
 companions: []
 ---
 
@@ -174,6 +174,18 @@ flowchart TB
 - **Prevents:** paying for a commercial scanning API when a free, actively-maintained, open-source scanner covers this small-scale, tutor-only upload surface — decided in cost review, 2026-08-11
 - **Rule:** ClamAV (Cisco-Talos, GPLv2, official `clamav/clamav` Docker image, web-verified Aug 2026) runs as its own service (`clamav`, AD-13), reached over its `clamd` TCP protocol — `Infrastructure/Scanning/` gets a client (e.g. an `nClam`-class .NET ClamAV client, `[ASSUMPTION: exact client library not yet chosen — confirm before build]`) implementing an `IFileScanner` interface defined in `Application/Common/`. A file failing the scan is rejected at FR-11's upload step with a specific reason, before ever reaching AD-21's parsing step. ClamAV's documented lower detection rate on novel/obfuscated malware (vs. commercial engines) is an accepted trade-off at this upload surface's scale and threat profile — supplementing with a free third-party signature feed (e.g. SaneSecurity) is a future hardening option, not required for launch.
 
+### AD-23 — Correlation ID: ambient accessor for the HTTP path, explicit job parameter for the async path [ASSUMPTION]
+
+- **Binds:** FR-20/FR-21/FR-22 (`prd-eLearning-ErrorObservability-2026-08-13`)
+- **Prevents:** two engineers picking incompatible propagation mechanisms — one threading an explicit `correlationId` parameter through every method call, another reaching for `HttpContext.Items` directly inside an Application service (which would violate AD-1: Application/Domain must never reference `HttpContext`) — and, separately, silently assuming ambient request state survives into a Hangfire job's execution when it structurally cannot (a job runs on Hangfire's own server loop, on a different thread, with no relationship to the enqueuing request's async-flow context).
+- **Rule:** a new `Application/Common/ICorrelationIdAccessor` interface (`Current` getter, `Set(...)`) is the only sanctioned way to read or set the correlation ID — implemented in Infrastructure via an `AsyncLocal<string?>`-backed accessor, so it survives `await` boundaries within one request without being threaded as an explicit parameter through every intermediate call. A new `CorrelationIdMiddleware` in Api reads the inbound `X-Correlation-Id` header (or generates a GUID if absent), calls `ICorrelationIdAccessor.Set(...)`, and echoes it back on the response — registered **before** `ExceptionHandlingMiddleware` (AD-5's extension point) so an exception always has an ID to attach by the time it's caught. For the async path (extends AD-15): each `I{X}JobEnqueuer` method gains an explicit `correlationId` parameter, captured from `ICorrelationIdAccessor.Current` by the *calling* Application service at enqueue time and forwarded as an explicit `BackgroundJob.Enqueue<IXJob>(j => j.RunAsync(id, correlationId, CancellationToken.None, null))` argument; the job's `RunAsync` calls `ICorrelationIdAccessor.Set(correlationId)` as its first line, so every downstream capture call within that job's execution picks it up through the same accessor as the HTTP path — never derived independently inside the job. `[ASSUMPTION: mints its own GUID rather than reusing ASP.NET Core's built-in HttpContext.TraceIdentifier, to avoid coupling this feature's identifier semantics to a framework-internal value that can serve other purposes — confirm before build if reuse is preferred instead.]`
+
+### AD-24 — Centralized error capture behind one `IErrorCaptureService`, never per-site duplication [ASSUMPTION]
+
+- **Binds:** FR-1, FR-3, FR-6/FR-7, FR-8, FR-9, FR-10, FR-19 (`prd-eLearning-ErrorObservability-2026-08-13`)
+- **Prevents:** FR-1's global exception middleware, FR-3's 4 job terminal-failure sites, and FR-6/FR-7's frontend-reporting path each independently reimplementing fingerprint hashing, category-mapping, or priority rules — a real risk of the four sites drifting (e.g. one site's fingerprint hash normalizes a stack trace differently than another's), silently breaking FR-8's "one row per distinct Fingerprint" dedup guarantee. Also prevents FR-7's deliberately-anonymous reporting endpoint from landing under FR-19's Master-only class-level policy — the exact conflict the PRD's own reviewer gate caught and fixed at the requirements level; encoding the two-controller split here stops it from recurring at build time.
+- **Rule:** a new `ErrorObservability` feature folder (AD-6 shape, spanning Domain/Application/Infrastructure/Api like `Courses`/`Tutoring`) exposes `Application/ErrorObservability/IErrorCaptureService` with one method, `CaptureAsync(ErrorCaptureRequest)`, owning fingerprinting (FR-8), rule-based categorization (FR-9), and rule-based priority assignment (FR-10 Phase A/B) in one place — matching AD-3's plain-service pattern, no mediator. All 4 capture sites call this one service; none reimplements the logic. It internally swallows its own failures (the PRD's own NFR: a failure writing an ErrorRecord must be swallowed, not thrown, so observability never becomes a second source of outages). Exposed over **two** controllers, never one: an anonymous `ErrorReportingController` (FR-7, `POST /api/v1/errors/client`, no `[Authorize]`) and a Master-gated `ErrorsController` (FR-11–FR-18, FR-24, `[Authorize(Policy = FeatureKeys.ErrorsManage)]` at class level, per AD-5's controller convention).
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -229,6 +241,7 @@ flowchart TB
       AiUsage/             # AiTaskUsage, AiTaskBudget entities (FR-29 spend tracking, AD-18)
       AiConfig/             # AiTaskConfig, AiPromptVersion entities (AD-19)
       Tags/                 # Tag entity (FR-26, net-new -- not part of the taxonomy/Master Data scaffold)
+      ErrorObservability/   # ErrorRecord entity (Fingerprint, Category, Priority, Status, CorrelationId, AD-23/AD-24)
       FlexDemy.Domain.csproj
 
     FlexDemy.Application/
@@ -240,7 +253,8 @@ flowchart TB
       AiGateway/            # IAiGateway (one method per AI Task, AD-14) + request/response DTOs
       AiConfig/              # IAiConfigService (AD-19): task provider/model/fallback/budget CRUD, prompt version list/activate
       Tags/                  # ITagService, TagService, TagMapper, TagDto, ITagRepository (FR-26)
-      Common/               # IUnitOfWork, IIdGenerator, IFileScanner (AD-22), AppException + subtypes, pagination/result wrappers
+      Common/               # IUnitOfWork, IIdGenerator, IFileScanner (AD-22), ICorrelationIdAccessor (AD-23), AppException + subtypes, pagination/result wrappers
+      ErrorObservability/    # IErrorCaptureService (AD-24): fingerprinting + FR-9 categorization + FR-10 priority, ErrorRecordDto, admin CRUD/lifecycle service
       FlexDemy.Application.csproj
 
     FlexDemy.Infrastructure/
@@ -255,6 +269,8 @@ flowchart TB
       Parsing/                 # HTTP client calling the self-hosted Docling service (AD-21)
       Scanning/                # ClamAV client implementing IFileScanner (AD-22)
       Jobs/                    # Hangfire job classes, one per content-node generation call (AD-15)
+      Correlation/             # AsyncLocal-backed ICorrelationIdAccessor implementation (AD-23)
+      ErrorObservability/      # EF Core repository for ErrorRecord (AD-24)
       DependencyInjection.cs  # AddInfrastructure(this IServiceCollection, IConfiguration)
       FlexDemy.Infrastructure.csproj
 
@@ -267,8 +283,11 @@ flowchart TB
         UsersController.cs
         AiConfigController.cs    # AD-19: Admin-facing task config/prompt-version/usage read+write
         TagsController.cs        # FR-26
+        ErrorsController.cs         # AD-24: Master-gated, FR-11-FR-18 + FR-24 trace view, [Authorize(Policy = FeatureKeys.ErrorsManage)]
+        ErrorReportingController.cs # AD-24: anonymous, FR-7 POST /api/v1/errors/client only, no [Authorize]
       Middleware/
         ExceptionHandlingMiddleware.cs   # maps AppException subtypes -> ProblemDetails
+        CorrelationIdMiddleware.cs       # AD-23: registered before ExceptionHandlingMiddleware
       Program.cs               # composition root: AddApplication() + AddInfrastructure() + middleware pipeline + RUN_MIGRATIONS_ON_STARTUP check + UseHangfireServer() (AD-15)
       appsettings.json
       appsettings.Development.json
@@ -310,4 +329,5 @@ flowchart LR
 - ~~**Auth implementation**~~ — **resolved outside this spine's own passes, not still deferred.** A fresh review caught this Deferred item and the project `CLAUDE.md` both contradicting the live code: `AuthController.cs`, `JwtTokenService.cs` (HMAC-signed JWTs, configurable signing key, dev-only fallback), and `FeatureAuthorizationHandler.cs` already implement login/register/`me` + role-claim-based authorization. Full OAuth2 (vs. this password-based JWT flow) remains genuinely unbuilt if the PRD's OAuth2 mention was meant literally — revisit only that narrower gap, not "auth" as a whole.
 - **NGINX reverse proxy on port 3000** (`BACKEND_PRD.md` §7) — not adopted in this pass; explicitly deferred rather than dropped. Revisit once actual deployment topology (cloud provider, TLS termination) is scoped.
 - **Production migration strategy** — AD-8's startup auto-migrate is a known anti-pattern at real production scale (concurrent instances racing to migrate); revisit before any production deployment.
+- **OpenTelemetry / W3C Trace Context** — AD-23's Correlation ID is a simple app-level GUID threaded through this one service's own requests and jobs, not a `traceparent`-compatible distributed-tracing identifier (matches the ErrorObservability PRD's own Non-Goal). Revisit if FlexDemy ever splits into more independently-deployed services where a real distributed-tracing standard would earn its keep.
 - **CI pipeline** — not set up in this pass; revisit once there's a remote to push to and a decision on where CI runs.

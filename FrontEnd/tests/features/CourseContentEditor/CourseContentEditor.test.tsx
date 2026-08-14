@@ -329,6 +329,98 @@ describe('CourseContentEditor', () => {
     expect(screen.getAllByText('Queued')).toHaveLength(2);
   });
 
+  // Bug fix: the dropzone previously looked like a drag-and-drop target (dashed border,
+  // "+ Add files") but had zero onDrop/onDragOver wiring -- dropped files silently vanished.
+  it('dragging and dropping files onto the dropzone uploads them, same as the file picker', async () => {
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    const dropzone = screen.getByRole('button', { name: /add files/i });
+    // fireEvent.drop only synchronously flushes the initial "queued" row; the mocked
+    // uploadFile() promise settles on a later microtask outside that boundary, so it's flushed
+    // explicitly here (same reasoning userEvent.upload's own internal handling covers for free
+    // in the file-picker tests above -- fireEvent.drop has no such wrapper).
+    await act(async () => {
+      fireEvent.drop(dropzone, { dataTransfer: { files: [makeFile('dropped-chapter.pdf')] } });
+    });
+
+    expect(screen.getByText('dropped-chapter.pdf')).toBeInTheDocument();
+    expect(screen.getByText('Queued')).toBeInTheDocument();
+  });
+
+  it('dropping zero files (e.g. a non-file drag) is a no-op, not an error', async () => {
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    const dropzone = screen.getByRole('button', { name: /add files/i });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [] } });
+
+    expect(courseFileService.uploadFile).not.toHaveBeenCalled();
+  });
+
+  // Real, pre-existing bug (found via live testing against a real Chromium browser, not caught by
+  // any prior test): in real browsers `input.files` is a *live* FileList tied to the input's own
+  // `.value` -- resetting `.value` clears that same FileList object immediately, in the same
+  // synchronous tick. jsdom's default mock `files` property is a static value, not tied to
+  // `.value` this way, so every other test in this file (which sets `.files` via a plain
+  // `Object.defineProperty(input, 'files', { value: [...] })`) never exercised this real-browser
+  // quirk and would pass even against the buggy handler. This test reproduces the live-clearing
+  // behavior explicitly with getters, so it actually fails against the pre-fix ordering (read
+  // fileList, THEN reset .value, THEN check fileList.length) and passes only once the handler
+  // snapshots files into a real array before resetting .value.
+  it('selecting a file via the native picker still uploads it even though real browsers clear input.files the instant .value resets', async () => {
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    const input = screen.getByTestId('file-upload-input') as HTMLInputElement;
+    const file = makeFile('picked-via-native-dialog.pdf');
+    let valueWasReset = false;
+    // Must be the SAME object on every `.files` access (matching a real live FileList), with its
+    // own length/iteration reflecting current state at ACCESS time -- not a fresh array literal
+    // per getter call, which would let `const fileList = e.target.files` capture an
+    // already-independent snapshot regardless of read order (an earlier version of this test made
+    // exactly that mistake and passed against both the buggy and the fixed handler).
+    const liveFileList = {
+      [Symbol.iterator]: function* () {
+        if (!valueWasReset) yield file;
+      },
+      get length() {
+        return valueWasReset ? 0 : 1;
+      },
+      0: file,
+    } as unknown as FileList;
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      get: () => liveFileList,
+    });
+    Object.defineProperty(input, 'value', {
+      configurable: true,
+      get: () => '',
+      set: () => {
+        valueWasReset = true;
+      },
+    });
+
+    // Same act() wrapping as the drag-and-drop test above, for the same reason: the mocked
+    // uploadFile() promise settles on a microtask outside fireEvent's own sync act() boundary.
+    await act(async () => {
+      fireEvent.change(input);
+    });
+
+    expect(screen.getByText('picked-via-native-dialog.pdf')).toBeInTheDocument();
+    expect(screen.getByText('Queued')).toBeInTheDocument();
+  });
+
+  // Bug fix: useFileUpload's error state (set when addFiles is called before the course draft
+  // has a real id) was computed but never destructured/rendered by this component -- a real
+  // failure here was completely silent, no row, no message.
+  it('shows a visible error when files are added before the course draft has been saved', async () => {
+    const u = userEvent.setup();
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId={null} />);
+
+    await u.upload(screen.getByTestId('file-upload-input') as HTMLInputElement, [makeFile('too-early.pdf')]);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your course draft has not been saved yet. Please try again.');
+    expect(screen.queryByText('too-early.pdf')).not.toBeInTheDocument();
+    expect(courseFileService.uploadFile).not.toHaveBeenCalled();
+  });
+
   it('resets the file list when draftId changes to a different draft', async () => {
     const u = userEvent.setup();
     const { rerender } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);

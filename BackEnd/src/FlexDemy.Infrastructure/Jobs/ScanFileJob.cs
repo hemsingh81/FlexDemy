@@ -1,5 +1,7 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.ErrorObservability;
+using FlexDemy.Domain.ErrorObservability;
 using FlexDemy.Domain.Jobs;
 using Hangfire;
 using Hangfire.Server;
@@ -11,7 +13,9 @@ public class ScanFileJob(
     IUnitOfWork unitOfWork,
     IFileStorageService fileStorage,
     IFileScanner fileScanner,
-    IParseFileJobEnqueuer parseFileJobEnqueuer) : IScanFileJob
+    IParseFileJobEnqueuer parseFileJobEnqueuer,
+    ICorrelationIdAccessor correlationIdAccessor,
+    IErrorCaptureService errorCaptureService) : IScanFileJob
 {
     // Matches [AutomaticRetry(Attempts = MaxAttempts)] below -- kept as a named constant so the
     // retry-exhaustion check (RunAsync) can't silently drift out of sync with the attribute.
@@ -21,8 +25,14 @@ public class ScanFileJob(
     private const int MaxFailureReasonLength = 1024;
 
     [AutomaticRetry(Attempts = MaxAttempts)]
-    public async Task RunAsync(string courseFileId, CancellationToken cancellationToken, PerformContext? context = null)
+    public async Task RunAsync(string courseFileId, string? correlationId, CancellationToken cancellationToken, PerformContext? context = null)
     {
+        // Story 4.1/AD-23: first line, so every downstream capture call within this job's
+        // execution picks up the same Correlation ID as the enqueuing HTTP request -- the job
+        // runs on a separate thread with no relationship to that request's own async-flow context,
+        // so this must be set explicitly here rather than assumed to already be ambient.
+        correlationIdAccessor.Set(correlationId);
+
         var courseFile = await repository.GetByIdAsync(courseFileId, cancellationToken)
             ?? throw new NotFoundException(nameof(Domain.Courses.CourseFile), courseFileId);
 
@@ -48,6 +58,19 @@ public class ScanFileJob(
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 // A detected-malicious file must not remain on disk.
                 await fileStorage.DeleteAsync(courseFile.StoredUrl, cancellationToken);
+
+                // Code-review patch: a genuine terminal Failed write with no exception object --
+                // still a capturable failure per FR-1's spirit, same as the malformed-response
+                // branches wired elsewhere in this epic.
+                await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+                {
+                    Message = $"Malware detected: {scanResult.ThreatName}",
+                    Source = ErrorSource.Backend,
+                    OriginContext = nameof(ScanFileJob),
+                    RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                    RelatedEntityId = courseFile.Id,
+                    IsBackgroundJobFailure = true,
+                }, cancellationToken);
             }
             else
             {
@@ -64,13 +87,27 @@ public class ScanFileJob(
                 // the scan job itself.
                 try
                 {
-                    parseFileJobEnqueuer.Enqueue(courseFile.Id);
+                    parseFileJobEnqueuer.Enqueue(courseFile.Id, correlationId);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     courseFile.Status = JobItemStatus.Failed;
                     courseFile.FailureReason = Truncate($"Could not schedule parsing: {ex.Message}");
                     await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    // Code-review patch: a Hangfire enqueue failure is exactly the backend
+                    // infrastructure failure this epic exists to surface.
+                    await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+                    {
+                        ExceptionType = ex.GetType().Name,
+                        Message = ex.Message,
+                        StackTrace = ex.StackTrace,
+                        Source = ErrorSource.Backend,
+                        OriginContext = nameof(ScanFileJob),
+                        RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                        RelatedEntityId = courseFile.Id,
+                        IsBackgroundJobFailure = true,
+                    }, cancellationToken);
                 }
             }
         }
@@ -95,6 +132,19 @@ public class ScanFileJob(
                     ? "Scanning unavailable — retries exhausted"
                     : $"Scan failed — retries exhausted ({ex.GetType().Name})");
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Story 4.3/FR-3/FR-4: mirrors the existing terminal write above, doesn't replace it.
+            await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+            {
+                ExceptionType = ex.GetType().Name,
+                Message = ex.Message,
+                StackTrace = ex.StackTrace,
+                Source = ErrorSource.Backend,
+                OriginContext = nameof(ScanFileJob),
+                RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                RelatedEntityId = courseFile.Id,
+                IsBackgroundJobFailure = true,
+            }, cancellationToken);
         }
     }
 

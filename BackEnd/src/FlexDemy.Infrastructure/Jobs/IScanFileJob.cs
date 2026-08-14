@@ -7,5 +7,7 @@ namespace FlexDemy.Infrastructure.Jobs;
 // service -- Hangfire resolves job classes from the DI container per-execution.
 public interface IScanFileJob
 {
-    Task RunAsync(string courseFileId, CancellationToken cancellationToken, PerformContext? context = null);
+    // Story 4.1/AD-23: correlationId is forwarded by the enqueuer; RunAsync calls
+    // ICorrelationIdAccessor.Set(correlationId) as its first action.
+    Task RunAsync(string courseFileId, string? correlationId, CancellationToken cancellationToken, PerformContext? context = null);
 }

@@ -1,10 +1,15 @@
 // Story 2.4: the Course Wizard's live-wire persistence surface (Title/Description/Thumbnails).
-// Same real-backend `fetch` pattern as masterDataService.ts -- see that file's header comment.
 // Deliberately NOT an extension of `./coursesService.ts`, which is an unrelated, fully
 // in-memory mock backing the separate public catalog/Discover screens.
-import { getToken } from './authService';
+// Story 4.4/AD-7: write() and uploadThumbnail() now delegate to httpClient.ts's shared
+// request<T>() -- kept as thin wrappers so CourseDraftError stays this file's public error type,
+// while the actual fetch/correlation-ID capture logic lives in exactly one place.
+import { request, HttpClientError, API_BASE_URL } from './httpClient';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+// Re-exported: useCourseDraft.ts builds absolute thumbnail URLs from this constant, and this
+// module was its historical source -- now sourced from httpClient.ts (the one place it's
+// actually defined) rather than each caller reaching into httpClient.ts directly.
+export { API_BASE_URL };
 
 export interface ThumbnailCropDto {
   x: number;
@@ -50,34 +55,19 @@ export interface UpdateDraftCourseFields {
 
 export class CourseDraftError extends Error {}
 
+const asCourseDraftError = (e: unknown): CourseDraftError =>
+  new CourseDraftError(e instanceof HttpClientError || e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+
 // Story 3.9: GetPublishStatus is the first GET this file consumes -- moveToReview/confirmReview/
 // publish are also added here (Story 3.9/Task 1's endpoints), still no GET-by-id "resume this
 // Draft" capability (that gap is documented in this story's own Dev Notes/Completion Notes, not
 // silently built here).
 const write = async <T>(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> => {
-  let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers: {
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    return await request<T>(path, method, body);
   } catch (e) {
-    throw new CourseDraftError('Could not reach the server. Please try again.');
+    throw asCourseDraftError(e);
   }
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null);
-    throw new CourseDraftError(problem?.detail || 'Something went wrong. Please try again.');
-  }
-
-  // 204 No Content (move-to-review/confirm-review/publish) has no JSON body -- same handling
-  // contentTreeService.ts's own request() helper already established.
-  if (response.status === 204) return undefined as T;
-  return response.json();
 };
 
 export const createDraftCourse = (title: string, description: string): Promise<CourseDraftDto> =>
@@ -89,9 +79,11 @@ export const createDraftCourse = (title: string, description: string): Promise<C
 export const updateDraftCourse = (id: string, fields: UpdateDraftCourseFields): Promise<CourseDraftDto> =>
   write(`/api/v1/courses/drafts/${encodeURIComponent(id)}`, 'PUT', fields);
 
-// Cannot reuse write()'s JSON helper -- a real upload needs a FormData body with no
-// Content-Type header set manually (fetch sets the multipart boundary itself; a hardcoded
-// 'Content-Type': 'application/json' plus JSON.stringify(body) would corrupt this request).
+// AD-7: routed through httpClient.ts's request() too (not just write()'s JSON path) -- every
+// services/* HTTP call must go through the one shared helper, or FR-23's correlation-ID capture
+// silently doesn't work for this call while appearing to work for every other one in this file.
+// request() itself handles the FormData-vs-JSON body distinction (no Content-Type set manually
+// for FormData -- fetch sets the multipart boundary itself).
 export const uploadThumbnail = async (courseId: string, file: File, crop: ThumbnailCropDto): Promise<CourseDraftDto> => {
   const formData = new FormData();
   formData.append('file', file);
@@ -99,23 +91,11 @@ export const uploadThumbnail = async (courseId: string, file: File, crop: Thumbn
   formData.append('cropY', String(crop.y));
   formData.append('cropZoom', String(crop.zoom));
 
-  let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/v1/courses/drafts/${encodeURIComponent(courseId)}/thumbnails`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: formData,
-    });
+    return await request<CourseDraftDto>(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}/thumbnails`, 'POST', formData);
   } catch (e) {
-    throw new CourseDraftError('Could not reach the server. Please try again.');
+    throw asCourseDraftError(e);
   }
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null);
-    throw new CourseDraftError(problem?.detail || 'Something went wrong. Please try again.');
-  }
-
-  return response.json();
 };
 
 export const removeThumbnail = (courseId: string, thumbnailId: string): Promise<CourseDraftDto> =>

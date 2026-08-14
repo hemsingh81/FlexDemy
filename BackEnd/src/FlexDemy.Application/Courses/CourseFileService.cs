@@ -15,7 +15,8 @@ public class CourseFileService(
     IIdGenerator idGenerator,
     IFileStorageService fileStorage,
     ICourseService courseService,
-    IScanFileJobEnqueuer scanFileJobEnqueuer) : ICourseFileService
+    IScanFileJobEnqueuer scanFileJobEnqueuer,
+    ICorrelationIdAccessor correlationIdAccessor) : ICourseFileService
 {
     // PRD FR-11's own stated assumption: 50MB/file, per the existing prototype's stated limit.
     // Public/const (code-review patch) so CourseFilesController's [RequestSizeLimit] attribute
@@ -86,7 +87,7 @@ public class CourseFileService(
         // surface as an unhandled 500 for a file that, from the caller's perspective, did upload.
         try
         {
-            scanFileJobEnqueuer.Enqueue(courseFile.Id);
+            scanFileJobEnqueuer.Enqueue(courseFile.Id, correlationIdAccessor.Current);
         }
         catch (Exception)
         {

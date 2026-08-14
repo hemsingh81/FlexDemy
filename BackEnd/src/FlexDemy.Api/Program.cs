@@ -1,6 +1,8 @@
 using System.Text;
 using FlexDemy.Api.Authorization;
+using FlexDemy.Api.Cors;
 using FlexDemy.Api.Middleware;
+using FlexDemy.Api.RateLimiting;
 using FlexDemy.Api.SeedData;
 using FlexDemy.Application;
 using FlexDemy.Application.Common;
@@ -42,10 +44,13 @@ builder.Services.AddOpenApi();
 // container) than the API, so the browser needs an explicit CORS allow-list.
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3100", "http://127.0.0.1:3100"];
+// Code-review patch (Story 4.4): the policy body itself now lives in FrontendCorsPolicy.Configure
+// -- see that class's own header comment for why (a missing WithExposedHeaders call is exactly
+// the kind of bug that needs to be independently testable, not just readable in a Program.cs
+// lambda that nothing can exercise).
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod());
+    options.AddPolicy(FrontendCorsPolicy.PolicyName, policy => FrontendCorsPolicy.Configure(policy, allowedOrigins));
 });
 
 // RBAC: JWT issued by AuthController.Login/Register carries a Role claim. Some endpoints still
@@ -85,14 +90,32 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IAuthorizationHandler, FeatureAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, FeaturePolicyProvider>();
 
+// Story 4.4/AC #5: per-source-IP limit on the anonymous error-reporting endpoint, the one
+// unauthenticated write surface this app exposes. Genuinely new infrastructure (see
+// ErrorReportingRateLimiterPolicy's own header comment) -- built-in
+// Microsoft.AspNetCore.RateLimiting, no NuGet package needed.
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy(ErrorReportingRateLimiterPolicy.PolicyName, ErrorReportingRateLimiterPolicy.GetPartition);
+    options.OnRejected = ErrorReportingRateLimiterPolicy.OnRejected;
+});
+
 var app = builder.Build();
+
+// AD-23/Story 4.1: assigns/reuses the request's Correlation ID. Registered first (ahead of
+// UseCors too, code-review patch) so it runs on every response, including CORS-preflight ones,
+// and -- the actually load-bearing requirement -- before ExceptionHandlingMiddleware, so
+// ICorrelationIdAccessor.Current is already set by the time any exception is caught. (Story 4.3
+// wires ExceptionHandlingMiddleware to actually read it for error capture; this middleware only
+// assigns/echoes it today.)
+app.UseMiddleware<CorrelationIdMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseCors("Frontend");
+app.UseCors(FrontendCorsPolicy.PolicyName);
 
 // AD-8: startup migration is opt-in via RUN_MIGRATIONS_ON_STARTUP, deliberately decoupled
 // from ASPNETCORE_ENVIRONMENT (which defaults to Production inside a plain container).
@@ -122,9 +145,17 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+// Story 4.4: only ErrorReportingController opts in via [EnableRateLimiting] -- every other
+// endpoint is unaffected by this middleware being in the pipeline.
+app.UseRateLimiter();
 // Story 2.6/AD-15: runs Hangfire's background-job processing (ScanFileJob et al.) in-process.
 // No Hangfire Dashboard mapped -- it has no auth story yet and isn't required by any AC.
 app.UseHangfireServer();
+// Story 4.6/AC #5/FR-18: this codebase's first *recurring* (not one-off enqueued) Hangfire job --
+// registered once at startup, not re-registered per request. Cron.Daily matches the retention
+// window's day-granularity; exact time-of-day isn't ACs-specified.
+RecurringJob.AddOrUpdate<FlexDemy.Infrastructure.Jobs.IPurgeOldErrorRecordsJob>(
+    "purge-error-records", j => j.RunAsync(CancellationToken.None), Cron.Daily);
 app.MapControllers();
 
 app.Run();

@@ -1,9 +1,8 @@
-// Story 2.6: the Course Content Editor's live-wire file upload/scan-status surface. Same real
-// backend `fetch` pattern as courseDraftService.ts -- own file, own error class, standalone
-// FormData upload (no manually-set Content-Type -- fetch sets the multipart boundary itself).
-import { getToken } from './authService';
-
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+// Story 2.6: the Course Content Editor's live-wire file upload/scan-status surface.
+// Story 4.4/AD-7: both calls below now delegate to httpClient.ts's shared request<T>() instead
+// of duplicating fetch logic -- retired as part of implementing correlation-ID capture (FR-23)
+// so this file's calls aren't silently left off the one path that updates the shared store.
+import { request, HttpClientError } from './httpClient';
 
 export interface CourseFileDto {
   id: string;
@@ -16,43 +15,20 @@ export interface CourseFileDto {
 
 export class CourseFileError extends Error {}
 
-export const uploadFile = async (courseId: string, file: File): Promise<CourseFileDto> => {
+const call = async <T>(fn: () => Promise<T>): Promise<T> => {
+  try {
+    return await fn();
+  } catch (e) {
+    throw new CourseFileError(e instanceof HttpClientError || e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+  }
+};
+
+export const uploadFile = (courseId: string, file: File): Promise<CourseFileDto> => {
   const formData = new FormData();
   formData.append('file', file);
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/api/v1/courses/${encodeURIComponent(courseId)}/files`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: formData,
-    });
-  } catch (e) {
-    throw new CourseFileError('Could not reach the server. Please try again.');
-  }
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null);
-    throw new CourseFileError(problem?.detail || 'Something went wrong. Please try again.');
-  }
-
-  return response.json();
+  return call(() => request<CourseFileDto>(`/api/v1/courses/${encodeURIComponent(courseId)}/files`, 'POST', formData));
 };
 
-export const getFiles = async (courseId: string): Promise<CourseFileDto[]> => {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/api/v1/courses/${encodeURIComponent(courseId)}/files`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-  } catch (e) {
-    throw new CourseFileError('Could not reach the server. Please try again.');
-  }
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null);
-    throw new CourseFileError(problem?.detail || 'Something went wrong. Please try again.');
-  }
-
-  return response.json();
-};
+export const getFiles = (courseId: string): Promise<CourseFileDto[]> =>
+  call(() => request<CourseFileDto[]>(`/api/v1/courses/${encodeURIComponent(courseId)}/files`, 'GET'));

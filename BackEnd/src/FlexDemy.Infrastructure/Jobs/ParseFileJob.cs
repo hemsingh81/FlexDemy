@@ -1,5 +1,7 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.ErrorObservability;
+using FlexDemy.Domain.ErrorObservability;
 using FlexDemy.Domain.Jobs;
 using Hangfire;
 using Hangfire.Server;
@@ -11,7 +13,9 @@ public class ParseFileJob(
     IUnitOfWork unitOfWork,
     IFileStorageService fileStorage,
     IDocumentParser documentParser,
-    IExtractStructureJobEnqueuer extractStructureJobEnqueuer) : IParseFileJob
+    IExtractStructureJobEnqueuer extractStructureJobEnqueuer,
+    ICorrelationIdAccessor correlationIdAccessor,
+    IErrorCaptureService errorCaptureService) : IParseFileJob
 {
     // Matches [AutomaticRetry(Attempts = MaxAttempts)] below -- same discipline as ScanFileJob
     // (Story 2.6): an explicit constant, not Hangfire's implicit default.
@@ -21,8 +25,11 @@ public class ParseFileJob(
     private const int MaxFailureReasonLength = 1024;
 
     [AutomaticRetry(Attempts = MaxAttempts)]
-    public async Task RunAsync(string courseFileId, CancellationToken cancellationToken, PerformContext? context = null)
+    public async Task RunAsync(string courseFileId, string? correlationId, CancellationToken cancellationToken, PerformContext? context = null)
     {
+        // Story 4.1/AD-23: see ScanFileJob's own comment for why this is the first line.
+        correlationIdAccessor.Set(correlationId);
+
         var courseFile = await repository.GetByIdAsync(courseFileId, cancellationToken)
             ?? throw new NotFoundException(nameof(Domain.Courses.CourseFile), courseFileId);
 
@@ -68,13 +75,27 @@ public class ParseFileJob(
                 // parse itself already succeeded and committed.
                 try
                 {
-                    extractStructureJobEnqueuer.Enqueue(courseFile.Id);
+                    extractStructureJobEnqueuer.Enqueue(courseFile.Id, correlationId);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     courseFile.Status = JobItemStatus.Failed;
                     courseFile.FailureReason = Truncate($"Could not schedule extraction: {ex.Message}");
                     await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    // Code-review patch: a Hangfire enqueue failure is exactly the backend
+                    // infrastructure failure this epic exists to surface.
+                    await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+                    {
+                        ExceptionType = ex.GetType().Name,
+                        Message = ex.Message,
+                        StackTrace = ex.StackTrace,
+                        Source = ErrorSource.Backend,
+                        OriginContext = nameof(ParseFileJob),
+                        RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                        RelatedEntityId = courseFile.Id,
+                        IsBackgroundJobFailure = true,
+                    }, cancellationToken);
                 }
 
                 return;
@@ -85,6 +106,19 @@ public class ParseFileJob(
             courseFile.Status = JobItemStatus.Failed;
             courseFile.FailureReason = Truncate(result.FailureReason ?? "Parsing failed.");
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Code-review patch: structurally identical to ExtractStructureJob's malformed-response
+            // branch (already wired) -- a genuine terminal failure with no exception object, since
+            // this is a parsed-but-low-confidence result, not a thrown exception.
+            await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+            {
+                Message = result.FailureReason ?? "Parsing failed.",
+                Source = ErrorSource.Backend,
+                OriginContext = nameof(ParseFileJob),
+                RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                RelatedEntityId = courseFile.Id,
+                IsBackgroundJobFailure = true,
+            }, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -100,6 +134,19 @@ public class ParseFileJob(
                     ? "Parsing service unavailable — retries exhausted"
                     : $"Parsing failed — retries exhausted ({ex.GetType().Name})");
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Story 4.3/FR-3/FR-4: mirrors the existing terminal write above, doesn't replace it.
+            await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+            {
+                ExceptionType = ex.GetType().Name,
+                Message = ex.Message,
+                StackTrace = ex.StackTrace,
+                Source = ErrorSource.Backend,
+                OriginContext = nameof(ParseFileJob),
+                RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                RelatedEntityId = courseFile.Id,
+                IsBackgroundJobFailure = true,
+            }, cancellationToken);
         }
     }
 

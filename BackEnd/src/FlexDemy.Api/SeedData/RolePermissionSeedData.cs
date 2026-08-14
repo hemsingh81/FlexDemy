@@ -64,6 +64,10 @@ public static class RolePermissionSeedData
         // Master-only since Story 1.1 (unlike tag-management, which Support also sees).
         seeds.Add(new RolePermissionSeed(UserRole.Master, FeatureKeys.AiConfigManage, true));
 
+        // errors.manage: Master only -- matches the Error Log admin sub-tab being Master-only
+        // (Story 4.5, AC #1).
+        seeds.Add(new RolePermissionSeed(UserRole.Master, FeatureKeys.ErrorsManage, true));
+
         return seeds;
     }
 }

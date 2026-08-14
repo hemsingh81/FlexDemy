@@ -19,7 +19,8 @@ public class PublishServiceTests
         IVersionService VersionService,
         IIdGenerator IdGenerator,
         IUnitOfWork UnitOfWork,
-        IPublishNodeContentJobEnqueuer JobEnqueuer);
+        IPublishNodeContentJobEnqueuer JobEnqueuer,
+        ICorrelationIdAccessor CorrelationIdAccessor);
 
     private static Sut MakeSut()
     {
@@ -32,9 +33,10 @@ public class PublishServiceTests
         idGenerator.NewId().Returns(_ => ids.Dequeue());
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var jobEnqueuer = Substitute.For<IPublishNodeContentJobEnqueuer>();
+        var correlationIdAccessor = Substitute.For<ICorrelationIdAccessor>();
 
-        var service = new PublishService(courseService, contentTreeRepository, repository, versionService, idGenerator, unitOfWork, jobEnqueuer);
-        return new Sut(service, courseService, contentTreeRepository, repository, versionService, idGenerator, unitOfWork, jobEnqueuer);
+        var service = new PublishService(courseService, contentTreeRepository, repository, versionService, idGenerator, unitOfWork, jobEnqueuer, correlationIdAccessor);
+        return new Sut(service, courseService, contentTreeRepository, repository, versionService, idGenerator, unitOfWork, jobEnqueuer, correlationIdAccessor);
     }
 
     private static CourseDto MakeCourseDto(string lifecycleState) => new(
@@ -124,7 +126,7 @@ public class PublishServiceTests
 
         var callOrder = new List<string>();
         sut.UnitOfWork.When(u => u.SaveChangesAsync(Arg.Any<CancellationToken>())).Do(_ => callOrder.Add("save"));
-        sut.JobEnqueuer.When(j => j.Enqueue(Arg.Any<string>())).Do(call => callOrder.Add($"enqueue:{call.Arg<string>()}"));
+        sut.JobEnqueuer.When(j => j.Enqueue(Arg.Any<string>(), Arg.Any<string?>())).Do(call => callOrder.Add($"enqueue:{call.ArgAt<string>(0)}"));
 
         await sut.Service.PublishAsync("course_1");
 
@@ -140,6 +142,29 @@ public class PublishServiceTests
         Assert.Equal(2, callOrder.Count(c => c.StartsWith("enqueue:")));
     }
 
+    // Code-review patch: Story 4.1's own design point for this loop ("read once... every
+    // node-generation job... shares the same Correlation ID") was previously untested -- the
+    // existing call-order test above only captured item ids, never the correlationId argument, and
+    // the accessor was substituted but never exposed on Sut for a test to configure/assert on.
+    [Fact]
+    public async Task PublishAsync_forwards_the_identical_correlation_id_to_every_enqueued_job_in_the_batch()
+    {
+        var sut = MakeSut();
+        sut.CorrelationIdAccessor.Current.Returns("corr-xyz");
+        sut.CourseService.GetCourseByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(MakeCourseDto(nameof(LifecycleState.ReviewConfirmed)));
+        var confirmedTopic1 = MakeTopic("topic_1", NodeConfirmation.Confirmed);
+        var confirmedTopic2 = MakeTopic("topic_2", NodeConfirmation.Confirmed);
+        sut.ContentTreeRepository.GetTreeAsync("course_1", Arg.Any<CancellationToken>())
+            .Returns([MakeChapter("chapter_1", confirmedTopic1, confirmedTopic2)]);
+        var capturedCorrelationIds = new List<string?>();
+        sut.JobEnqueuer.When(j => j.Enqueue(Arg.Any<string>(), Arg.Any<string?>())).Do(call => capturedCorrelationIds.Add(call.ArgAt<string?>(1)));
+
+        await sut.Service.PublishAsync("course_1");
+
+        Assert.Equal(2, capturedCorrelationIds.Count);
+        Assert.All(capturedCorrelationIds, id => Assert.Equal("corr-xyz", id));
+    }
+
     [Fact]
     public async Task PublishAsync_with_zero_confirmed_nodes_finalizes_immediately_without_creating_a_batch()
     {
@@ -151,7 +176,7 @@ public class PublishServiceTests
 
         sut.Repository.DidNotReceiveWithAnyArgs().AddBatch(default!);
         sut.Repository.DidNotReceiveWithAnyArgs().AddItem(default!);
-        sut.JobEnqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!);
+        sut.JobEnqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!, default!);
         await sut.VersionService.Received(1).CreateSnapshotAsync("course_1", Arg.Any<CancellationToken>());
         await sut.CourseService.Received(1).MarkPublishedAsync("course_1", Arg.Any<CancellationToken>());
     }

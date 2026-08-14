@@ -1,5 +1,5 @@
 # generated: 2026-08-11
-# last_updated: 2026-08-13 (3-11 → done, epic-3 → done)
+# last_updated: 2026-08-14 (Epic 4 retrospective complete)
 # project: eLearning
 # project_key: NOKEY
 # tracking_system: file-system
@@ -46,7 +46,7 @@
 #   (see epics.md's per-epic "Parallelization note").
 
 generated: 2026-08-11
-last_updated: 2026-08-13 (3-11 → done, epic-3 → done)
+last_updated: 2026-08-14 (Epic 4 retrospective complete)
 project: eLearning
 project_key: NOKEY
 tracking_system: file-system
@@ -91,3 +91,31 @@ development_status:
   3-10-publish-versioning-rollback: done
   3-11-cross-view-golden-file-visual-regression-parity: done
   epic-3-retrospective: optional
+
+  epic-4: done
+  4-1-correlation-id-assignment-and-propagation: done
+  4-2-errorrecord-data-model-and-centralized-capture-service: done
+  4-3-backend-error-capture-wiring: done
+  4-4-frontend-global-error-capture-and-reporting-endpoint: done
+  4-5-admin-error-log-list-filter-and-detail: done
+  4-6-error-lifecycle-actions: done
+  4-7-correlation-id-trace-view: done
+  epic-4-retrospective: done
+
+action_items:
+  - epic: 4
+    action: "Commit Epic 4's work to git (currently 7 stories of uncommitted changes on one shared baseline)"
+    owner: "Dev"
+    status: open
+  - epic: 4
+    action: "For future multi-story epics, commit each story to git upon reaching done rather than batching -- makes each subsequent story's code review a plain git diff, not a hand-reconstructed packet"
+    owner: "Dev"
+    status: open
+  - epic: 4
+    action: "When authoring a story that extends a prior story's files, grep the actual current file paths/type names into the story text rather than writing them from memory, to reduce recurring stale-reference corrections"
+    owner: "Dev/PM"
+    status: open
+  - epic: 4
+    action: "Continue using the Acceptance Auditor layer on every future story's review -- it has now twice caught a 'verified' claim that didn't hold in the code, a distinct value from adversarial bug-hunting alone"
+    owner: "Dev"
+    status: open

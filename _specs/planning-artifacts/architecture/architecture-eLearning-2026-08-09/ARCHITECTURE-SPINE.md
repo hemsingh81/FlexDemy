@@ -7,9 +7,9 @@ paradigm: 'feature-folder architecture with a repository (service) data-access b
 scope: 'FrontEnd/src -- refactor of the existing React 19 + TypeScript + Vite + Tailwind SPA into modular, reusable, component-based structure with a data-access seam ready for a future backend, plus test conventions'
 status: final
 created: '2026-08-09'
-updated: '2026-08-11'
+updated: '2026-08-13'
 binds: []
-sources: ['FrontEnd/docs/FRONTEND_PRD.md', 'FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md']
+sources: ['FrontEnd/docs/FRONTEND_PRD.md', 'FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md', '{planning_artifacts}/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md']
 companions: []
 ---
 
@@ -82,6 +82,12 @@ This generalizes the one convention already present in the codebase (`src/compon
 - **Prevents:** introducing Playwright Test as a second, separately-configured test runner alongside `vitest`, and recurring-cost/opaque-pricing exposure from a hosted visual-regression service (Percy/Chromatic/Applitools)
 - **Rule:** Vitest 4's built-in `toMatchScreenshot()` via the `@vitest/browser-playwright` provider — MIT-licensed, no second test runner. **Not** "the same flat `vitest.config.ts` block" as AD-5 (a fresh review caught that claim as wrong: jsdom-environment tests and browser-mode tests can't share one flat `test:` block) — `vitest.config.ts` gains a `test.projects` array with two entries, one keeping AD-5's existing `environment: 'jsdom'` config untouched, one new project scoped to `tests/**/__screenshots__/**` using the `@vitest/browser-playwright` provider; both run from the same `vitest` CLI invocation and the same CI job conceptually, but CI gains one setup step (`npx playwright install --with-deps chromium`) that AD-5's jsdom-only suite never needed. `@vitest/browser-playwright` is version-locked to the exact `vitest` core version (confirmed: mismatched patch versions fail install) — pin both to the same explicit version, never `latest` on one and a range on the other. Golden-file screenshots live alongside their `FrontEnd/tests/` mirror-path tests (e.g. `tests/features/CourseContentEditor/__screenshots__/`), reviewed and updated the same way any other Vitest snapshot is (`vitest -u`). **Determinism for the exact content this AD protects:** KaTeX/mhchem and Devanagari rendering is font-load-dependent — screenshot tests wait for `document.fonts.ready` before capturing, and CI pins the same font files/versions as local dev (no system-font fallback in the CI image) to avoid cross-environment drift on the one content type most exposed to it. Chosen over Playwright Test (a full second toolchain) and hosted services (recurring cost; Applitools' pricing opacity specifically flagged as the kind of surprise this project avoids per its licensing-sensitive stance elsewhere).
 
+### AD-7 — Correlation ID capture lives in one shared HTTP-call helper, not per-service state [ASSUMPTION]
+
+- **Binds:** `services/*` (extends AD-1), the new `errorsService.ts` (`prd-eLearning-ErrorObservability-2026-08-13`, FR-7/FR-23)
+- **Prevents:** FR-23's "hold the most recently seen Correlation ID" requirement being implemented separately — and inconsistently — per service file. Confirmed live: `services/*.ts` is inconsistent today — `courseDraftService.ts` already has a shared `write<T>()` helper that reads response bodies centrally, but `courseFileService.ts` and others still duplicate fetch logic per function. Bolting correlation-ID capture onto only the shared helper would mean calls still on the per-function pattern silently never update the retained ID — FR-23 would appear to work in some flows and silently not in others, depending on which service happened to handle a given call.
+- **Rule:** a single module-level store (not React state — this value doesn't drive rendering) holds the most recently seen `X-Correlation-Id` response header value. Every `services/*` HTTP call goes through one shared low-level request helper — generalizing `courseDraftService.ts`'s `write<T>()` pattern into `services/httpClient.ts` — that reads the header and updates the store; `courseFileService.ts`'s per-function duplicated fetch logic is retired as part of implementing this feature, not left as a second, silently-noncompliant path. `errorsService.ts`'s FR-7 report call reads the store's current value into its payload when present.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -118,7 +124,7 @@ This generalizes the one convention already present in the codebase (`src/compon
 FrontEnd/
   src/
     App.tsx                  # composition root only: active feature + Context providers (AD-4)
-    main.tsx                 # unchanged entry point
+    main.tsx                 # entry point; also mounts the top-level React Error Boundary and registers window.onerror/unhandledrejection once (ErrorObservability PRD FR-6)
     types.ts                 # unchanged: shared domain types
 
     features/                # one folder per product surface -- EVERY feature gets this shape (AD-2)
@@ -150,6 +156,7 @@ FrontEnd/
       Admin/                     # existing folder (MasterDataManager, etc.), not re-enumerated here -- see the codebase; New Course Wizard PRD adds two subtabs:
         AiConfiguration/          # admin AI task provider/model/fallback/budget config + usage view -- calls services/aiConfigService.ts (backend AD-19), a DIFFERENT backend surface than aiGatewayService.ts below
         TagManagement/            # Tag CRUD (FR-26) -- calls services/tagsService.ts, net-new, not masterDataService.ts
+        ErrorLog/                 # ErrorObservability PRD FR-11-FR-13/FR-24: Master-only, server-side paginated list/filter/detail/trace-view -- calls services/errorsService.ts
 
     ui/                       # pure reusable presentational primitives (AD-3's checkable test)
       Navbar.tsx
@@ -170,6 +177,8 @@ FrontEnd/
       AccessibilityContext.tsx  # language + accessibility settings
 
     services/                 # the data-access boundary -- only layer allowed to import data/ or lib/offlineStorage.ts, or call fetch/HTTP directly (AD-1)
+      httpClient.ts             # AD-7: shared low-level request helper (generalized from courseDraftService.ts's write<T>()) -- reads X-Correlation-Id off every response into the module-level store
+      errorsService.ts          # ErrorObservability PRD FR-7: POST /api/v1/errors/client, reads httpClient.ts's current correlation ID into the payload
       coursesService.ts
       courseContentService.ts   # backs CourseContentContext (AD-4): the tree, per-node confirm state, extraction status
       aiConfigService.ts        # Admin AI Configuration -- calls backend AD-19, distinct from aiGatewayService.ts below

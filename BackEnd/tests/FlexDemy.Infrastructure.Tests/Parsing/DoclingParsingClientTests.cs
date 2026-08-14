@@ -84,18 +84,25 @@ public class DoclingParsingClientTests
         Assert.Contains("confidence", result.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
-    // Code-review patch: a missing/null confidence object must fail closed (allowlist design),
-    // not silently pass through as if confidence had never been checked.
+    // Correction (2026-08-13): an earlier code-review patch made this fail closed on a
+    // missing/null confidence object, on the assumption its absence was anomalous for a "success"
+    // response. Confirmed wrong via live testing against a real docling-serve v1.25.0 instance --
+    // `confidence` is always null for every successful conversion that instance was asked to run,
+    // so failing closed here made the whole parsing feature permanently non-functional (every
+    // real parse would fail, unconditionally). A missing confidence object now passes through
+    // (status=success + non-empty content is sufficient); a *present* confidence object with a
+    // failing grade still fails closed -- see the POOR-grade test above.
     [Fact]
-    public async Task ParseAsync_a_success_status_with_no_confidence_object_fails_closed()
+    public async Task ParseAsync_a_success_status_with_no_confidence_object_passes_through()
     {
         var sut = MakeSut(HttpStatusCode.OK, """{"document":{"md_content":"# Notes"},"status":"success"}""");
         using var content = MakeContent();
 
         var result = await sut.ParseAsync(content, "notes.pdf", "application/pdf");
 
-        Assert.False(result.IsSuccessful);
-        Assert.Null(result.ParsedContent);
+        Assert.True(result.IsSuccessful);
+        Assert.Equal("# Notes", result.ParsedContent);
+        Assert.Null(result.FailureReason);
     }
 
     [Fact]

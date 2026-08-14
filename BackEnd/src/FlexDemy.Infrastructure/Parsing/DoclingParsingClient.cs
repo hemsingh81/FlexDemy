@@ -67,14 +67,30 @@ public sealed class DoclingParsingClient(HttpClient httpClient, ILogger<DoclingP
             return new DocumentParseResult(false, null, reason);
         }
 
-        var lowGrade = parsed.Confidence?.LowGrade;
-        if (lowGrade is null || !PassingConfidenceGrades.Contains(lowGrade))
+        // Correction, found via live testing against a real deployed docling-serve v1.25.0
+        // instance (2026-08-13): the original code-review patch here failed closed on a *missing*
+        // confidence object, on the assumption that its absence was anomalous for a "success"
+        // response. That assumption was wrong -- confirmed against docling-serve's own OpenAPI
+        // schema (no request parameter anywhere enables computing it) and its actual response to
+        // a real successful PDF conversion (`confidence` is always `null`, with both
+        // `to_formats=md` and `to_formats=[md,json]`). Failing closed on "always null" is
+        // equivalent to failing every parse unconditionally, which would make this entire feature
+        // permanently non-functional, not a quality gate. A *present* confidence object with a
+        // recognized-but-failing grade (e.g. "POOR") is still treated as a genuine low-quality
+        // signal and still fails below -- only the "no data available at all" case now passes
+        // through instead of rejecting.
+        var confidence = parsed.Confidence;
+        if (confidence is not null)
         {
-            var reason = $"Parsed output confidence is too low or unrecognized (worst-page grade: {lowGrade ?? "none"}).";
-            logger.LogWarning(
-                "Docling parse confidence too low for {FileName}: low_grade={LowGrade}, mean_grade={MeanGrade}",
-                fileName, lowGrade ?? "none", parsed.Confidence?.MeanGrade ?? "none");
-            return new DocumentParseResult(false, null, reason);
+            var lowGrade = confidence.LowGrade;
+            if (lowGrade is null || !PassingConfidenceGrades.Contains(lowGrade))
+            {
+                var reason = $"Parsed output confidence is too low or unrecognized (worst-page grade: {lowGrade ?? "none"}).";
+                logger.LogWarning(
+                    "Docling parse confidence too low for {FileName}: low_grade={LowGrade}, mean_grade={MeanGrade}",
+                    fileName, lowGrade ?? "none", confidence.MeanGrade ?? "none");
+                return new DocumentParseResult(false, null, reason);
+            }
         }
 
         var parsedContent = parsed.Document?.MdContent;
@@ -136,12 +152,12 @@ public sealed class DoclingParsingClient(HttpClient httpClient, ILogger<DoclingP
         }
     }
 
-    // Internal wire-shape DTOs. [ASSUMPTION: the exact JSON field path/name for the confidence
-    // object inside docling-serve's /v1/convert/file response body was not independently
-    // confirmed against a live OpenAPI schema during this story's authoring -- this assumes
-    // "confidence" sits at the response root, parallel to "document"/"status"/"errors". Confirm
-    // against the actual deployed docling-serve instance's /docs before relying on this in
-    // production.]
+    // Internal wire-shape DTOs. Confirmed live (2026-08-13) against a real docling-serve v1.25.0
+    // instance: "confidence" does sit at the response root, parallel to
+    // "document"/"status"/"errors" -- but it is populated as `null` for every successful
+    // conversion this instance was asked to run (verified against its own OpenAPI schema too: no
+    // request parameter anywhere enables computing it). See the null-confidence handling in
+    // ParseAsync above.
     private sealed record DoclingConvertResponse(
         [property: JsonPropertyName("document")] DoclingDocument? Document,
         [property: JsonPropertyName("status")] string? Status,

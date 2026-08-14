@@ -6,5 +6,6 @@ namespace FlexDemy.Infrastructure.Jobs;
 // at publish time. Registered AddScoped, like every other Infrastructure service.
 public interface IPublishNodeContentJob
 {
-    Task RunAsync(string batchItemId, CancellationToken cancellationToken, PerformContext? context = null);
+    // Story 4.1/AD-23: see IScanFileJob's own comment for why this parameter exists.
+    Task RunAsync(string batchItemId, string? correlationId, CancellationToken cancellationToken, PerformContext? context = null);
 }

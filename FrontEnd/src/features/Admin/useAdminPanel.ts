@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
-import { ClipboardCheck, Cpu, LayoutGrid, ShieldCheck, Tags, UserPlus } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Cpu, LayoutGrid, ShieldCheck, Tags, UserPlus } from 'lucide-react';
 import { useDomain } from '../../context/DomainContext';
 
 export type AdminSubTab =
@@ -9,7 +9,8 @@ export type AdminSubTab =
   | 'role-visibility'
   | 'tutor-approvals'
   | 'ai-configuration'
-  | 'tag-management';
+  | 'tag-management'
+  | 'errors';
 
 const ALL_SUB_TABS: AdminSubTab[] = [
   'masterdata',
@@ -18,6 +19,7 @@ const ALL_SUB_TABS: AdminSubTab[] = [
   'tutor-approvals',
   'ai-configuration',
   'tag-management',
+  'errors',
 ];
 
 // Single source of truth for admin sub-tab label/icon metadata -- shared by AdminPanel's own
@@ -32,6 +34,9 @@ export const ADMIN_SUBTAB_META: Record<AdminSubTab, { label: string; icon: Compo
   'ai-configuration': { label: 'AI Configuration & Usage', icon: Cpu },
   // Master AND Support (FR-26) -- tag hygiene is routine vocabulary upkeep, not a cost lever.
   'tag-management': { label: 'Tag Management', icon: Tags },
+  // Master-only (ErrorObservability PRD FR-19, Story 4.5) -- not added to Support's subset below,
+  // same Master-only precedent as 'ai-configuration'.
+  errors: { label: 'Error Log', icon: AlertTriangle },
 };
 
 export interface ControlledAdminSubTab {

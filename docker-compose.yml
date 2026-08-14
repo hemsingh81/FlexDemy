@@ -45,9 +45,33 @@ services:
 
   # Story 2.7: self-hosted document-parsing/OCR service, reached only over the internal Compose
   # network at docling:5001 (AD-13's "none exposed externally" rule -- docling-serve has no API
-  # auth by default, per this story's research, so it must never be on a host-exposed port). The
-  # named volume persists model weights across restarts -- without it, DOCLING_SERVE_LOAD_MODELS_AT_BOOT's
-  # warm-up would re-download them on every restart.
+  # auth by default, per this story's research, so it must never be on a host-exposed port).
+  #
+  # Correction (found live, 2026-08-13): the previous version of this comment assumed
+  # DOCLING_SERVE_LOAD_MODELS_AT_BOOT would auto-download models into the empty volume on first
+  # boot. That's wrong -- this setting defaults to true, but the docling-serve-cpu image itself
+  # bakes in DOCLING_SERVE_ARTIFACTS_PATH as an image-level default, and docling-serve treats ANY
+  # explicitly-set artifacts path (baked-in or ours, doesn't matter which) as "pre-populated,
+  # don't auto-download" -- confirmed via this image's own startup log line: "artifacts_path is
+  # set to a valid directory. No model weights will be downloaded at runtime." With an empty
+  # volume, the container crashes on boot (FileNotFoundError from RapidOCR, exit code 3) instead
+  # of downloading anything.
+  #
+  # REQUIRED one-time step before this service can start successfully against a fresh volume:
+  #   docker run --rm --user 0 -v flexdemy_docling_artifacts:/opt/docling-artifacts \
+  #     --entrypoint sh quay.io/docling-project/docling-serve-cpu:v1.25.0 \
+  #     -c "docling-tools models download --output-dir /opt/docling-artifacts"
+  # (--user 0 is required: the volume is created root-owned/0755, and the image's own default
+  # user, uid 1001, has no write access to it otherwise.)
+  # This downloads several GB from huggingface.co -- if that fails or hangs with a
+  # CERTIFICATE_VERIFY_FAILED / "self-signed certificate in certificate chain" error, this
+  # machine's network is TLS-intercepting outbound HTTPS (a corporate proxy or endpoint-security
+  # tool) and the container doesn't trust that proxy's root CA. That's a host/network
+  # configuration issue, not something fixable in this compose file -- either run the download
+  # from a network without TLS interception and copy/move the resulting volume over, or install
+  # the intercepting proxy's root CA into a container that has it before running the download.
+  #
+  # The named volume persists downloaded model weights across restarts once populated.
   docling:
     profiles: ["backend", "all"]
     image: quay.io/docling-project/docling-serve-cpu:v1.25.0
@@ -68,6 +92,22 @@ services:
       retries: 5
       start_period: 120s
 
+  # Story 1.4/AD-14: self-hosted Portkey OSS gateway (Apache-2.0, `portkeyai/gateway` on Docker
+  # Hub) -- the single AI-provider router every AI-calling feature (extractStructure, drilldown,
+  # exercises, keyword/notation) goes through via IAiGateway/PortkeyAiGateway.cs. Documented in
+  # ARCHITECTURE-SPINE.md's own compose diagram from Story 1.4 onward but never actually added
+  # here until found missing live (2026-08-13): every AI task failed with
+  # "No API key configured for AI provider '<X>'" because api's AiGateway__BaseUrl
+  # (http://ai-gateway:8787, appsettings.json's default) pointed at a service that didn't exist.
+  # The gateway itself is stateless and needs no secrets/config of its own -- PortkeyAiGateway.cs
+  # forwards the real provider API key per-request via an Authorization header (AD-14's own
+  # web-verified self-hosted convention: x-portkey-provider + Authorization: Bearer <token>, not
+  # the Portkey-Cloud-only x-portkey-api-key), so the actual provider credentials live only in
+  # api's own AiGateway__ProviderApiKeys__<Provider> environment overrides below, never here.
+  ai-gateway:
+    profiles: ["backend", "all"]
+    image: portkeyai/gateway:latest
+
   api:
     profiles: ["backend", "all"]
     build:
@@ -82,12 +122,23 @@ services:
       ClamAv__Host: clamav
       ClamAv__Port: "3310"
       Docling__BaseUrl: "http://docling:5001"
+      AiGateway__BaseUrl: "http://ai-gateway:8787"
+    # REQUIRED, per-provider, real AI provider keys -- never committed. Loaded from a root-level
+    # `.env` (gitignored; copy `.env.example` to `.env` and fill in real values). Every AI task
+    # (Admin -> AI Configuration) is assigned a provider/model pair (e.g. "Groq/llama-4-scout");
+    # `.env` needs one AIGATEWAY__PROVIDERAPIKEYS__<PROVIDER> line per provider actually assigned
+    # to a task -- matching is case-insensitive (.NET config binding), so the .env.example's
+    # UPPER_SNAKE_CASE styling is just convention, not a requirement.
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
-      # No service_healthy condition for clamav/docling -- a not-yet-ready dependency should
-      # correctly produce a retry-then-fail-closed CourseFile.Status = Failed from
-      # ScanFileJob/ParseFileJob rather than blocking the whole API from starting.
+      # No service_healthy condition for clamav/docling/ai-gateway -- a not-yet-ready dependency
+      # should correctly produce a retry-then-fail-closed CourseFile.Status = Failed from
+      # ScanFileJob/ParseFileJob/ExtractStructureJob rather than blocking the whole API from
+      # starting.
 
   web:
     profiles: ["frontend", "all"]

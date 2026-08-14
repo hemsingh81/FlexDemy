@@ -6,5 +6,6 @@ namespace FlexDemy.Application.Common;
 // BackgroundJob.Enqueue<IPublishNodeContentJob>(...) under the hood.
 public interface IPublishNodeContentJobEnqueuer
 {
-    void Enqueue(string batchItemId);
+    // Story 4.1/AD-23: see IScanFileJobEnqueuer's own header comment for why this parameter exists.
+    void Enqueue(string batchItemId, string? correlationId);
 }

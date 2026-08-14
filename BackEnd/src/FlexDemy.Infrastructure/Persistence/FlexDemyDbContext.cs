@@ -2,6 +2,7 @@ using FlexDemy.Domain.AdaptiveLearning;
 using FlexDemy.Domain.AiConfig;
 using FlexDemy.Domain.AiUsage;
 using FlexDemy.Domain.Courses;
+using FlexDemy.Domain.ErrorObservability;
 using FlexDemy.Domain.MasterData;
 using FlexDemy.Domain.Permissions;
 using FlexDemy.Domain.Profiles;
@@ -48,6 +49,9 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
     public DbSet<PublishBatch> PublishBatches => Set<PublishBatch>();
     public DbSet<PublishBatchItem> PublishBatchItems => Set<PublishBatchItem>();
     public DbSet<CourseVersion> CourseVersions => Set<CourseVersion>();
+
+    public DbSet<ErrorRecord> ErrorRecords => Set<ErrorRecord>();
+    public DbSet<ErrorRetentionSettings> ErrorRetentionSettings => Set<ErrorRetentionSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -8,6 +8,6 @@ namespace FlexDemy.Infrastructure.Jobs;
 // own header comment for why this seam exists at all.
 public class ScanFileJobEnqueuer : IScanFileJobEnqueuer
 {
-    public void Enqueue(string courseFileId) =>
-        BackgroundJob.Enqueue<IScanFileJob>(j => j.RunAsync(courseFileId, CancellationToken.None, null));
+    public void Enqueue(string courseFileId, string? correlationId) =>
+        BackgroundJob.Enqueue<IScanFileJob>(j => j.RunAsync(courseFileId, correlationId, CancellationToken.None, null));
 }

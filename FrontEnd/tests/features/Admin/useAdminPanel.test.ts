@@ -1,6 +1,6 @@
-﻿import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useAdminPanel } from '@/src/features/Admin/useAdminPanel';
+import { useAdminPanel, ADMIN_SUBTAB_META } from '@/src/features/Admin/useAdminPanel';
 import { useDomain } from '@/src/context/DomainContext';
 import { UserProfile } from '@/src/types';
 
@@ -34,7 +34,7 @@ const mockDomain = (role: UserProfile['role']) => {
 };
 
 describe('useAdminPanel', () => {
-  it('Master sees all 6 admin sub-tabs, defaulting to masterdata', () => {
+  it('Master sees all 7 admin sub-tabs, defaulting to masterdata', () => {
     mockDomain('Master');
 
     const { result } = renderHook(() => useAdminPanel());
@@ -46,11 +46,12 @@ describe('useAdminPanel', () => {
       'tutor-approvals',
       'ai-configuration',
       'tag-management',
+      'errors',
     ]);
     expect(result.current.activeSubTab).toBe('masterdata');
   });
 
-  it('Support sees tutor-approvals and tag-management', () => {
+  it('Support sees tutor-approvals and tag-management, not errors', () => {
     mockDomain('Support');
 
     const { result } = renderHook(() => useAdminPanel());
@@ -77,5 +78,10 @@ describe('useAdminPanel', () => {
     });
 
     expect(result.current.activeSubTab).toBe('role-visibility');
+  });
+
+  it("ADMIN_SUBTAB_META has an 'errors' entry with a label and icon", () => {
+    expect(ADMIN_SUBTAB_META.errors.label).toBe('Error Log');
+    expect(ADMIN_SUBTAB_META.errors.icon).toBeDefined();
   });
 });

@@ -7,5 +7,6 @@ namespace FlexDemy.Application.Common;
 // BackgroundJob.Enqueue<IParseFileJob>(...) under the hood, per this story's Task 4.
 public interface IParseFileJobEnqueuer
 {
-    void Enqueue(string courseFileId);
+    // Story 4.1/AD-23: see IScanFileJobEnqueuer's own header comment for why this parameter exists.
+    void Enqueue(string courseFileId, string? correlationId);
 }

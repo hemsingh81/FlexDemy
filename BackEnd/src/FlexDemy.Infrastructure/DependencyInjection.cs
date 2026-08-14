@@ -9,6 +9,9 @@ using FlexDemy.Application.Profiles;
 using FlexDemy.Application.Tags;
 using FlexDemy.Application.Users;
 using FlexDemy.Infrastructure.AiGateway;
+using FlexDemy.Application.ErrorObservability;
+using FlexDemy.Infrastructure.Correlation;
+using FlexDemy.Infrastructure.ErrorObservability;
 using FlexDemy.Infrastructure.IdGeneration;
 using FlexDemy.Infrastructure.Jobs;
 using FlexDemy.Infrastructure.Parsing;
@@ -56,6 +59,11 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddSingleton<IIdGenerator, GuidV7IdGenerator>();
+        // Story 4.1/AD-23: the backing store is a private `static` AsyncLocal<string?> field, so
+        // correctness doesn't actually depend on this being Singleton -- any lifetime would behave
+        // identically. Singleton is simply the idiomatic, zero-allocation-per-request choice,
+        // matching how IHttpContextAccessor is registered in this same Program.cs.
+        services.AddSingleton<ICorrelationIdAccessor, AsyncLocalCorrelationIdAccessor>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
 
@@ -126,6 +134,20 @@ public static class DependencyInjection
         services.AddScoped<IAiTaskBudgetRepository, AiTaskBudgetRepository>();
 
         services.AddScoped<ITagRepository, TagRepository>();
+
+        // Story 4.2/AD-24: Scoped, not Singleton -- both depend on IUnitOfWork/DbContext, same
+        // lifetime discipline as every other Application service registered here.
+        services.AddScoped<IErrorRecordRepository, ErrorRecordRepository>();
+        services.AddScoped<IErrorCaptureService, ErrorCaptureService>();
+        // Story 4.5: same registration file/lifetime as the rest of this feature's
+        // Application-layer services (see comment above).
+        services.AddScoped<IErrorAdminService, ErrorAdminService>();
+        // Story 4.6/FR-18.
+        services.AddScoped<IErrorRetentionSettingsRepository, ErrorRetentionSettingsRepository>();
+        // Story 4.6/AC #5: resolved by Hangfire's activator when the recurring job fires
+        // (Program.cs's RecurringJob.AddOrUpdate<IPurgeOldErrorRecordsJob>), same Scoped
+        // lifetime/DI-resolution path as every other job registered here.
+        services.AddScoped<IPurgeOldErrorRecordsJob, PurgeOldErrorRecordsJob>();
 
         // Backs FeatureAuthorizationHandler's dynamic role-permission lookups (plan §3).
         // AddMemoryCache registers IMemoryCache as a singleton; RolePermissionCache itself is

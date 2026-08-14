@@ -9,5 +9,8 @@ namespace FlexDemy.Application.Common;
 // Hangfire concept.
 public interface IScanFileJobEnqueuer
 {
-    void Enqueue(string courseFileId);
+    // Story 4.1/AD-23: correlationId is captured from ICorrelationIdAccessor.Current by the
+    // calling Application service at enqueue time and forwarded as an explicit job argument --
+    // never derived independently inside the job.
+    void Enqueue(string courseFileId, string? correlationId);
 }

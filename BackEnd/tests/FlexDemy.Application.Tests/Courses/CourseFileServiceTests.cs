@@ -16,7 +16,8 @@ public class CourseFileServiceTests
         IIdGenerator IdGenerator,
         IFileStorageService FileStorage,
         ICourseService CourseService,
-        IScanFileJobEnqueuer Enqueuer);
+        IScanFileJobEnqueuer Enqueuer,
+        ICorrelationIdAccessor CorrelationIdAccessor);
 
     private static Sut MakeSut()
     {
@@ -26,8 +27,9 @@ public class CourseFileServiceTests
         var fileStorage = Substitute.For<IFileStorageService>();
         var courseService = Substitute.For<ICourseService>();
         var enqueuer = Substitute.For<IScanFileJobEnqueuer>();
-        var service = new CourseFileService(repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer);
-        return new Sut(service, repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer);
+        var correlationIdAccessor = Substitute.For<ICorrelationIdAccessor>();
+        var service = new CourseFileService(repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer, correlationIdAccessor);
+        return new Sut(service, repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer, correlationIdAccessor);
     }
 
     // -- UploadFileAsync ------------------------------------------------------------------------
@@ -53,9 +55,27 @@ public class CourseFileServiceTests
         sut.Repository.Received(1).Add(Arg.Is<CourseFile>(f =>
             f.Id == "file_new" && f.CourseId == "draft_1" && f.FileName == "notes.pdf" && f.Status == JobItemStatus.Queued));
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        sut.Enqueuer.Received(1).Enqueue(Arg.Any<string>());
+        sut.Enqueuer.Received(1).Enqueue(Arg.Any<string>(), Arg.Any<string?>());
         Assert.Equal("notes.pdf", result.FileName);
         Assert.Equal(nameof(JobItemStatus.Queued), result.Status);
+    }
+
+    // Code-review patch: Story 4.1's own core AC (the correlation ID read from the accessor is
+    // forwarded to the scan job enqueuer) was previously untested at this call site -- the
+    // accessor was substituted but never exposed on Sut, so no test could configure or assert it.
+    [Fact]
+    public async Task UploadFileAsync_forwards_the_current_correlation_id_to_the_scan_job_enqueuer()
+    {
+        var sut = MakeSut();
+        sut.CorrelationIdAccessor.Current.Returns("corr-abc");
+        sut.IdGenerator.NewId().Returns("storedname_new", "file_new");
+        sut.FileStorage.SaveAsync(Arg.Any<Stream>(), Arg.Any<string>(), "application/pdf", "course-files", Arg.Any<CancellationToken>())
+            .Returns("/uploads/course-files/storedname_new.pdf");
+        using var content = new MemoryStream([1, 2, 3]);
+
+        await sut.Service.UploadFileAsync("draft_1", content, "notes.pdf", "application/pdf", 3);
+
+        sut.Enqueuer.Received(1).Enqueue("file_new", "corr-abc");
     }
 
     [Theory]
@@ -71,7 +91,7 @@ public class CourseFileServiceTests
             sut.Service.UploadFileAsync("draft_1", content, "file.bin", contentType, 1));
 
         await sut.FileStorage.DidNotReceiveWithAnyArgs().SaveAsync(default!, default!, default!, default!);
-        sut.Enqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!);
+        sut.Enqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!, default!);
     }
 
     [Fact]
@@ -108,7 +128,7 @@ public class CourseFileServiceTests
             sut.Service.UploadFileAsync("draft_1", content, "notes.pdf", "application/pdf", 1));
 
         await sut.FileStorage.DidNotReceiveWithAnyArgs().SaveAsync(default!, default!, default!, default!);
-        sut.Enqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!);
+        sut.Enqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!, default!);
     }
 
     // Code-review patch: a charset-suffixed/differently-cased content-type is normalized before
@@ -152,7 +172,7 @@ public class CourseFileServiceTests
         var sut = MakeSut();
         sut.FileStorage.SaveAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), "course-files", Arg.Any<CancellationToken>())
             .Returns("/private-uploads/course-files/x.pdf");
-        sut.Enqueuer.When(e => e.Enqueue(Arg.Any<string>())).Do(_ => throw new InvalidOperationException("Hangfire storage unavailable"));
+        sut.Enqueuer.When(e => e.Enqueue(Arg.Any<string>(), Arg.Any<string?>())).Do(_ => throw new InvalidOperationException("Hangfire storage unavailable"));
         using var content = new MemoryStream([1]);
 
         var result = await sut.Service.UploadFileAsync("draft_1", content, "notes.pdf", "application/pdf", 1);

@@ -1,6 +1,7 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Domain.AiConfig;
 using FlexDemy.Domain.AiUsage;
+using FlexDemy.Domain.ErrorObservability;
 using FlexDemy.Domain.MasterData;
 using FlexDemy.Domain.Permissions;
 using FlexDemy.Domain.Tags;
@@ -23,6 +24,7 @@ public static class DatabaseSeeder
         await EnsureRolePermissionsAsync(db, idGenerator, ct);
         await EnsureAiConfigAsync(db, idGenerator, ct);
         await EnsureTagsAsync(db, idGenerator, ct);
+        await EnsureErrorRetentionSettingsAsync(db, ct);
     }
 
     // Dev-only seed: one default account per role so the RBAC model has something to sign
@@ -215,6 +217,18 @@ public static class DatabaseSeeder
                 IsActive = seed.IsActive,
             });
         }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    // Dev-only Story 4.6/FR-18 seed: exactly one settings row, default 180-day retention.
+    // Idempotent -- skipped entirely once any row exists (there is only ever meant to be one).
+    private static async Task EnsureErrorRetentionSettingsAsync(FlexDemyDbContext db, CancellationToken ct)
+    {
+        if (await db.ErrorRetentionSettings.AnyAsync(ct))
+            return;
+
+        db.ErrorRetentionSettings.Add(new ErrorRetentionSettings { Id = ErrorRetentionSettings.SingletonId, RetentionDays = 180 });
 
         await db.SaveChangesAsync(ct);
     }

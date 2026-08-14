@@ -2,6 +2,8 @@ using System.Text.Json;
 using FlexDemy.Application.AiGateway;
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.ErrorObservability;
+using FlexDemy.Domain.ErrorObservability;
 using FlexDemy.Domain.Jobs;
 using Hangfire;
 using Hangfire.Server;
@@ -12,7 +14,9 @@ public class ExtractStructureJob(
     ICourseFileRepository repository,
     IUnitOfWork unitOfWork,
     ICourseService courseService,
-    IAiTaskGateway aiTaskGateway) : IExtractStructureJob
+    IAiTaskGateway aiTaskGateway,
+    ICorrelationIdAccessor correlationIdAccessor,
+    IErrorCaptureService errorCaptureService) : IExtractStructureJob
 {
     // Matches [AutomaticRetry(Attempts = MaxAttempts)] below -- same discipline as
     // ScanFileJob/ParseFileJob (Stories 2.6/2.7): an explicit constant, not Hangfire's implicit default.
@@ -32,8 +36,11 @@ public class ExtractStructureJob(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [AutomaticRetry(Attempts = MaxAttempts)]
-    public async Task RunAsync(string courseFileId, CancellationToken cancellationToken, PerformContext? context = null)
+    public async Task RunAsync(string courseFileId, string? correlationId, CancellationToken cancellationToken, PerformContext? context = null)
     {
+        // Story 4.1/AD-23: see ScanFileJob's own comment for why this is the first line.
+        correlationIdAccessor.Set(correlationId);
+
         var courseFile = await repository.GetByIdAsync(courseFileId, cancellationToken)
             ?? throw new NotFoundException(nameof(Domain.Courses.CourseFile), courseFileId);
 
@@ -73,16 +80,45 @@ public class ExtractStructureJob(
                 // schema-incomplete AI response routes to Failed, not a silent broken structure.
                 courseFile.Status = JobItemStatus.Failed;
                 courseFile.FailureReason = Truncate(parseError ?? "Extraction response could not be parsed.");
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                // Story 4.3/FR-3: a terminal failure that never went through the exception-based
+                // retry path at all -- TryParse failing is a parsed-but-invalid response, not a
+                // thrown exception, so there's no ExceptionType to read here.
+                await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+                {
+                    ExceptionType = null,
+                    Message = parseError ?? "Extraction response could not be parsed.",
+                    Source = ErrorSource.Backend,
+                    OriginContext = nameof(ExtractStructureJob),
+                    RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                    RelatedEntityId = courseFile.Id,
+                    IsBackgroundJobFailure = true,
+                }, cancellationToken);
+                return;
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
-        catch (AiTaskBudgetExceededException)
+        catch (AiTaskBudgetExceededException ex)
         {
             // No retry -- retrying immediately cannot un-exceed a budget threshold still in effect.
             courseFile.Status = JobItemStatus.Failed;
             courseFile.FailureReason = "AI budget exceeded for extraction.";
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Story 4.3/FR-3/FR-4: mirrors the existing terminal write above, doesn't replace it.
+            await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+            {
+                ExceptionType = ex.GetType().Name,
+                Message = ex.Message,
+                StackTrace = ex.StackTrace,
+                Source = ErrorSource.Backend,
+                OriginContext = nameof(ExtractStructureJob),
+                RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                RelatedEntityId = courseFile.Id,
+                IsBackgroundJobFailure = true,
+            }, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -102,6 +138,19 @@ public class ExtractStructureJob(
                     ? "AI extraction unavailable — retries exhausted"
                     : $"Extraction failed — retries exhausted ({ex.GetType().Name})");
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Story 4.3/FR-3/FR-4: mirrors the existing terminal write above, doesn't replace it.
+            await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+            {
+                ExceptionType = ex.GetType().Name,
+                Message = ex.Message,
+                StackTrace = ex.StackTrace,
+                Source = ErrorSource.Backend,
+                OriginContext = nameof(ExtractStructureJob),
+                RelatedEntityType = nameof(Domain.Courses.CourseFile),
+                RelatedEntityId = courseFile.Id,
+                IsBackgroundJobFailure = true,
+            }, cancellationToken);
         }
     }
 

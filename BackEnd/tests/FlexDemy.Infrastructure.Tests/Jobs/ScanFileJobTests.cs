@@ -1,5 +1,6 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.ErrorObservability;
 using FlexDemy.Domain.Courses;
 using FlexDemy.Domain.Jobs;
 using FlexDemy.Infrastructure.Jobs;
@@ -18,7 +19,7 @@ namespace FlexDemy.Infrastructure.Tests.Jobs;
 // lives in FlexDemy.Infrastructure.Tests/Jobs/ instead. Noted here rather than silently deviating.
 public class ScanFileJobTests
 {
-    private sealed record Sut(ScanFileJob Job, ICourseFileRepository Repository, IUnitOfWork UnitOfWork, IFileStorageService FileStorage, IFileScanner FileScanner, IParseFileJobEnqueuer ParseEnqueuer);
+    private sealed record Sut(ScanFileJob Job, ICourseFileRepository Repository, IUnitOfWork UnitOfWork, IFileStorageService FileStorage, IFileScanner FileScanner, IParseFileJobEnqueuer ParseEnqueuer, ICorrelationIdAccessor CorrelationIdAccessor, IErrorCaptureService ErrorCaptureService);
 
     private static Sut MakeSut()
     {
@@ -27,8 +28,10 @@ public class ScanFileJobTests
         var fileStorage = Substitute.For<IFileStorageService>();
         var fileScanner = Substitute.For<IFileScanner>();
         var parseEnqueuer = Substitute.For<IParseFileJobEnqueuer>();
-        var job = new ScanFileJob(repository, unitOfWork, fileStorage, fileScanner, parseEnqueuer);
-        return new Sut(job, repository, unitOfWork, fileStorage, fileScanner, parseEnqueuer);
+        var correlationIdAccessor = Substitute.For<ICorrelationIdAccessor>();
+        var errorCaptureService = Substitute.For<IErrorCaptureService>();
+        var job = new ScanFileJob(repository, unitOfWork, fileStorage, fileScanner, parseEnqueuer, correlationIdAccessor, errorCaptureService);
+        return new Sut(job, repository, unitOfWork, fileStorage, fileScanner, parseEnqueuer, correlationIdAccessor, errorCaptureService);
     }
 
     private static CourseFile MakeQueuedFile(string id = "file_1") => new()
@@ -49,7 +52,7 @@ public class ScanFileJobTests
     private static PerformContext MakePerformContext(int? retryCount)
     {
         var method = typeof(IScanFileJob).GetMethod(nameof(IScanFileJob.RunAsync))!;
-        var job = new Job(typeof(IScanFileJob), method, "file_1", CancellationToken.None, null!);
+        var job = new Job(typeof(IScanFileJob), method, "file_1", null!, CancellationToken.None, null!);
         var backgroundJob = new BackgroundJob("job_1", job, DateTime.UtcNow);
         var connection = Substitute.For<IStorageConnection>();
         connection.GetJobParameter("job_1", "RetryCount").Returns(retryCount?.ToString());
@@ -70,12 +73,29 @@ public class ScanFileJobTests
         sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>()).Returns(new MemoryStream([1, 2, 3]));
         sut.FileScanner.ScanAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(new FileScanResult(true, null));
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
         Assert.Equal(JobItemStatus.Queued, file.Status);
         await sut.FileStorage.DidNotReceiveWithAnyArgs().DeleteAsync(default!);
         await sut.UnitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
-        sut.ParseEnqueuer.Received(1).Enqueue("file_1");
+        sut.ParseEnqueuer.Received(1).Enqueue("file_1", Arg.Any<string?>());
+    }
+
+    // Story 4.1/AC#4-5: the correlationId argument is set on the accessor as the job's first
+    // action and forwarded unchanged to the next job's enqueuer -- never re-derived independently.
+    [Fact]
+    public async Task RunAsync_sets_the_correlation_accessor_and_forwards_the_same_id_to_the_parse_enqueuer()
+    {
+        var sut = MakeSut();
+        var file = MakeQueuedFile();
+        sut.Repository.GetByIdAsync("file_1", Arg.Any<CancellationToken>()).Returns(file);
+        sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>()).Returns(new MemoryStream([1, 2, 3]));
+        sut.FileScanner.ScanAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(new FileScanResult(true, null));
+
+        await sut.Job.RunAsync("file_1", "corr-abc", CancellationToken.None);
+
+        sut.CorrelationIdAccessor.Received(1).Set("corr-abc");
+        sut.ParseEnqueuer.Received(1).Enqueue("file_1", "corr-abc");
     }
 
     // Story 2.7 code-review patch: a clean scan whose only failure is *scheduling* the next step
@@ -88,9 +108,9 @@ public class ScanFileJobTests
         sut.Repository.GetByIdAsync("file_1", Arg.Any<CancellationToken>()).Returns(file);
         sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>()).Returns(new MemoryStream([1, 2, 3]));
         sut.FileScanner.ScanAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(new FileScanResult(true, null));
-        sut.ParseEnqueuer.When(e => e.Enqueue(Arg.Any<string>())).Do(_ => throw new InvalidOperationException("Hangfire storage unavailable"));
+        sut.ParseEnqueuer.When(e => e.Enqueue(Arg.Any<string>(), Arg.Any<string?>())).Do(_ => throw new InvalidOperationException("Hangfire storage unavailable"));
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
         Assert.Equal(JobItemStatus.Failed, file.Status);
         Assert.Contains("schedule parsing", file.FailureReason);
@@ -107,13 +127,13 @@ public class ScanFileJobTests
         sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>()).Returns(new MemoryStream([1, 2, 3]));
         sut.FileScanner.ScanAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(new FileScanResult(false, "Eicar-Test-Signature"));
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
         Assert.Equal(JobItemStatus.Failed, file.Status);
         Assert.Contains("Eicar-Test-Signature", file.FailureReason);
         await sut.FileStorage.Received(1).DeleteAsync(file.StoredUrl, Arg.Any<CancellationToken>());
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        sut.ParseEnqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!);
+        sut.ParseEnqueuer.DidNotReceiveWithAnyArgs().Enqueue(default!, default!);
     }
 
     // Code-review patch: the DB write must commit before the file is deleted from disk -- if
@@ -128,7 +148,7 @@ public class ScanFileJobTests
         sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>()).Returns(new MemoryStream([1]));
         sut.FileScanner.ScanAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(new FileScanResult(false, "Eicar-Test-Signature"));
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
         Received.InOrder(() =>
         {
@@ -149,7 +169,7 @@ public class ScanFileJobTests
         file.Status = status;
         sut.Repository.GetByIdAsync("file_1", Arg.Any<CancellationToken>()).Returns(file);
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
         await sut.FileStorage.DidNotReceiveWithAnyArgs().OpenReadAsync(default!);
         await sut.FileScanner.DidNotReceiveWithAnyArgs().ScanAsync(default!);
@@ -169,11 +189,15 @@ public class ScanFileJobTests
             .Returns<Task<Stream>>(_ => throw new FileNotFoundException("stored file missing"));
         var context = MakePerformContext(retryCount: 4); // attempt 5 of 5 -- the last
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None, context);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None, context);
 
         Assert.Equal(JobItemStatus.Failed, file.Status);
         Assert.Contains("Scan failed", file.FailureReason);
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await sut.ErrorCaptureService.Received(1).CaptureAsync(
+            Arg.Is<ErrorCaptureRequest>(r => r.ExceptionType == "FileNotFoundException"
+                && r.RelatedEntityType == nameof(CourseFile) && r.RelatedEntityId == "file_1" && r.IsBackgroundJobFailure),
+            Arg.Any<CancellationToken>());
     }
 
     // Code-review patch: ClamAV's own reported threat name is out of this codebase's control --
@@ -189,7 +213,7 @@ public class ScanFileJobTests
         var overLongThreatName = new string('x', 2000);
         sut.FileScanner.ScanAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(new FileScanResult(false, overLongThreatName));
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
 
         Assert.NotNull(file.FailureReason);
         Assert.True(file.FailureReason!.Length <= 1024);
@@ -206,7 +230,7 @@ public class ScanFileJobTests
             .Returns<FileScanResult>(_ => throw new FileScanUnavailableException("unreachable"));
         var context = MakePerformContext(retryCount: 1); // attempt 2 of 5 -- not the last
 
-        await Assert.ThrowsAsync<FileScanUnavailableException>(() => sut.Job.RunAsync("file_1", CancellationToken.None, context));
+        await Assert.ThrowsAsync<FileScanUnavailableException>(() => sut.Job.RunAsync("file_1", null, CancellationToken.None, context));
 
         Assert.Equal(JobItemStatus.Queued, file.Status);
         await sut.UnitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
@@ -223,10 +247,45 @@ public class ScanFileJobTests
             .Returns<FileScanResult>(_ => throw new FileScanUnavailableException("unreachable"));
         var context = MakePerformContext(retryCount: 4); // attempt 5 of 5 -- the last
 
-        await sut.Job.RunAsync("file_1", CancellationToken.None, context);
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None, context);
 
         Assert.Equal(JobItemStatus.Failed, file.Status);
         Assert.Equal("Scanning unavailable — retries exhausted", file.FailureReason);
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await sut.ErrorCaptureService.Received(1).CaptureAsync(
+            Arg.Is<ErrorCaptureRequest>(r => r.ExceptionType == "FileScanUnavailableException" && r.IsBackgroundJobFailure),
+            Arg.Any<CancellationToken>());
+    }
+
+    // -- Story 4.3/AC #4: CaptureAsync is never called on a retry that still has attempts left, or
+    // on a clean scan that succeeds. ------------------------------------------------------------
+
+    [Fact]
+    public async Task RunAsync_a_non_final_retry_never_calls_CaptureAsync()
+    {
+        var sut = MakeSut();
+        var file = MakeQueuedFile();
+        sut.Repository.GetByIdAsync("file_1", Arg.Any<CancellationToken>()).Returns(file);
+        sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>())
+            .Returns<Task<Stream>>(_ => throw new FileScanUnavailableException("unreachable"));
+        var context = MakePerformContext(retryCount: 1); // attempt 2 of 5 -- not the last
+
+        await Assert.ThrowsAsync<FileScanUnavailableException>(() => sut.Job.RunAsync("file_1", null, CancellationToken.None, context));
+
+        await sut.ErrorCaptureService.DidNotReceiveWithAnyArgs().CaptureAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task RunAsync_a_clean_scan_that_succeeds_never_calls_CaptureAsync()
+    {
+        var sut = MakeSut();
+        var file = MakeQueuedFile();
+        sut.Repository.GetByIdAsync("file_1", Arg.Any<CancellationToken>()).Returns(file);
+        sut.FileStorage.OpenReadAsync(file.StoredUrl, Arg.Any<CancellationToken>()).Returns(new MemoryStream([1, 2, 3]));
+        sut.FileScanner.ScanAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(new FileScanResult(true, null));
+
+        await sut.Job.RunAsync("file_1", null, CancellationToken.None);
+
+        await sut.ErrorCaptureService.DidNotReceiveWithAnyArgs().CaptureAsync(default!, default);
     }
 }

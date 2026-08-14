@@ -6,5 +6,6 @@ namespace FlexDemy.Infrastructure.Jobs;
 // passes. Registered AddScoped, like every other Infrastructure service.
 public interface IParseFileJob
 {
-    Task RunAsync(string courseFileId, CancellationToken cancellationToken, PerformContext? context = null);
+    // Story 4.1/AD-23: see IScanFileJob's own comment for why this parameter exists.
+    Task RunAsync(string courseFileId, string? correlationId, CancellationToken cancellationToken, PerformContext? context = null);
 }

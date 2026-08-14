@@ -1,7 +1,9 @@
 using FlexDemy.Application.AdaptiveLearning;
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
+using FlexDemy.Application.ErrorObservability;
 using FlexDemy.Domain.AdaptiveLearning;
+using FlexDemy.Domain.ErrorObservability;
 using Hangfire;
 using Hangfire.Server;
 
@@ -18,14 +20,19 @@ public class PublishNodeContentJob(
     IUnitOfWork unitOfWork,
     IAdaptiveLearningService adaptiveLearningService,
     IVersionService versionService,
-    ICourseService courseService) : IPublishNodeContentJob
+    ICourseService courseService,
+    ICorrelationIdAccessor correlationIdAccessor,
+    IErrorCaptureService errorCaptureService) : IPublishNodeContentJob
 {
     // Matches ExtractStructureJob.cs's own explicit-constant discipline (not Hangfire's implicit default).
     private const int MaxAttempts = 5;
 
     [AutomaticRetry(Attempts = MaxAttempts)]
-    public async Task RunAsync(string batchItemId, CancellationToken cancellationToken, PerformContext? context = null)
+    public async Task RunAsync(string batchItemId, string? correlationId, CancellationToken cancellationToken, PerformContext? context = null)
     {
+        // Story 4.1/AD-23: see ScanFileJob's own comment for why this is the first line.
+        correlationIdAccessor.Set(correlationId);
+
         var item = await repository.GetItemByIdAsync(batchItemId, cancellationToken)
             ?? throw new NotFoundException(nameof(PublishBatchItem), batchItemId);
         var batch = await repository.GetByIdAsync(item.BatchId, cancellationToken)
@@ -67,10 +74,10 @@ public class PublishNodeContentJob(
                 item.ProgressText = "Drill-Down + Ways generated";
                 await unitOfWork.SaveChangesAsync(cancellationToken);
             }
-            catch (AiTaskBudgetExceededException)
+            catch (AiTaskBudgetExceededException ex)
             {
                 // No retry -- retrying immediately cannot un-exceed a budget threshold still in effect.
-                await MarkFailedAsync(item, "AI budget exceeded during publish generation.", cancellationToken);
+                await MarkFailedAsync(item, "AI budget exceeded during publish generation.", ex, cancellationToken);
             }
             catch (AiResponseValidationException ex)
             {
@@ -80,7 +87,7 @@ public class PublishNodeContentJob(
                 // mechanism: Story 3.5's GetOrGenerateLevelAsync/GetOrGenerateWayAsync (on-demand
                 // fallback) already serves a student viewing this node for free, since no
                 // GeneratedContentJson was ever written for it.
-                await MarkFailedAsync(item, ex.Message, cancellationToken);
+                await MarkFailedAsync(item, ex.Message, ex, cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -97,6 +104,7 @@ public class PublishNodeContentJob(
                     ex is AiTaskUnavailableException
                         ? "AI generation unavailable — retries exhausted"
                         : $"Publish generation failed — retries exhausted ({ex.GetType().Name})",
+                    ex,
                     cancellationToken);
             }
         }
@@ -123,10 +131,26 @@ public class PublishNodeContentJob(
         }
     }
 
-    private async Task MarkFailedAsync(PublishBatchItem item, string reason, CancellationToken cancellationToken)
+    // Story 4.3/FR-3/FR-4: called from all 3 terminal-failure sites above -- one CaptureAsync call
+    // site here instead of duplicating it at each. `exception` is passed through from the caller's
+    // own catch block so ExceptionType/StackTrace reflect the real failure, not the human-friendly
+    // `reason` string that goes into ProgressText instead (that field's shape/content is unchanged).
+    private async Task MarkFailedAsync(PublishBatchItem item, string reason, Exception? exception, CancellationToken cancellationToken)
     {
         item.Status = PublishItemStatus.Failed;
         item.ProgressText = reason;
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await errorCaptureService.CaptureAsync(new ErrorCaptureRequest
+        {
+            ExceptionType = exception?.GetType().Name,
+            Message = exception?.Message ?? reason,
+            StackTrace = exception?.StackTrace,
+            Source = ErrorSource.Backend,
+            OriginContext = nameof(PublishNodeContentJob),
+            RelatedEntityType = nameof(PublishBatchItem),
+            RelatedEntityId = item.Id,
+            IsBackgroundJobFailure = true,
+        }, cancellationToken);
     }
 }
