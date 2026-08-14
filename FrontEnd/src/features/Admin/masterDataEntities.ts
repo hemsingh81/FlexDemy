@@ -1,8 +1,16 @@
-import { BookOpen, Building2, Globe2, GraduationCap, Layers, Map } from 'lucide-react';
+import { BookOpen, Building2, Globe2, GraduationCap, Layers, Map, Tags } from 'lucide-react';
 
-export type MasterDataEntity = 'country' | 'state' | 'city' | 'board' | 'classlevel' | 'subject';
+export type MasterDataEntity = 'country' | 'state' | 'city' | 'board' | 'classlevel' | 'subject' | 'tag';
 
-export const MASTER_DATA_ENTITIES: MasterDataEntity[] = ['country', 'state', 'city', 'board', 'classlevel', 'subject'];
+export const MASTER_DATA_ENTITIES: MasterDataEntity[] = [
+  'country',
+  'state',
+  'city',
+  'board',
+  'classlevel',
+  'subject',
+  'tag',
+];
 
 export const MASTER_DATA_ENTITY_META: Record<MasterDataEntity, { label: string; icon: typeof Globe2 }> = {
   country: { label: 'Country', icon: Globe2 },
@@ -11,4 +19,7 @@ export const MASTER_DATA_ENTITY_META: Record<MasterDataEntity, { label: string; 
   board: { label: 'Board', icon: BookOpen },
   classlevel: { label: 'Class Level', icon: GraduationCap },
   subject: { label: 'Subject', icon: Layers },
+  // Moved in from its own top-level Admin sub-tab -- tag hygiene is master data too. Support's
+  // access is narrowed to just this entity inside MasterDataManager (see its visibleEntities).
+  tag: { label: 'Tag Management', icon: Tags },
 };

@@ -34,7 +34,7 @@ const mockDomain = (role: UserProfile['role']) => {
 };
 
 describe('useAdminPanel', () => {
-  it('Master sees all 7 admin sub-tabs, defaulting to masterdata', () => {
+  it('Master sees all 6 admin sub-tabs, defaulting to masterdata', () => {
     mockDomain('Master');
 
     const { result } = renderHook(() => useAdminPanel());
@@ -45,18 +45,17 @@ describe('useAdminPanel', () => {
       'role-visibility',
       'tutor-approvals',
       'ai-configuration',
-      'tag-management',
       'errors',
     ]);
     expect(result.current.activeSubTab).toBe('masterdata');
   });
 
-  it('Support sees tutor-approvals and tag-management, not errors', () => {
+  it('Support sees tutor-approvals and masterdata (narrowed to Tag Management), not errors', () => {
     mockDomain('Support');
 
     const { result } = renderHook(() => useAdminPanel());
 
-    expect(result.current.availableSubTabs).toEqual(['tutor-approvals', 'tag-management']);
+    expect(result.current.availableSubTabs).toEqual(['tutor-approvals', 'masterdata']);
     expect(result.current.activeSubTab).toBe('tutor-approvals');
   });
 

@@ -50,8 +50,9 @@ export const SidePanel: React.FC<SidePanelProps> = ({
           width === 'lg' ? 'sm:w-[640px]' : 'sm:w-[480px]'
         }`}
       >
-        {/* Header */}
-        <div className="shrink-0 flex items-start justify-between gap-3 px-6 py-5 border-b border-[#E1DED4]">
+        {/* Header -- same bg-[#FAF7EC] as the footer below, so the docked blade reads as one
+            consistent chrome instead of a white header against a tinted footer. */}
+        <div className="shrink-0 flex items-start justify-between gap-3 px-6 py-5 border-b border-[#E1DED4] bg-[#FAF7EC]">
           <div className="min-w-0">
             <h3 className="text-lg font-extrabold text-[#142030] truncate">{title}</h3>
             {subtitle && <p className="text-xs text-[#5E6A79] mt-0.5">{subtitle}</p>}

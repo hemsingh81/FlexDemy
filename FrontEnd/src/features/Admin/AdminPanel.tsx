@@ -5,7 +5,6 @@ import { SupportUserCreation } from './SupportUserCreation';
 import { RoleVisibilityManager } from './RoleVisibilityManager';
 import { TutorApprovals } from './TutorApprovals';
 import { AiConfiguration } from './AiConfiguration/AiConfiguration';
-import { TagManagement } from './TagManagement/TagManagement';
 import { ErrorLog } from './ErrorLog/ErrorLog';
 import { PageTransition } from '../../ui/PageTransition';
 
@@ -55,7 +54,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab: controlled
         {activeSubTab === 'role-visibility' && <RoleVisibilityManager />}
         {activeSubTab === 'tutor-approvals' && <TutorApprovals />}
         {activeSubTab === 'ai-configuration' && <AiConfiguration />}
-        {activeSubTab === 'tag-management' && <TagManagement />}
         {activeSubTab === 'errors' && <ErrorLog />}
       </PageTransition>
     </div>

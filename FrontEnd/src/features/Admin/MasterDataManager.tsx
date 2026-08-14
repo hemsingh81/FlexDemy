@@ -4,6 +4,9 @@ import type { Board, City, ClassLevel, Country, State, Subject } from '../../ser
 import { MasterDataTable, type MasterDataExtraField } from './MasterDataTable';
 import { MASTER_DATA_ENTITIES, MASTER_DATA_ENTITY_META, type MasterDataEntity } from './masterDataEntities';
 import { TypeaheadMultiSelect } from '../../ui/TypeaheadMultiSelect';
+import { TagManagement } from './TagManagement/TagManagement';
+import { useDomain } from '../../context/DomainContext';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 // Hosts one MasterDataTable per entity (plan §5 item 5). Country/ClassLevel/Subject have no
 // parent; State/City/Board are scoped by the "Location scope" selector below (reusing the
@@ -13,8 +16,51 @@ import { TypeaheadMultiSelect } from '../../ui/TypeaheadMultiSelect';
 const selectClassName =
   'px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]';
 
+const searchInputClassName =
+  'w-full sm:w-72 px-3 py-2 bg-white border border-[#E1DED4] rounded-xl text-sm text-[#142030] focus:outline-none focus:ring-2 focus:ring-[#BA5012]';
+
+// Same debounce window as TagManagement's own search (which pre-dates this and stays
+// self-contained below rather than being folded in, since it already owns its filtering).
+const SEARCH_DEBOUNCE_MS = 250;
+
 export const MasterDataManager: React.FC = () => {
+  const { user } = useDomain();
+  // Support previously reached Tag Management via its own top-level Admin sub-tab; now that
+  // it lives inside Master Data, Support's access is narrowed to just this entity rather than
+  // opening up the other 6 (country/state/... stay Master-only, same as before).
+  const visibleEntities = useMemo<MasterDataEntity[]>(
+    () => (user?.role === 'Support' ? ['tag'] : MASTER_DATA_ENTITIES),
+    [user?.role]
+  );
+
   const [activeEntity, setActiveEntity] = useState<MasterDataEntity>('country');
+
+  // Keeps activeEntity valid if visibleEntities narrows after mount (e.g. user resolves after
+  // the initial render) -- same self-correcting pattern as useAdminPanel.ts.
+  useEffect(() => {
+    if (visibleEntities.length > 0 && !visibleEntities.includes(activeEntity)) {
+      setActiveEntity(visibleEntities[0]);
+    }
+  }, [visibleEntities, activeEntity]);
+
+  // Search-by-name, mirroring TagManagement's own pattern: no server-side search endpoint
+  // exists for any master-data entity, so fetchAll fetches the full (includeInactive) list and
+  // filters it client-side. Cleared on entity switch so each page starts fresh instead of
+  // carrying over a filter that no longer makes sense for the new entity.
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, SEARCH_DEBOUNCE_MS);
+  useEffect(() => {
+    setSearchQuery('');
+  }, [activeEntity]);
+
+  const filterByName = useCallback(
+    <T extends { name: string }>(list: T[]): T[] => {
+      const query = debouncedSearchQuery.trim().toLowerCase();
+      return query ? list.filter((item) => item.name.toLowerCase().includes(query)) : list;
+    },
+    [debouncedSearchQuery]
+  );
+
   const [countries, setCountries] = useState<Country[]>([]);
   const [statesInScope, setStatesInScope] = useState<State[]>([]);
   const [scopeCountryId, setScopeCountryId] = useState('');
@@ -51,21 +97,34 @@ export const MasterDataManager: React.FC = () => {
   const countryOptions = countries.map((c) => ({ value: c.id, label: c.name }));
   const stateOptions = statesInScope.map((s) => ({ value: s.id, label: s.name }));
 
-  const fetchCountries = useCallback(() => masterDataService.getCountries(true), []);
+  const fetchCountries = useCallback(
+    () => masterDataService.getCountries(true).then(filterByName),
+    [filterByName]
+  );
   const fetchStates = useCallback(
-    () => (scopeCountryId ? masterDataService.getStates(scopeCountryId, true) : Promise.resolve([])),
-    [scopeCountryId]
+    () =>
+      scopeCountryId
+        ? masterDataService.getStates(scopeCountryId, true).then(filterByName)
+        : Promise.resolve([]),
+    [scopeCountryId, filterByName]
   );
   const fetchCities = useCallback(
-    () => (scopeStateId ? masterDataService.getCities(scopeStateId, true) : Promise.resolve([])),
-    [scopeStateId]
+    () =>
+      scopeStateId ? masterDataService.getCities(scopeStateId, true).then(filterByName) : Promise.resolve([]),
+    [scopeStateId, filterByName]
   );
   const fetchBoards = useCallback(
-    () => masterDataService.getBoards(scopeStateId || undefined, true),
-    [scopeStateId]
+    () => masterDataService.getBoards(scopeStateId || undefined, true).then(filterByName),
+    [scopeStateId, filterByName]
   );
-  const fetchClassLevels = useCallback(() => masterDataService.getClassLevels(true), []);
-  const fetchSubjects = useCallback(() => masterDataService.getSubjects(true), []);
+  const fetchClassLevels = useCallback(
+    () => masterDataService.getClassLevels(true).then(filterByName),
+    [filterByName]
+  );
+  const fetchSubjects = useCallback(
+    () => masterDataService.getSubjects(true).then(filterByName),
+    [filterByName]
+  );
 
   // ClassLevel-only extra field (Part B) -- a Subject multi-select, narrowly scoped via
   // MasterDataTable's extraFields mechanism so the other 5 entities' simpler forms are
@@ -93,7 +152,7 @@ export const MasterDataManager: React.FC = () => {
   return (
     <div className="flex flex-col lg:flex-row gap-6 items-start">
       <nav className="w-full lg:w-52 shrink-0 bg-white p-2 rounded-2xl border border-[#E1DED4] shadow-2xs flex lg:flex-col flex-row flex-wrap gap-1">
-        {MASTER_DATA_ENTITIES.map((entity) => {
+        {visibleEntities.map((entity) => {
           const meta = MASTER_DATA_ENTITY_META[entity];
           const Icon = meta.icon;
           return (
@@ -115,6 +174,17 @@ export const MasterDataManager: React.FC = () => {
       </nav>
 
       <div className="flex-1 min-w-0 w-full space-y-6">
+      {activeEntity !== 'tag' && (
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder={`Search ${MASTER_DATA_ENTITY_META[activeEntity].label.toLowerCase()}...`}
+        aria-label={`Search ${MASTER_DATA_ENTITY_META[activeEntity].label}`}
+        className={searchInputClassName}
+      />
+      )}
+
       {(activeEntity === 'state' || activeEntity === 'city' || activeEntity === 'board') && (
       <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-2xl border border-[#E1DED4] shadow-2xs">
         <span className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide">Location scope</span>
@@ -289,6 +359,8 @@ export const MasterDataManager: React.FC = () => {
         buildUpdatePayload={(_row, isActive, v) => ({ name: v.name, stream: v.stream || null, isActive })}
       />
       )}
+
+      {activeEntity === 'tag' && <TagManagement />}
       </div>
     </div>
   );
