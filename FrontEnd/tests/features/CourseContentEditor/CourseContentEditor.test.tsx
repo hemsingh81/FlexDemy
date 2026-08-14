@@ -545,6 +545,26 @@ describe('CourseContentEditor', () => {
       expect(screen.getAllByText('Done')).toHaveLength(3);
     });
 
+    it('a file reaching Done triggers a content tree refetch, without reopening the editor', async () => {
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await act(async () => {
+        selectFilesSync([makeFile('a.pdf')]);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const callsBeforeDone = vi.mocked(contentTreeService.getTree).mock.calls.length;
+
+      // The backend materializes any pending extraction on every GetTreeAsync call
+      // (ContentTreeService.cs) -- but nothing else re-triggers that fetch once a file goes
+      // Done, so the newly extracted chapters would otherwise stay invisible until the tutor
+      // closes and reopens the editor.
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([{ id: 'file_1', fileName: 'a.pdf', contentType: 'application/pdf', sizeBytes: 7, status: 'Done', failureReason: null }]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(FILE_POLL_INTERVAL_MS);
+      });
+
+      expect(vi.mocked(contentTreeService.getTree).mock.calls.length).toBeGreaterThan(callsBeforeDone);
+    });
+
     it('batches near-simultaneous status-change announcements into one aria-live update', async () => {
       render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
       await act(async () => {

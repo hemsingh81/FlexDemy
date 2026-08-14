@@ -134,7 +134,15 @@ public sealed class PortkeyAiGateway(HttpClient httpClient, IOptions<AiGatewayOp
 
         try
         {
-            httpRequest.Headers.Add("x-portkey-provider", provider);
+            // Portkey's provider slugs are lowercase ("groq", not "Groq") and the check is
+            // case-sensitive -- confirmed live against the real gateway: PascalCase (this app's
+            // own AiTaskConfig.Provider casing, e.g. "Groq"/"OpenRouter") gets rejected outright
+            // with 400 "Invalid provider passed" before Portkey even attempts the upstream call,
+            // while the lowercase slug is accepted and actually reaches the provider. Only the
+            // header value is normalized here -- Provider elsewhere (DB storage, Admin UI,
+            // ResolveApiKey's already-case-insensitive lookup, usage/pricing records) keeps its
+            // existing PascalCase convention untouched.
+            httpRequest.Headers.Add("x-portkey-provider", provider.ToLowerInvariant());
             httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         }
         catch (FormatException ex)

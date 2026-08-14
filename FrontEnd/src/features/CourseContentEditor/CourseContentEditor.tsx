@@ -163,6 +163,12 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
       if (prevStatuses.get(file.id) !== file.status) {
         changed = true;
         pendingMessagesRef.current.push(`${file.name}: ${STATUS_LABEL[file.status]}`);
+        // A file reaching 'done' means the backend has already materialized its extracted
+        // structure into real chapters (ContentTreeService.GetTreeAsync does this on every call)
+        // -- but useCourseContentTree's own tree fetch only runs on mount/courseId-change, with
+        // nothing else telling it a file it doesn't know about just finished. Without this, the
+        // newly extracted content silently never appears until the editor is closed and reopened.
+        if (file.status === 'done') contentTree.refetch();
         prevStatuses.set(file.id, file.status);
       }
     });

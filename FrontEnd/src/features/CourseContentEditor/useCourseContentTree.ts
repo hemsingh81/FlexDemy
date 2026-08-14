@@ -155,6 +155,10 @@ interface UseCourseContentTreeResult {
   // -- this reloads the real persisted tree from the server, called by the caller when the screen
   // closes or switches to a different draft (mirrors useFileUpload's resetFiles()).
   resetTree: () => void;
+  // Refetches in place (no flash back to empty first, unlike resetTree) -- called by
+  // CourseContentEditor.tsx when a file's upload/extraction finishes, so newly materialized
+  // content actually appears without the tutor closing and reopening the editor.
+  refetch: () => void;
 }
 
 // Feature-local hook (AD-2), separate from useFileUpload.ts (different domain: confirmed content
@@ -278,6 +282,16 @@ export const useCourseContentTree = (courseId: string | null): UseCourseContentT
     if (courseId) fetchTree(courseId);
   };
 
+  // Distinct from resetTree above: this refetches in place (no flash back to an empty tree first)
+  // -- for CourseContentEditor.tsx to call once a file's upload/extraction finishes, so a newly
+  // materialized chapter (GetTreeAsync materializes any pending extraction server-side on every
+  // call, ContentTreeService.cs's own MaterializePendingExtractionsAsync) actually shows up
+  // without the tutor having to close and reopen the editor. useFileUpload.ts's own poll has no
+  // way to know this hook exists, so nothing else calls fetchTree when a file goes 'done'.
+  const refetch = () => {
+    if (courseId) fetchTree(courseId);
+  };
+
   return {
     data,
     isLoading,
@@ -291,5 +305,6 @@ export const useCourseContentTree = (courseId: string | null): UseCourseContentT
     moveNode,
     confirmNode,
     resetTree,
+    refetch,
   };
 };

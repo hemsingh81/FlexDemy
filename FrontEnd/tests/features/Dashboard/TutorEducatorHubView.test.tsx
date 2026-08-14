@@ -7,12 +7,20 @@ import { UserProfile } from '@/src/types';
 import * as courseDraftService from '@/src/services/courseDraftService';
 import * as tagsService from '@/src/services/tagsService';
 import * as masterDataService from '@/src/services/masterDataService';
+import * as courseFileService from '@/src/services/courseFileService';
+import * as contentTreeService from '@/src/services/contentTreeService';
 
 // Story 2.4: CourseWizard's Next/Finish now persist via courseDraftService -- mocked so this
 // file's real focus (wiring the wizard trigger into the hub) doesn't depend on a real backend.
+// getPublishStatus must be mocked too: the "finishing the wizard opens Course Content Editor"
+// test below mounts the real PublishLifecycleBar/useCourseLifecycle for 'draft_mock_1', which
+// otherwise fires a real, unmocked GET against a live local backend if one happens to be running
+// on API_BASE_URL's default (http://127.0.0.1:8080) -- a real bug found via the Admin Error Log
+// itself: this test was leaking a genuine 404 (NotFoundException, "Course 'draft_mock_1' was not
+// found") into the actual backend's captured error records on every test run against a live API.
 vi.mock('@/src/services/courseDraftService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/courseDraftService')>('@/src/services/courseDraftService');
-  return { ...actual, createDraftCourse: vi.fn(), updateDraftCourse: vi.fn() };
+  return { ...actual, createDraftCourse: vi.fn(), updateDraftCourse: vi.fn(), getPublishStatus: vi.fn() };
 });
 
 // Story 2.5: useCourseDraft.ts now fetches real Tags/Taxonomy data on mount -- mocked so this
@@ -24,6 +32,18 @@ vi.mock('@/src/services/tagsService', async () => {
 vi.mock('@/src/services/masterDataService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/masterDataService')>('@/src/services/masterDataService');
   return { ...actual, getCountries: vi.fn(), getStates: vi.fn(), getCities: vi.fn(), getBoards: vi.fn(), getClassLevels: vi.fn(), getSubjects: vi.fn() };
+});
+
+// Same reasoning as getPublishStatus above -- Course Content Editor's useFileUpload/
+// useCourseContentTree hooks also fetch on mount (GetFilesAsync / GetTreeAsync) for whatever
+// draftId it's given.
+vi.mock('@/src/services/courseFileService', async () => {
+  const actual = await vi.importActual<typeof import('@/src/services/courseFileService')>('@/src/services/courseFileService');
+  return { ...actual, getFiles: vi.fn() };
+});
+vi.mock('@/src/services/contentTreeService', async () => {
+  const actual = await vi.importActual<typeof import('@/src/services/contentTreeService')>('@/src/services/contentTreeService');
+  return { ...actual, getTree: vi.fn() };
 });
 
 beforeEach(() => {
@@ -44,6 +64,9 @@ beforeEach(() => {
   };
   vi.mocked(courseDraftService.createDraftCourse).mockResolvedValue(draftDto);
   vi.mocked(courseDraftService.updateDraftCourse).mockResolvedValue(draftDto);
+  vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue({ lifecycleState: 'Draft', isPublishing: false, checklist: null });
+  vi.mocked(courseFileService.getFiles).mockResolvedValue([]);
+  vi.mocked(contentTreeService.getTree).mockResolvedValue([]);
   vi.mocked(tagsService.getTags).mockResolvedValue([]);
   // Fixture data mirrors the old MOCK_* constants useCourseDraft.ts used to hardcode (Story 2.1),
   // so existing taxonomy-flow assertions (country_in/CBSE/Class 10/Physics) keep working.

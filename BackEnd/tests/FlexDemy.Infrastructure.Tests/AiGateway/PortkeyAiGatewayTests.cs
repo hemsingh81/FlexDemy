@@ -278,7 +278,13 @@ public class PortkeyAiGatewayTests
         await sut.ExplainTopicAsync(ChatRequest() with { Provider = "GROQ" });
 
         Assert.NotNull(handler.LastRequest);
-        Assert.Equal("GROQ", handler.LastRequest!.Headers.GetValues("x-portkey-provider").Single());
+        // Bug found live against a real Portkey gateway (2026-08-14): the x-portkey-provider
+        // header is itself case-sensitive on Portkey's side and rejects anything but its own
+        // lowercase slug ("Groq"/"GROQ" -> 400 "Invalid provider passed", even though this app's
+        // own AiTaskConfig.Provider is stored PascalCase everywhere). Only the header is
+        // normalized -- ProviderApiKeys lookup (this test's own original point) already tolerated
+        // any input casing via ResolveApiKey's case-insensitive dictionary, unaffected by this fix.
+        Assert.Equal("groq", handler.LastRequest!.Headers.GetValues("x-portkey-provider").Single());
     }
 
     [Theory]

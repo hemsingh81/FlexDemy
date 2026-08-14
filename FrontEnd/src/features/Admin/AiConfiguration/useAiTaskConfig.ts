@@ -32,9 +32,12 @@ export const AI_TASK_IDS: AiTaskId[] = [
 export const AI_PROVIDERS = ['Groq', 'OpenRouter', 'Local'] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
+// "llama-4-scout"/"llama-4-maverick" this list used to carry aren't valid Groq model IDs on
+// this account -- confirmed live, 2026-08-14, directly against Groq's own /openai/v1/models
+// catalog (neither Llama 4 variant listed; llama-3.3-70b-versatile is the largest general-
+// purpose chat model actually available). See AiConfigSeedData.cs's matching comment.
 export const AI_MODELS = [
-  'llama-4-scout',
-  'llama-4-maverick',
+  'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
   'nomic-embed-text',
   'gpt-4o-mini',

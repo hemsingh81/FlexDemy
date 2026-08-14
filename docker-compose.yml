@@ -107,6 +107,31 @@ services:
   ai-gateway:
     profiles: ["backend", "all"]
     image: portkeyai/gateway:latest
+    # Trusts the same corporate/TLS-inspection CA chain as the api build stage (see
+    # BackEnd/src/FlexDemy.Api/certs/README.md) -- reused rather than duplicated, since it's the
+    # same intercepting proxy either way. This is the actual egress point for outbound HTTPS to
+    # Groq/OpenRouter/etc (api only ever talks to this container over plain internal HTTP, per
+    # AiGateway__BaseUrl below) -- found live (2026-08-14) as the cause of every AI task failing
+    # with AiTaskUnavailableException ("both the primary and fallback provider failed") on a
+    # network with TLS inspection: the *.pem files fixed `dotnet restore` in api's build stage,
+    # but were never wired into this container, which has no cert-trust story of its own.
+    #
+    # portkeyai/gateway is a node:20-alpine image (verified against its Dockerfile, 2026-08-14),
+    # so this uses Node's NODE_EXTRA_CA_CERTS rather than rebuilding the image with
+    # update-ca-certificates -- no custom Dockerfile needed. The certs folder is bind-mounted
+    # read-only and concatenated into a single bundle at container start (NODE_EXTRA_CA_CERTS
+    # takes one file, not a directory); entrypoint is overridden (not just command) because the
+    # image's own ENTRYPOINT is `npm`, and a raw shell command is needed to build the bundle
+    # first. If the folder holds no *.pem files (most devs/CI), this produces an empty bundle --
+    # a harmless no-op, same as the api build stage's own empty-folder case.
+    volumes:
+      - ./BackEnd/src/FlexDemy.Api/certs:/usr/local/share/corporate-ca-certs:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /tmp/corporate-ca-bundle.pem
+    entrypoint:
+      - sh
+      - -c
+      - "cat /usr/local/share/corporate-ca-certs/*.pem > /tmp/corporate-ca-bundle.pem 2>/dev/null; exec npm run start:node"
 
   api:
     profiles: ["backend", "all"]
