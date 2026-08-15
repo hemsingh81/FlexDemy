@@ -281,6 +281,74 @@ describe('CourseContentEditor', () => {
     });
   });
 
+  describe('file status badge', () => {
+    it('shows a spinner on the Queued and Parsing badges, the two non-terminal statuses', async () => {
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'queued.pdf', status: 'Queued' }),
+        makeDto({ id: 'file_2', fileName: 'parsing.pdf', status: 'Parsing' }),
+      ]);
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      await screen.findByText('queued.pdf');
+      const queuedBadge = screen.getByText('Queued').closest('span');
+      const parsingBadge = screen.getByText('Parsing').closest('span');
+      expect(queuedBadge?.querySelector('svg.animate-spin')).toBeInTheDocument();
+      expect(parsingBadge?.querySelector('svg.animate-spin')).toBeInTheDocument();
+      // Exactly these two spinners -- no stray spinner anywhere else in the file list.
+      expect(container.querySelectorAll('svg.animate-spin')).toHaveLength(2);
+    });
+
+    it('shows no spinner on the terminal Done or Failed badges', async () => {
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'done.pdf', status: 'Done', parsedContent: 'text' }),
+        makeDto({ id: 'file_2', fileName: 'failed.pdf', status: 'Failed', failureReason: 'Unsupported file type.' }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      // 'done.pdf' legitimately appears twice once Done (file row + its own content card header,
+      // same as the 'Course Content raw-text view' describe block below) -- sync on the badge
+      // text itself, which is unique, instead.
+      await screen.findByText('Done');
+      expect(screen.getByText('Done').closest('span')?.querySelector('svg.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByText('Failed').closest('span')?.querySelector('svg.animate-spin')).not.toBeInTheDocument();
+    });
+
+    it('lets a Failed file be deleted outright, alongside Retry, with no confirm step', async () => {
+      const u = userEvent.setup();
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'corrupted.pdf', status: 'Failed', failureReason: 'Could not parse this file.' }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await screen.findByText('corrupted.pdf');
+
+      // Both actions available on a Failed row -- Delete doesn't replace Retry, it sits beside it.
+      expect(screen.getByLabelText('Retry file 1: corrupted.pdf')).toBeInTheDocument();
+      await u.click(screen.getByLabelText('Delete file 1: corrupted.pdf'));
+
+      // No ConfirmModal -- unlike a Done file's delete (which destroys real extracted content),
+      // a Failed file never had any, so this goes straight through.
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      await waitFor(() => expect(courseFileService.deleteFile).toHaveBeenCalledWith('draft-1', 'file_1'));
+      await waitFor(() => expect(screen.queryByText('corrupted.pdf')).not.toBeInTheDocument());
+    });
+
+    it('does not offer Delete on Queued, Parsing, or Done rows -- only Failed', async () => {
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'queued.pdf', status: 'Queued' }),
+        makeDto({ id: 'file_2', fileName: 'parsing.pdf', status: 'Parsing' }),
+        makeDto({ id: 'file_3', fileName: 'done.pdf', status: 'Done', parsedContent: 'text' }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      await screen.findByText('queued.pdf');
+      expect(screen.queryByLabelText(/^Delete file \d+:/)).not.toBeInTheDocument();
+      // Done files still get their own separate, ConfirmModal-gated delete from the Course
+      // Content card below -- that one's accessible name is `Delete ${fileName}`, a distinct
+      // pattern from the row-level `Delete file N: ${fileName}` this test is checking for.
+      expect(screen.getByLabelText('Delete done.pdf')).toBeInTheDocument();
+    });
+  });
+
   describe('Course Content raw-text view', () => {
     it('shows each Done files raw parsed text under its file name, with no AI structuring step', async () => {
       vi.mocked(courseFileService.getFiles).mockResolvedValue([
@@ -345,10 +413,155 @@ describe('CourseContentEditor', () => {
 
       await u.keyboard('{Escape}');
 
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // ConfirmModal now fades out over EXIT_MS before actually unmounting (ConfirmModal.tsx) --
+      // no longer instant.
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
       expect(screen.getByText('Some text.')).toBeInTheDocument(); // not deleted
       expect(screen.getByText('Course Content Editor')).toBeInTheDocument(); // editor still open
       expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('screen presentation', () => {
+    it('Normal is not a fixed full-viewport overlay, and keeps the bordered/rounded card shell', () => {
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).not.toHaveClass('fixed');
+      expect(root).not.toHaveClass('inset-0');
+      expect(root).toHaveClass('rounded-2xl');
+      expect(root).toHaveClass('border');
+    });
+
+    it('Maximize turns it into a true full-viewport takeover, above the Navbar, with no card-shell chrome', async () => {
+      const u = userEvent.setup();
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await u.click(screen.getByRole('button', { name: 'Maximize Course Content Editor' }));
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).toHaveClass('fixed');
+      expect(root).toHaveClass('inset-0');
+      expect(root).toHaveClass('z-50');
+      expect(root).not.toHaveClass('rounded-2xl');
+      expect(root).not.toHaveClass('border');
+    });
+
+    it('Maximize keeps the header out of the scrollable body, which becomes its own overflow-y-auto region', async () => {
+      const u = userEvent.setup();
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await u.click(screen.getByRole('button', { name: 'Maximize Course Content Editor' }));
+
+      // The header wrapper (title/Close/Maximize-Restore row + PublishLifecycleBar) lives one
+      // level up from the heading itself, not on the heading's own row.
+      const heading = screen.getByText('Course Content Editor');
+      const headerWrapper = heading.closest('div')?.parentElement;
+      expect(headerWrapper).toHaveClass('shrink-0');
+
+      // The body content div (starting with "Uploaded Files") is the sibling scroll region.
+      const uploadedFilesHeading = screen.getByText('Uploaded Files');
+      const scrollRegion = uploadedFilesHeading.closest('div')?.parentElement;
+      expect(scrollRegion).toHaveClass('flex-1');
+      expect(scrollRegion).toHaveClass('overflow-y-auto');
+    });
+  });
+
+  describe('maximize / restore', () => {
+    it('defaults to Normal: centered capped-width card, no sticky header', () => {
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).toHaveClass('max-w-4xl');
+      expect(root).toHaveClass('shadow-lg');
+      expect(root).not.toHaveClass('fixed');
+      const heading = screen.getByText('Course Content Editor');
+      expect(heading.closest('div')?.parentElement).not.toHaveClass('sticky');
+      expect(screen.getByRole('button', { name: 'Maximize Course Content Editor' })).toBeInTheDocument();
+    });
+
+    it('fullWidth drops the centered max-w-4xl cap on Normal, e.g. when embedded in MyCoursesSection', () => {
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" fullWidth />);
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).toHaveClass('w-full');
+      expect(root).not.toHaveClass('max-w-4xl');
+      // Still a bordered/shadowed Normal card otherwise -- fullWidth only changes the width rule.
+      expect(root).toHaveClass('rounded-2xl');
+      expect(root).toHaveClass('shadow-lg');
+    });
+
+    it('fullWidth has no effect on Maximized -- already as wide as it gets', async () => {
+      const u = userEvent.setup();
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" fullWidth />);
+
+      await u.click(screen.getByRole('button', { name: 'Maximize Course Content Editor' }));
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).toHaveClass('fixed');
+      expect(root).toHaveClass('inset-0');
+    });
+
+    it('clicking Maximize expands to a full-viewport takeover, no width cap', async () => {
+      const u = userEvent.setup();
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      await u.click(screen.getByRole('button', { name: 'Maximize Course Content Editor' }));
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).toHaveClass('fixed');
+      expect(root).toHaveClass('inset-0');
+      expect(root).not.toHaveClass('max-w-4xl');
+      expect(root).not.toHaveClass('shadow-lg');
+      expect(screen.getByRole('button', { name: 'Restore Course Content Editor' })).toBeInTheDocument();
+    });
+
+    it('Normal and Maximized use genuinely different zoom keyframes, so the toggle actually restarts the animation', async () => {
+      const u = userEvent.setup();
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      const root = () => container.querySelector('[aria-label="Course Content Editor"]');
+
+      // Normal (including the default first open): zoom-out, not fade-in-scale.
+      expect(root()).toHaveClass('animate-[zoom-out_150ms_ease-out]');
+      expect(root()).not.toHaveClass('animate-[fade-in-scale_150ms_ease-out]');
+
+      await u.click(screen.getByRole('button', { name: 'Maximize Course Content Editor' }));
+
+      // Maximized: fade-in-scale (the zoom-in direction), not zoom-out -- a genuinely different
+      // class value, not the same one reapplied, which is what makes the browser restart the
+      // animation on toggle instead of it only ever playing once on the very first mount.
+      expect(root()).toHaveClass('animate-[fade-in-scale_150ms_ease-out]');
+      expect(root()).not.toHaveClass('animate-[zoom-out_150ms_ease-out]');
+
+      await u.click(screen.getByRole('button', { name: 'Restore Course Content Editor' }));
+
+      expect(root()).toHaveClass('animate-[zoom-out_150ms_ease-out]');
+      expect(root()).not.toHaveClass('animate-[fade-in-scale_150ms_ease-out]');
+    });
+
+    it('clicking Restore after Maximize returns to the centered Normal layout', async () => {
+      const u = userEvent.setup();
+      const { container } = render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await u.click(screen.getByRole('button', { name: 'Maximize Course Content Editor' }));
+
+      await u.click(screen.getByRole('button', { name: 'Restore Course Content Editor' }));
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).toHaveClass('max-w-4xl');
+      expect(root).toHaveClass('shadow-lg');
+      expect(root).not.toHaveClass('fixed');
+    });
+
+    it('resets to Normal on every fresh open, not carrying over a prior Maximize', async () => {
+      const u = userEvent.setup();
+      const onClose = vi.fn();
+      const { container, rerender } = render(<CourseContentEditor isOpen onClose={onClose} draftId="draft-1" />);
+      await u.click(screen.getByRole('button', { name: 'Maximize Course Content Editor' }));
+
+      rerender(<CourseContentEditor isOpen={false} onClose={onClose} draftId="draft-1" />);
+      rerender(<CourseContentEditor isOpen onClose={onClose} draftId="draft-1" />);
+
+      const root = container.querySelector('[aria-label="Course Content Editor"]');
+      expect(root).toHaveClass('max-w-4xl');
+      expect(root).not.toHaveClass('fixed');
     });
   });
 });

@@ -68,6 +68,14 @@ public class CourseRepository(FlexDemyDbContext db) : ICourseRepository
     public Task<Course?> GetDraftByIdAsync(string id, CancellationToken cancellationToken = default) =>
         db.Courses.Include(c => c.Thumbnails).FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
+    // FR-31: newest-edited-first, matching the "resume a course" list's own ordering need -- a
+    // tutor picking up where they left off cares most about what they touched most recently.
+    public async Task<IReadOnlyList<Course>> GetByTutorIdAsync(string tutorId, CancellationToken cancellationToken = default) =>
+        await db.Courses.AsNoTracking()
+            .Where(c => c.TutorId == tutorId)
+            .OrderByDescending(c => c.UpdatedAt ?? c.CreatedAt)
+            .ToListAsync(cancellationToken);
+
     // AD-11: stages the change only -- IUnitOfWork.SaveChangesAsync (called by the service) commits it.
     public void Add(Course course) => db.Courses.Add(course);
 }

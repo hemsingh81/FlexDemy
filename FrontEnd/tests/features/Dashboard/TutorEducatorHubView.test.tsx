@@ -17,9 +17,11 @@ import * as courseFileService from '@/src/services/courseFileService';
 // on API_BASE_URL's default (http://127.0.0.1:8080) -- a real bug found via the Admin Error Log
 // itself: this test was leaking a genuine 404 (NotFoundException, "Course 'draft_mock_1' was not
 // found") into the actual backend's captured error records on every test run against a live API.
+// FR-31: MyCoursesSection now also fetches on every TutorEducatorHubView mount -- getMyCourses
+// mocked here for the exact same reason getPublishStatus already is (see comment above).
 vi.mock('@/src/services/courseDraftService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/courseDraftService')>('@/src/services/courseDraftService');
-  return { ...actual, createDraftCourse: vi.fn(), updateDraftCourse: vi.fn(), getPublishStatus: vi.fn() };
+  return { ...actual, createDraftCourse: vi.fn(), updateDraftCourse: vi.fn(), getPublishStatus: vi.fn(), getMyCourses: vi.fn() };
 });
 
 // Story 2.5: useCourseDraft.ts now fetches real Tags/Taxonomy data on mount -- mocked so this
@@ -59,6 +61,7 @@ beforeEach(() => {
   vi.mocked(courseDraftService.createDraftCourse).mockResolvedValue(draftDto);
   vi.mocked(courseDraftService.updateDraftCourse).mockResolvedValue(draftDto);
   vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue({ lifecycleState: 'Draft' });
+  vi.mocked(courseDraftService.getMyCourses).mockResolvedValue([]);
   vi.mocked(courseFileService.getFiles).mockResolvedValue([]);
   vi.mocked(tagsService.getTags).mockResolvedValue([]);
   // Fixture data mirrors the old MOCK_* constants useCourseDraft.ts used to hardcode (Story 2.1),
@@ -209,6 +212,36 @@ describe('TutorEducatorHubView', () => {
     // The trigger stays disabled while Course Content Editor is open, so a keyboard user can't
     // open a second CourseWizard session on top of it.
     expect(screen.getByText('New Course Wizard').closest('button')).toBeDisabled();
+  });
+
+  // FR-31 (CourseWizard PRD S4.11): the "resume a course" list's own entry point into the editor
+  // -- useCourseCreationFlow.openContentEditorForCourse, exercised here the same way this file
+  // already exercises the rest of that hook (through the real component, not in isolation).
+  it('clicking Resume on a Draft course in My Courses opens Course Content Editor for that course', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseDraftService.getMyCourses).mockResolvedValue([
+      { id: 'course_existing_draft', title: 'Existing Draft', lifecycleState: 'Draft', updatedAt: '2026-08-10T12:00:00Z' },
+    ]);
+
+    render(
+      <TutorEducatorHubView
+        user={user}
+        courses={[]}
+        onAddCourse={vi.fn()}
+        tutorSlots={[]}
+        onUpdateSlot={vi.fn()}
+        groupRequests={[]}
+        publicClasses={[]}
+        onAnnouncePublicClass={vi.fn()}
+        isOnline={true}
+        onToggleOnlineStatus={vi.fn()}
+      />
+    );
+
+    await u.click(await screen.findByRole('button', { name: 'Resume' }));
+
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Course Content Editor' })).toBeInTheDocument());
+    expect(courseFileService.getFiles).toHaveBeenCalledWith('course_existing_draft');
   });
 
   it('toggles online status when the live status button is clicked', async () => {

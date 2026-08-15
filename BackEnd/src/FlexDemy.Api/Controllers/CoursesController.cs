@@ -41,6 +41,19 @@ public class CoursesController(
         return Ok(course);
     }
 
+    // FR-31 (CourseWizard PRD S4.11): the tutor's own "resume a course" list -- literal "mine"
+    // segment, matched before {id} by ASP.NET Core's routing (an exact literal segment always
+    // wins over a parameterized one in the same controller, same precedent as the existing
+    // "drafts" segment below). Same CoursesCreate policy as the rest of this controller's
+    // tutor-authoring actions -- there's no separate "browse your own courses" permission.
+    [HttpGet("mine")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<ActionResult<IReadOnlyList<MyCourseSummaryDto>>> GetMyCourses(CancellationToken cancellationToken)
+    {
+        var courses = await courseService.GetMyCoursesAsync(cancellationToken);
+        return Ok(courses);
+    }
+
     // Student-facing read of this course's uploaded files and their raw parsed text -- no AI
     // structuring step in between, replacing the old Chapter/Topic/Subtopic tree. Same open-read
     // shape as GetCourseById above: no [Authorize] attribute.
@@ -159,6 +172,17 @@ public class CoursesController(
     public async Task<IActionResult> ReturnToDraft(string id, CancellationToken cancellationToken)
     {
         await courseService.ReturnToDraftAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    // FR-32 (CourseWizard PRD S4.11): permanent (soft) delete, Draft/InReview/ReviewConfirmed
+    // only -- CourseService.DeleteCourseAsync rejects a Published course itself, not just this
+    // route relying on the frontend to withhold the button.
+    [HttpDelete("drafts/{id}")]
+    [Authorize(Policy = FeatureKeys.CoursesCreate)]
+    public async Task<IActionResult> DeleteCourse(string id, CancellationToken cancellationToken)
+    {
+        await courseService.DeleteCourseAsync(id, cancellationToken);
         return NoContent();
     }
 

@@ -69,3 +69,8 @@ public record UpdateDraftCourseRequest(
 public record ThumbnailCropDto(decimal X, decimal Y, decimal Zoom);
 
 public record CourseThumbnailDto(string Id, string Url, bool IsPrimary, int Order, ThumbnailCropDto Crop);
+
+// FR-31 (CourseWizard PRD S4.11): the "resume a course" list -- deliberately a lighter shape than
+// CourseDto (no Rating/EnrolledCount/InstructorName/etc., none of which this list needs), covering
+// every Lifecycle State the tutor owns, not just Draft.
+public record MyCourseSummaryDto(string Id, string Title, string LifecycleState, DateTimeOffset UpdatedAt);

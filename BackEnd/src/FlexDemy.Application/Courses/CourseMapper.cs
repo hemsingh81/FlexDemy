@@ -45,6 +45,16 @@ public static class CourseMapper
         );
     }
 
+    // FR-31: UpdatedAt is nullable on AuditableEntity (a never-edited-since-creation course has
+    // no stamped update yet) -- CreatedAt is always set, so it's the honest fallback rather than
+    // surfacing a null "last edited" to the tutor for a course they just created.
+    public static MyCourseSummaryDto ToMyCourseSummaryDto(this Course course) => new(
+        course.Id,
+        course.Title,
+        course.LifecycleState.ToString(),
+        course.UpdatedAt ?? course.CreatedAt
+    );
+
     public static CourseThumbnailDto ToDto(this CourseThumbnail thumbnail) => new(
         thumbnail.Id,
         thumbnail.Url,

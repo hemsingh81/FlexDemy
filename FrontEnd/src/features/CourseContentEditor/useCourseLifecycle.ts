@@ -40,8 +40,10 @@ const KNOWN_STATES: readonly LifecycleState[] = ['draft', 'inReview', 'reviewCon
 
 // Backend serializes LifecycleState via enum.ToString() (PascalCase, e.g. "ReviewConfirmed") --
 // lower-first-char here to match this hook's own lowercase union, same fallback-to-a-safe-default
-// discipline useFileUpload.ts's own toStatus() established for an unrecognized value.
-const toState = (raw: string): LifecycleState => {
+// discipline useFileUpload.ts's own toStatus() established for an unrecognized value. Exported
+// (FR-31) so MyCoursesSection.tsx's course list shares this exact conversion instead of a second,
+// independently-drifting copy.
+export const toState = (raw: string): LifecycleState => {
   const lowered = raw.charAt(0).toLowerCase() + raw.slice(1);
   return (KNOWN_STATES as readonly string[]).includes(lowered) ? (lowered as LifecycleState) : 'draft';
 };

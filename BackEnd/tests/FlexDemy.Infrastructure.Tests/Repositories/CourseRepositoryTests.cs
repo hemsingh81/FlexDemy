@@ -331,4 +331,79 @@ public class CourseRepositoryTests
 
         Assert.Null(await repository.GetDraftByIdAsync("does_not_exist"));
     }
+
+    // -- GetByTutorIdAsync (FR-31) --------------------------------------------------------------
+
+    [Fact]
+    public async Task GetByTutorIdAsync_returns_only_the_given_tutors_courses_across_every_Lifecycle_State()
+    {
+        await using var db = NewContext();
+        var owned = MakeCourse("course_draft", lifecycleState: LifecycleState.Draft);
+        owned.TutorId = "tutor_1";
+        var ownedPublished = MakeCourse("course_published", lifecycleState: LifecycleState.Published);
+        ownedPublished.TutorId = "tutor_1";
+        var someoneElses = MakeCourse("course_other", lifecycleState: LifecycleState.Draft);
+        someoneElses.TutorId = "tutor_2";
+        db.Courses.AddRange(owned, ownedPublished, someoneElses);
+        await db.SaveChangesAsync();
+        var repository = new CourseRepository(db);
+
+        var result = await repository.GetByTutorIdAsync("tutor_1");
+
+        Assert.Equal(["course_draft", "course_published"], result.Select(c => c.Id).Order());
+    }
+
+    [Fact]
+    public async Task GetByTutorIdAsync_orders_by_most_recently_updated_first()
+    {
+        var options = new DbContextOptionsBuilder<FlexDemyDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+
+        await using (var writeDb = new FlexDemyDbContext(options))
+        {
+            var older = MakeCourse("course_older", lifecycleState: LifecycleState.Draft);
+            older.TutorId = "tutor_1";
+            older.UpdatedAt = DateTimeOffset.UtcNow.AddDays(-2);
+            var newer = MakeCourse("course_newer", lifecycleState: LifecycleState.Draft);
+            newer.TutorId = "tutor_1";
+            newer.UpdatedAt = DateTimeOffset.UtcNow;
+            writeDb.Courses.AddRange(older, newer);
+            await writeDb.SaveChangesAsync();
+        }
+
+        await using var readDb = new FlexDemyDbContext(options);
+        var result = await new CourseRepository(readDb).GetByTutorIdAsync("tutor_1");
+
+        Assert.Equal(["course_newer", "course_older"], result.Select(c => c.Id));
+    }
+
+    [Fact]
+    public async Task GetByTutorIdAsync_returns_empty_for_a_tutor_with_no_courses()
+    {
+        await using var db = NewContext();
+        var repository = new CourseRepository(db);
+
+        Assert.Empty(await repository.GetByTutorIdAsync("tutor_with_nothing"));
+    }
+
+    // FR-32: DeleteCourseAsync soft-deletes via IsDeleted, relying entirely on
+    // CourseConfiguration.cs's global HasQueryFilter(c => !c.IsDeleted) to make that deletion
+    // "permanent" from every read path -- this confirms the filter actually does that for the
+    // "resume a course" list specifically, not just for GetAllAsync's public-catalog path.
+    [Fact]
+    public async Task GetByTutorIdAsync_excludes_a_soft_deleted_course()
+    {
+        await using var db = NewContext();
+        var deleted = MakeCourse("course_deleted", lifecycleState: LifecycleState.Draft);
+        deleted.TutorId = "tutor_1";
+        deleted.IsDeleted = true;
+        var kept = MakeCourse("course_kept", lifecycleState: LifecycleState.Draft);
+        kept.TutorId = "tutor_1";
+        db.Courses.AddRange(deleted, kept);
+        await db.SaveChangesAsync();
+        var repository = new CourseRepository(db);
+
+        var result = await repository.GetByTutorIdAsync("tutor_1");
+
+        Assert.Equal(["course_kept"], result.Select(c => c.Id));
+    }
 }

@@ -10,6 +10,11 @@ public interface ICourseService
     // the public catalog previously had no paging at all.
     Task<PagedResult<CourseDto>> GetCoursesAsync(string? gradeTag, string? search, string? subject, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default);
     Task<CourseDto> GetCourseByIdAsync(string id, CancellationToken cancellationToken = default);
+
+    // FR-31 (CourseWizard PRD S4.11): every course the calling tutor owns, any Lifecycle State --
+    // backs the "resume a course" list (currently authenticated user only, via ICurrentUserService;
+    // there's no "view another tutor's courses" caller for this yet).
+    Task<IReadOnlyList<MyCourseSummaryDto>> GetMyCoursesAsync(CancellationToken cancellationToken = default);
     Task<CourseDto> CreateCourseAsync(CreateCourseRequest request, CancellationToken cancellationToken = default);
 
     // Story 2.4: the wizard's live-wire persistence surface.
@@ -69,4 +74,9 @@ public interface ICourseService
     // tutor-facing ReviewConfirmed -> Published trigger lives there, but only Courses' own service
     // may mutate a Course entity, so the terminal flip itself lives here.
     Task MarkPublishedAsync(string courseId, CancellationToken cancellationToken = default);
+
+    // FR-32 (CourseWizard PRD S4.11): permanent (soft) delete from the "resume a course" list --
+    // Draft/InReview/ReviewConfirmed only. A Published course has no delete path at all; "Take
+    // Offline" (ReturnToDraftAsync above) is the only way to make one deletable.
+    Task DeleteCourseAsync(string courseId, CancellationToken cancellationToken = default);
 }

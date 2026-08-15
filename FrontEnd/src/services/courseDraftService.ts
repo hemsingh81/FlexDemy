@@ -146,3 +146,20 @@ export const publishCourse = (courseId: string): Promise<void> =>
 
 export const getPublishStatus = (courseId: string): Promise<PublishStatusDto> =>
   write(`/api/v1/courses/${encodeURIComponent(courseId)}/publish-status`, 'GET');
+
+// FR-31 (CourseWizard PRD S4.11): closes the "no GET-by-id 'resume this Draft' capability" gap
+// flagged in this file's own historical comment above (write()'s doc comment) -- backs the
+// "resume a course" list, every Lifecycle State the tutor owns, not just Draft.
+export interface MyCourseSummaryDto {
+  id: string;
+  title: string;
+  lifecycleState: string;
+  updatedAt: string;
+}
+
+export const getMyCourses = (): Promise<MyCourseSummaryDto[]> => write('/api/v1/courses/mine', 'GET');
+
+// FR-32 (CourseWizard PRD S4.11): permanent delete, Draft/InReview/ReviewConfirmed only -- the
+// backend rejects a Published course itself (ValidationException), this isn't just a UI guard.
+export const deleteCourse = (courseId: string): Promise<void> =>
+  write(`/api/v1/courses/drafts/${encodeURIComponent(courseId)}`, 'DELETE');

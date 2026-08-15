@@ -2,7 +2,7 @@
 title: New Course Wizard — AI-Assisted Course Creation & Adaptive Learning Module
 status: final
 created: 2026-08-10
-updated: 2026-08-11
+updated: 2026-08-15
 ---
 
 # PRD: New Course Wizard — AI-Assisted Course Creation & Adaptive Learning Module
@@ -402,6 +402,7 @@ Tutor can leave and resume a course in `Draft` state at any point in the wizard 
 
 **Consequences (testable):**
 - A course left mid-edit and reopened later resumes with all prior input intact and status still `Draft`.
+- Explicitly closing the Course Content Editor (its own Close action, not just a browser close/crash) is equivalent to Save as Draft: it commits the course to `Draft` state and returns the tutor to their course-management area, never silently discarding uploaded files or edits made so far.
 
 #### FR-23: Review as Student mode
 
@@ -430,6 +431,46 @@ A tutor can return a `Published` course to `Draft` to make fixes, with prior pub
 
 **Notes:**
 - `[NOTE FOR PM]` "Prior published state retained as a version" is satisfiable in two very different ways with an order-of-magnitude storage difference: a deep copy of the entire confirmed content tree plus its cached Drill-Down/Way content (FR-21) per version, or a lighter diff/audit-log approach. Neither this PRD nor either architecture spine picks one — real design work to scope explicitly at the architecture pass, not discover mid-build.
+
+#### FR-30: Content Editor renders in the page body, not as a viewport takeover
+
+The Course Content Editor renders below the app's persistent site header — as the page body's content, sized to the space beneath it — rather than as a `fixed`, full-viewport overlay that covers the header. Two header rows stay pinned while only the space between them and the page bottom scrolls: the site's own header (already sticky-top on every other page — unchanged here) and, directly beneath it, the Content Editor's own header row (title + Close action) as a second sticky bar, visually distinguished from both the site header and the editor body by a distinct background color. The editor's primary content (uploaded-file list, content tree, etc.) is the only part that scrolls — with the page's own scroll, not a separate nested scroll container.
+
+**Consequences (testable):**
+- With the Content Editor open, the app's persistent site header remains visible, on top, and interactive (its nav/account controls are still reachable) instead of being covered by the editor.
+- The Content Editor's own header row (title + Close) stays pinned directly beneath the site header while the editor's content scrolls underneath both — Close is reachable at any scroll position, not just at the top.
+- The Content Editor's header row renders in a background color distinct from both the site header and the editor's content area, so a user can visually tell the two sticky header rows apart.
+- Scrolling the Content Editor's content (e.g. a long uploaded-file list or content tree) scrolls the page itself; there is no separate inner scrollbar/scroll region competing with the page's own scroll.
+- The Content Editor still spans the full width of the page body below the header — this FR changes what "full" is measured against (page body, not browser viewport), not whether the editor is a takeover vs. a small modal dialog.
+
+**Notes:**
+- This refines, not reopens, the existing UX decision that the Course Content Editor is a full-width takeover surface rather than a `SidePanel`-style blade (`EXPERIENCE.md` UX-DR5) — it stays a takeover, just scoped to the page body instead of the full browser viewport. Feeds directly into the UX pass (`bmad-ux`).
+- Header-behavior decided by user, 2026-08-15: site header stays sticky-top (its existing behavior, unchanged); Content Editor's own header is a second sticky bar directly beneath it in a distinct background color; only the editor's body scrolls. `[ASSUMPTION: the specific background color value is a design-system token choice, not specified here — defer to `bmad-ux`/`DESIGN.md`, confirm before build]`.
+
+#### FR-31: Resume a previously saved Draft course
+
+From their course-management area, a tutor can see all of their own courses — regardless of Lifecycle State (§4.11) — each with a visible status badge (`Draft`/`In Review`/`Review Confirmed`/`Published`), and select a `Draft` course to reopen the Course Content Editor for that specific course, picking up editing exactly where they left off (FR-22). Decided by user, 2026-08-15: the list is not Draft-only — a tutor managing several courses gets one place to find any of them regardless of state.
+
+**Consequences (testable):**
+- A tutor with two or more `Draft` courses can tell them apart (e.g. by title and last-edited time) and open the specific one they intend to resume, not just "the most recent draft."
+- Selecting a `Draft` course from this list opens the Content Editor pre-loaded with that course's prior input intact (FR-22), not a blank editor.
+- A tutor cannot lose track of a `Draft` course started via the wizard and closed before completion — it remains reachable from this same list indefinitely, not just in the current session.
+- Courses in `In Review`, `Review Confirmed`, or `Published` state appear in the same list with their own status badge, distinguishable at a glance from `Draft`.
+
+**Notes:**
+- Exact placement of this list within the Tutor Hub (e.g. a new "My Courses" section vs. extending an existing one) is left to the UX pass (`bmad-ux`), consistent with this PRD's practice of deferring UI placement specifics rather than prescribing them here.
+
+#### FR-32: Permanently delete a non-Published course; take a Published course offline instead
+
+From the same course list (FR-31), a tutor can permanently delete a `Draft`, `In Review`, or `Review Confirmed` course, behind an explicit confirmation step. A `Published` course cannot be deleted directly — the list offers "Take Offline" instead (FR-25's existing Published → Draft transition), after which the now-`Draft` course can be deleted like any other. Decided by user, 2026-08-15.
+
+**Consequences (testable):**
+- Deleting a `Draft`/`In Review`/`Review Confirmed` course requires an explicit confirm step (not a single click) before it's removed.
+- A confirmed delete removes the course from the tutor's course list; there is no undo/restore action surfaced anywhere in the product for it.
+- Attempting to delete a `Published` course is rejected (client-side: no delete action is even offered; server-side: the same rule is enforced independently, not left as a UI-only guard) — "Take Offline" is the only path, matching FR-25's existing Return-to-Draft mechanics exactly rather than introducing a second, parallel unpublish flow.
+
+**Notes:**
+- Implemented as a soft delete (the `Course` entity already carries an `IsDeleted` flag with an active query filter excluding it from every read path — Admin's Tag/Taxonomy deletion already uses this exact mechanism) rather than a hard row delete, avoiding a first-time cascade-delete design across `CourseFile`/`CourseThumbnail`/`CourseVersion` for comparatively little benefit — "permanent" is satisfied from the tutor's own vantage point (gone from every screen, no restore path offered), while the underlying row-level mechanism matches this codebase's established data-retention convention rather than diverging from it just for this one entity.
 
 ---
 
@@ -532,7 +573,7 @@ The four adaptive-learning mechanisms (§4.6–§4.9) ship together rather than 
 
 **Secondary**
 - **SM-3**: % of AI-extracted Chapters/Topics/Subtopics confirmed with no or only minor tutor edits. Validates FR-13, FR-14, FR-15.
-- **SM-4**: Draft → Published conversion rate. Validates FR-22–FR-25.
+- **SM-4**: Draft → Published conversion rate. Validates FR-22–FR-25, FR-31.
 
 **Cost / Operational**
 - **SM-5**: Cost per generated topic (drill-down + alt-explanation generation), tracked separately for dev free-tier vs. production paid-tier, and before/after any provider swap; stays within the budget threshold configured per FR-29. Validates FR-2, FR-4, FR-21, FR-29.
@@ -566,3 +607,4 @@ The four adaptive-learning mechanisms (§4.6–§4.9) ship together rather than 
 - §4.14 (Accessibility) — WCAG 2.1 AA assumed as the conformance target; not confirmed by the user.
 - §2.3 Key User Journeys — All four journeys are structured from the source draft's stated flows, not independently narrated live by the user this session; confirm narrative fidelity before UX work begins.
 - §2.3 UJ-1 — OCR/parsing status is assumed to surface to the tutor only as a plain status label, not technical detail.
+- §4.11 FR-30 — Header/scroll structure decided by user, 2026-08-15 (site header sticky-top unchanged; Content Editor's own header sticky directly beneath it in a distinct background color; only the body scrolls). Only the exact background color token remains open — deferred to `bmad-ux`/`DESIGN.md`, confirm before build.

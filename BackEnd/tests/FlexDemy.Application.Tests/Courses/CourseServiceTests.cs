@@ -124,6 +124,43 @@ public class CourseServiceTests
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+    // -- GetMyCoursesAsync (FR-31) ------------------------------------------------------------
+
+    [Fact]
+    public async Task GetMyCoursesAsync_maps_every_returned_course_regardless_of_LifecycleState()
+    {
+        var sut = MakeSut(currentUserId: "tutor_1");
+        var draft = MakeDraft(id: "course_draft", tutorId: "tutor_1");
+        var published = MakeCourse(id: "course_published", lifecycleState: LifecycleState.Published);
+        published.TutorId = "tutor_1";
+        sut.Repository.GetByTutorIdAsync("tutor_1", Arg.Any<CancellationToken>()).Returns([draft, published]);
+
+        var result = await sut.Service.GetMyCoursesAsync();
+
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, c => c.Id == "course_draft" && c.LifecycleState == nameof(LifecycleState.Draft));
+        Assert.Contains(result, c => c.Id == "course_published" && c.LifecycleState == nameof(LifecycleState.Published));
+    }
+
+    [Fact]
+    public async Task GetMyCoursesAsync_queries_by_the_current_users_id()
+    {
+        var sut = MakeSut(currentUserId: "tutor_42");
+        sut.Repository.GetByTutorIdAsync("tutor_42", Arg.Any<CancellationToken>()).Returns([]);
+
+        await sut.Service.GetMyCoursesAsync();
+
+        await sut.Repository.Received(1).GetByTutorIdAsync("tutor_42", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetMyCoursesAsync_throws_UnauthorizedAppException_when_no_current_user()
+    {
+        var sut = MakeSut(currentUserId: null);
+
+        await Assert.ThrowsAsync<UnauthorizedAppException>(() => sut.Service.GetMyCoursesAsync());
+    }
+
     // -- CreateDraftCourseAsync --------------------------------------------------------------
 
     [Fact]
@@ -922,5 +959,56 @@ public class CourseServiceTests
         sut.Repository.GetByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
 
         await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.MarkDraftAsync("missing"));
+    }
+
+    // -- DeleteCourseAsync (FR-32) ----------------------------------------------------------------
+
+    [Theory]
+    [InlineData(LifecycleState.Draft)]
+    [InlineData(LifecycleState.InReview)]
+    [InlineData(LifecycleState.ReviewConfirmed)]
+    public async Task DeleteCourseAsync_soft_deletes_a_non_Published_course(LifecycleState lifecycleState)
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        course.LifecycleState = lifecycleState;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await sut.Service.DeleteCourseAsync("draft_1");
+
+        Assert.True(course.IsDeleted);
+        await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteCourseAsync_throws_ValidationException_for_a_Published_course_and_does_not_delete_it()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        course.LifecycleState = LifecycleState.Published;
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.DeleteCourseAsync("draft_1"));
+
+        Assert.False(course.IsDeleted);
+        await sut.UnitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteCourseAsync_throws_UnauthorizedAppException_for_a_different_tutors_course()
+    {
+        var sut = MakeSut(currentUserId: "stranger");
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft(tutorId: "owner"));
+
+        await Assert.ThrowsAsync<UnauthorizedAppException>(() => sut.Service.DeleteCourseAsync("draft_1"));
+    }
+
+    [Fact]
+    public async Task DeleteCourseAsync_throws_NotFoundException_for_a_genuinely_unknown_course_id()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetDraftByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.DeleteCourseAsync("missing"));
     }
 }

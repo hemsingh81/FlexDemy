@@ -16,5 +16,9 @@ public interface ICourseRepository
     // deliberately does not filter by LifecycleState (a tutor must be able to fetch and keep
     // editing their own Draft).
     Task<Course?> GetDraftByIdAsync(string id, CancellationToken cancellationToken = default);
+    // FR-31 (CourseWizard PRD S4.11): every course a tutor owns, any Lifecycle State -- backs
+    // the "resume a course" list, deliberately unfiltered by state unlike GetAllAsync (which is
+    // Published-only) so a Draft is just as reachable here as a Published course.
+    Task<IReadOnlyList<Course>> GetByTutorIdAsync(string tutorId, CancellationToken cancellationToken = default);
     void Add(Course course);
 }

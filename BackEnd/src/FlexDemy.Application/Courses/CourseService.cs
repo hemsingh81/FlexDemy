@@ -49,6 +49,16 @@ public class CourseService(
         return course.ToDto();
     }
 
+    // FR-31: RequireCurrentUserId, not currentUserService.UserId directly -- an unauthenticated
+    // caller gets a clean UnauthorizedAppException instead of a query for TutorId == null (which
+    // would incorrectly return every legacy seeded catalog course that has no owning tutor).
+    public async Task<IReadOnlyList<MyCourseSummaryDto>> GetMyCoursesAsync(CancellationToken cancellationToken = default)
+    {
+        var tutorId = RequireCurrentUserId();
+        var courses = await repository.GetByTutorIdAsync(tutorId, cancellationToken);
+        return courses.Select(c => c.ToMyCourseSummaryDto()).ToList();
+    }
+
     public async Task<CourseDto> CreateCourseAsync(CreateCourseRequest request, CancellationToken cancellationToken = default)
     {
         var course = request.ToEntity(idGenerator.NewId());
@@ -294,6 +304,21 @@ public class CourseService(
             ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
 
         course.LifecycleState = LifecycleState.Published;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    // FR-32: soft delete -- IsDeleted flips the global HasQueryFilter(c => !c.IsDeleted) shut
+    // (CourseConfiguration.cs), same mechanism MasterDataService's Tag/Taxonomy delete already
+    // uses, deliberately not a hard row delete (see this FR's own PRD Notes for why). Rejects
+    // Published outright -- "Take Offline" (ReturnToDraftAsync) is the only path off Published,
+    // enforced here too, not just by the frontend hiding the button.
+    public async Task DeleteCourseAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await LoadOwnedCourseAsync(courseId, cancellationToken);
+        if (course.LifecycleState == LifecycleState.Published)
+            throw new ValidationException("A Published course can't be deleted. Take it offline first.");
+
+        course.IsDeleted = true;
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 

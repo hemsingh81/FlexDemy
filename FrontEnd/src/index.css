@@ -150,6 +150,25 @@
   }
 }
 
+/* Zoom-out counterpart to fade-in-scale above -- same fade+scale idiom, opposite starting scale
+   (above 1 instead of below), so it reads as "shrinking into place" instead of "growing into
+   place". Used by CourseContentEditor.tsx's Maximize/Restore toggle: Maximize reuses
+   fade-in-scale itself as its zoom-in effect (already a scale-up-and-fade "zoom in"), Restore
+   uses this one as its zoom-out counterpart. The two keyframes must stay genuinely different
+   between those two states, not just differently-parameterized copies of one shared class --
+   CSS only restarts an animation when its animation-name value actually changes, and toggling
+   between two states that both reference the exact same class name never does that. */
+@keyframes zoom-out {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Side panel entrance (SidePanel.tsx) -- docked-right "blade" pattern, slides in from the
    viewport edge instead of scaling up from center like fade-in-scale. */
 @keyframes slide-in-right {

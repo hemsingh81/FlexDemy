@@ -10,6 +10,7 @@ import { CourseWizard } from '../CourseWizard/CourseWizard';
 import { CourseContentEditor } from '../CourseContentEditor/CourseContentEditor';
 import { EducatorStudioHeader } from './EducatorStudioHeader';
 import { TeachingStatsCards } from './TeachingStatsCards';
+import { MyCoursesSection } from './MyCoursesSection';
 import { TeachingAnalyticsChart } from './TeachingAnalyticsChart';
 import { CalendarSlotsSection } from './CalendarSlotsSection';
 import { AddSlotPanel } from './AddSlotPanel';
@@ -65,9 +66,33 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
 
       <EducatorStudioHeader isOnline={isOnline} onToggleOnlineStatus={onToggleOnlineStatus} />
 
+      {/* Only the New Course Wizard's own hand-off (a freshly-created course, not yet in the My
+          Courses list below) renders here, at the top -- immediately visible without the tutor
+          having to scroll, same reasoning FR-30 originally established. Resuming an *existing*
+          course from My Courses now renders its own editor instance inline, directly beneath the
+          clicked row (see MyCoursesSection below) -- gated by contentEditorOrigin so the two
+          entry points never both try to show an editor at once for the same shared state. */}
+      <CourseContentEditor
+        isOpen={courseCreationFlow.isContentEditorOpen && courseCreationFlow.contentEditorOrigin === 'wizard'}
+        onClose={courseCreationFlow.closeContentEditor}
+        draftId={courseCreationFlow.contentEditorDraftId}
+      />
+
       <TeachingStatsCards
         isContentEditorOpen={courseCreationFlow.isContentEditorOpen}
         onOpenNewCourseWizard={courseCreationFlow.openWizard}
+      />
+
+      {/* FR-31 (CourseWizard PRD S4.11): the "resume a course" list -- placed directly beneath
+          the New Course Wizard trigger card above, the natural "manage your courses" spot until
+          a UX pass decides otherwise (deferred per the PRD's own Notes on FR-31). Owns rendering
+          its own inline Course Content Editor instance (openDraftId/onCloseContentEditor) for the
+          Resume path -- see the comment on the top-level instance above. */}
+      <MyCoursesSection
+        isContentEditorOpen={courseCreationFlow.isContentEditorOpen}
+        onResumeDraft={courseCreationFlow.openContentEditorForCourse}
+        openDraftId={courseCreationFlow.contentEditorOrigin === 'resume' ? courseCreationFlow.contentEditorDraftId : null}
+        onCloseContentEditor={courseCreationFlow.closeContentEditor}
       />
 
       <TeachingAnalyticsChart />
@@ -87,14 +112,6 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
         isOpen={courseCreationFlow.isNewCourseWizardOpen}
         onClose={courseCreationFlow.closeWizard}
         onComplete={courseCreationFlow.handleWizardComplete}
-      />
-
-      {/* Course Content Editor (Story 2.2) -- file-upload slice only; Story 2.3 extends this
-          same screen with the Chapter/Topic/Subtopic tree. */}
-      <CourseContentEditor
-        isOpen={courseCreationFlow.isContentEditorOpen}
-        onClose={courseCreationFlow.closeContentEditor}
-        draftId={courseCreationFlow.contentEditorDraftId}
       />
 
       <AddSlotPanel
