@@ -2,19 +2,31 @@
 title: FlexDemy eLearning — UX Scenario Overview
 status: backfilled-synthesis
 backfilled: 2026-08-15
+updated: 2026-08-15
 source-of-truth:
   - ../../_specs/planning-artifacts/ux-designs/ux-eLearning-2026-08-10/DESIGN.md
   - ../../_specs/planning-artifacts/ux-designs/ux-eLearning-2026-08-10/EXPERIENCE.md
+  - ../../_specs/planning-artifacts/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md
+  - ../../FrontEnd/src/features/Admin/ErrorLog/
 ---
 
 # FlexDemy — UX Scenario Overview (WDS C-UX-Scenarios)
 
-**This file is a backfilled synthesis, written 2026-08-15.** The `design-artifacts/C-UX-Scenarios`
-folder was scaffolded by the WDS install but never populated. This overview was produced after the
-fact by reading the existing, already-final UX design work at
+**This file is a backfilled synthesis, written 2026-08-15, updated 2026-08-15.** The
+`design-artifacts/C-UX-Scenarios` folder was scaffolded by the WDS install but never populated. This
+overview was produced after the fact by reading the existing, already-final UX design work at
 [`_specs/planning-artifacts/ux-designs/ux-eLearning-2026-08-10/`](../../_specs/planning-artifacts/ux-designs/ux-eLearning-2026-08-10/)
 (`DESIGN.md` — visual system — and `EXPERIENCE.md` — behavioral/experience spine, itself sourced from
 four PRDs) and restating its journeys in WDS's persona + goal + outcome + driving-force shape.
+
+**Update note:** Scenario 3.2 below (Error Observability triage) was added after the initial
+backfill closed a gap this file originally flagged: the Error Observability PRD's UJ-1 had shipped
+code but no entry in `DESIGN.md`/`EXPERIENCE.md`. Since neither doc covers it, 3.2 is sourced
+directly from the PRD's UJ-1 plus a read of the actual shipped component code in
+[`FrontEnd/src/features/Admin/ErrorLog/`](../../FrontEnd/src/features/Admin/ErrorLog/) — not from
+`DESIGN.md`/`EXPERIENCE.md` like every other scenario in this file. Treat it as lower-confidence on
+visual/interaction polish (no UX-authored spec exists to check the shipped UI against) and
+higher-confidence on functional accuracy (grounded in the code that actually runs).
 
 **`DESIGN.md` and `EXPERIENCE.md` remain the authoritative, detailed source.** This file does not
 duplicate their page-by-page specs, component behavior, state tables, or accessibility rules — it is
@@ -143,6 +155,29 @@ Each scenario lists:
 - **Edge case noted in source:** if the newly configured model/provider is unreachable, standard fallback behavior applies and the fallback event is flagged in the same Usage view — not silently absorbed.
 - **Full spec:** `EXPERIENCE.md` → "Key Flows → New Course Wizard PRD · UJ-3"; "Component Patterns" (AI Configuration table — 7 AI Tasks including `describeNotation`); "State Patterns" (Node generation degraded (fallback-served), Budget threshold approaching/exceeded).
 
+### 3.2 Rohan triages a spike in course-upload failures
+*(Error Observability PRD · UJ-1 — sourced from the PRD and shipped code, not `EXPERIENCE.md`/`DESIGN.md`; see update note above)*
+
+- **Persona:** Master admin (Rohan), already authenticated. *(Support admins do not get this scenario at all — the underlying `ErrorsManage` policy is seeded Master-only, fail-closed; PRD §4.8.)*
+- **Goal:** Find out why support is suddenly getting complaints about course uploads failing, confirm the cause, and clear the backlog of related errors.
+- **Driving force:** A reactive, time-pressured triage moment — something is visibly broken *right now* and he needs to go from "vague reports of failures" to "confirmed root cause, marked handled" as fast as possible, with confidence he isn't missing a related failure elsewhere in the same request chain.
+- **Expected outcome:** The record for the spike is at `Status = Resolved`; he's confident (via a Correlation ID trace) that he's seen every error the same failing request chain produced, not just the one row that first caught his eye.
+- **Step summary:**
+  1. Opens the Admin → Error Log tab (`ErrorLog.tsx`).
+  2. Filters the table — Category, Priority, Status, Source dropdowns, a From/To date range, free-text Search over Message/ExceptionType, and an exact-match Correlation ID field are all combinable and AND together server-side (`ErrorLogFilters.tsx`; PRD FR-12). Sets Category = "External Integration Error" and Priority = P0/P1, per the PRD's own worked example.
+  3. Sees one row with a high `OccurrenceCount` — many occurrences already folded into a single record by Fingerprint dedup (PRD FR-8) rather than listed as separate rows.
+  4. Clicks the row to open the detail side panel (`ErrorDetailPanel.tsx`): full untruncated stack trace (with a one-click Copy), Category, Message, Exception Type, Source, Occurrence count, First/Last Occurred timestamps, Request Path, Origin Context, and — when present — a clickable Correlation ID and a Related Entity reference.
+  5. Clicks the Correlation ID. This closes the detail panel and re-filters the list behind it to every other ErrorRecord sharing that exact ID (`onCorrelationIdClick` in `ErrorLog.tsx`) — surfacing, e.g., every stage of one course-file's scan→parse→extract pipeline that failed, per PRD FR-19–24. `includeArchived` is force-enabled on this filter so an already-archived sibling in the same trace isn't silently hidden.
+  6. Confirms the underlying service is back up, then clicks **Mark Resolved** on the record. The action shows an inline loading state on that one button, and the panel refreshes in place (no full-panel reload) to reflect the new Status immediately.
+  7. Closes the panel; the list behind it refetches so the row's new Status is reflected without a manual page refresh.
+- **Edge cases in source:**
+  - **Escalation, not just triage:** if the same Fingerprint spikes in frequency, the system auto-escalates its Priority (PRD FR-10 Phase B) — Rohan doesn't have to notice the spike himself, but Priority never auto-*decreases*, so a resolved-then-recurring issue that was once escalated stays at its highest-ever severity until he or another admin manually intervenes.
+  - **Regression reopening:** if a `Resolved` (or `Archived`) record's Fingerprint occurs again, it automatically flips back to `New` (PRD FR-16) rather than silently re-incrementing behind his back — so "Resolved" is never a guarantee the issue won't reappear in his queue.
+  - **Manual override:** he can also click **Increase Priority** directly from the detail panel — one level toward P0 at a time, disabled once already at P0 (PRD FR-17; no manual decrease exists in v1).
+  - **Discrepancy vs. the PRD:** PRD §4.6 (FR-14) frames Archive as "replaces literal Delete" — but the shipped panel has *both* Archive (soft, reversible, still Reopen-eligible) *and* a separate, clearly visually-isolated permanent **Delete** button behind its own confirm dialog (`ErrorDetailPanel.tsx`). A design decision to add a real hard-delete path exists in the code with no corresponding UX or PRD documentation — flagged here as its own gap, not silently reconciled.
+- **Full spec:** PRD → `_specs/planning-artifacts/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md` §2.3 (UJ-1), §4.4–§4.9 (FR-9 through FR-24); shipped implementation → `FrontEnd/src/features/Admin/ErrorLog/` (`ErrorLog.tsx`, `ErrorLogFilters.tsx`, `ErrorLogTable.tsx`, `ErrorDetailPanel.tsx`, `useErrorLog.ts`); story-level acceptance criteria in `_specs/implementation-artifacts/4-5-admin-error-log-list-filter-and-detail.md`, `4-6-error-lifecycle-actions.md`, `4-7-correlation-id-trace-view.md`.
+- **Mockups:** none — no UX-authored mockup exists for this surface (see update note above); the shipped component code is the closest thing to a spec.
+
 ---
 
 ## Surfaces referenced in EXPERIENCE.md without a full narrated journey
@@ -163,5 +198,13 @@ scenarios, since a step-by-step journey isn't evidenced in the source.
 
 ## Gaps
 
-- **Centralized Error Observability & Management** (`_specs/planning-artifacts/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md`) defines its own UJ-1 — a Master admin triaging a spike in failures via a filterable Admin error log, correlation-ID tracing, categorization/priority, and lifecycle actions (Archive/Resolve/Reopen/Escalate). **This PRD is not among EXPERIENCE.md's `sources` and has no corresponding entry in DESIGN.md or EXPERIENCE.md** — no IA row, no component spec, no mockup. It is the one PRD area with product code already shipped (see recent commit "Fix error logs page") but no UX design-doc coverage, and is not represented as a scenario above because nothing in the UX source docs evidences it. Recommend either folding it into `EXPERIENCE.md`'s sources on its next revision or scoping a dedicated UX pass for it.
+- ~~**Centralized Error Observability & Management** has no UX scenario coverage~~ — **closed 2026-08-15.**
+  Scenario 3.2 now covers this, sourced directly from the PRD (`prd-eLearning-ErrorObservability-2026-08-13`,
+  UJ-1) and the shipped `FrontEnd/src/features/Admin/ErrorLog/` code, since `DESIGN.md`/`EXPERIENCE.md`
+  still don't mention it. **This does not fully close the underlying documentation gap**: the PRD is
+  still absent from `EXPERIENCE.md`'s own `sources` list, so `DESIGN.md`/`EXPERIENCE.md` remain silent
+  on this surface's visual treatment (badge colors, panel layout, empty/loading states beyond what the
+  code happens to do). Recommend a proper UX pass (or at minimum folding this PRD into `EXPERIENCE.md`'s
+  sources) so this surface has an authored spec, not just a reverse-engineered scenario. Also flagged in
+  3.2: the shipped panel has a permanent Delete action with no PRD or UX documentation basis.
 - No `imports/` folder exists in the source UX directory to inventory (only `mockups/`, 3 files, all covering New Course Wizard PRD surfaces — Dashboard and Assignments PRD surfaces have no rendered mockups, per EXPERIENCE.md's own "Composition reference" note that those were authored directly against the live built product).
