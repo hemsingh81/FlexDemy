@@ -68,6 +68,12 @@ public static class RolePermissionSeedData
         // (Story 4.5, AC #1).
         seeds.Add(new RolePermissionSeed(UserRole.Master, FeatureKeys.ErrorsManage, true));
 
+        // settings.manage: Master, Support -- AD-27: the PRD's "same as Tag Management"
+        // comparison was factually wrong (Tag Management is Master-only via masterdata.manage);
+        // the actual Master+Support precedent is tutor.approve, mirrored here exactly.
+        seeds.Add(new RolePermissionSeed(UserRole.Master, FeatureKeys.SettingsManage, true));
+        seeds.Add(new RolePermissionSeed(UserRole.Support, FeatureKeys.SettingsManage, true));
+
         return seeds;
     }
 }

@@ -187,3 +187,34 @@ shapes (optional city level, optional auto-select-first, an `includeInactive` fl
 through every fetch) would have added more configuration surface than the ~15 lines of
 country/state-fetching logic it would have saved in either file. If a third cascading-location
 call site shows up with the same shape as one of these two, revisit.
+
+## Site typography / theme (`Admin/Settings` + `context/SiteSettingsContext.tsx`)
+
+Not a control to reuse, but the thing to know before hardcoding a font anywhere: an admin sets
+the site-wide font pairing and text scale at runtime (Admin -> Settings -> Appearance), and
+`SiteSettingsContext` is the **only** code that writes the resulting values to
+`document.documentElement`. Everything downstream reads them as CSS custom properties:
+
+| Property             | What it holds                                   |
+| -------------------- | ----------------------------------------------- |
+| `--font-display`     | headings (`font-display` / `h1`-`h3` in index.css) |
+| `--font-sans`        | body text (`body`)                              |
+| `--font-mono`        | code                                            |
+| `--root-font-scale`  | root font-size percentage, e.g. `112%`          |
+
+Practical consequences:
+
+- **Never hardcode a `font-family`** in a component. Use the tokens (or the Tailwind `font-*`
+  utilities that map to them) so an admin's theme choice actually reaches your screen.
+- **Prefer rem-based sizing** (Tailwind's `text-*` scale already is) so `--root-font-scale`
+  scales your text too. A hardcoded `px` font-size opts that element out of the whole system.
+- **Adding a font pairing is two coordinated changes**: a row in
+  `BackEnd/.../DatabaseSeeder.EnsureFontPairingDefinitionsAsync` *and* the family in
+  `FrontEnd/index.html`'s Google Fonts link. Seed a family that isn't loaded and it silently
+  falls back to the generic stack.
+- **Previewing a font/size is not the same as applying it.** Settings previews scope their fonts
+  to a wrapper's own subtree and never touch `document.documentElement`; only a real Apply/Save
+  (which goes through the backend) does. If you build another preview, keep that split -- and
+  note that scale previews need the fixed-16px-baseline + `em` trick documented in `Settings.tsx`,
+  because Tailwind's rem-based `text-*` utilities always resolve against the document root, not
+  the nearest ancestor.

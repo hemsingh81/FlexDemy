@@ -34,7 +34,7 @@ const mockDomain = (role: UserProfile['role']) => {
 };
 
 describe('useAdminPanel', () => {
-  it('Master sees all 6 admin sub-tabs, defaulting to masterdata', () => {
+  it('Master sees all 7 admin sub-tabs, defaulting to masterdata', () => {
     mockDomain('Master');
 
     const { result } = renderHook(() => useAdminPanel());
@@ -46,16 +46,17 @@ describe('useAdminPanel', () => {
       'tutor-approvals',
       'ai-configuration',
       'errors',
+      'settings',
     ]);
     expect(result.current.activeSubTab).toBe('masterdata');
   });
 
-  it('Support sees tutor-approvals and masterdata (narrowed to Tag Management), not errors', () => {
+  it('Support sees tutor-approvals, masterdata (narrowed to Tag Management), and settings, not errors', () => {
     mockDomain('Support');
 
     const { result } = renderHook(() => useAdminPanel());
 
-    expect(result.current.availableSubTabs).toEqual(['tutor-approvals', 'masterdata']);
+    expect(result.current.availableSubTabs).toEqual(['tutor-approvals', 'masterdata', 'settings']);
     expect(result.current.activeSubTab).toBe('tutor-approvals');
   });
 
@@ -82,5 +83,10 @@ describe('useAdminPanel', () => {
   it("ADMIN_SUBTAB_META has an 'errors' entry with a label and icon", () => {
     expect(ADMIN_SUBTAB_META.errors.label).toBe('Error Log');
     expect(ADMIN_SUBTAB_META.errors.icon).toBeDefined();
+  });
+
+  it("ADMIN_SUBTAB_META has a 'settings' entry with a label and icon", () => {
+    expect(ADMIN_SUBTAB_META.settings.label).toBe('Settings');
+    expect(ADMIN_SUBTAB_META.settings.icon).toBeDefined();
   });
 });

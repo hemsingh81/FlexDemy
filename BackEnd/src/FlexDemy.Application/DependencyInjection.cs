@@ -5,6 +5,7 @@ using FlexDemy.Application.AiUsage;
 using FlexDemy.Application.Courses;
 using FlexDemy.Application.Permissions;
 using FlexDemy.Application.Profiles;
+using FlexDemy.Application.Settings;
 using FlexDemy.Application.Tags;
 using FlexDemy.Application.Users;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,8 @@ public static class DependencyInjection
         services.AddScoped<IAiBudgetService, AiBudgetService>();
 
         services.AddScoped<ITagService, TagService>();
+
+        services.AddScoped<ISettingsService, SettingsService>();
 
         return services;
     }

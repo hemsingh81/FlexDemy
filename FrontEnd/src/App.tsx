@@ -23,6 +23,7 @@ import { PageTransition } from './ui/PageTransition';
 import { AdminSubTab, useAdminPanel } from './features/Admin/useAdminPanel';
 import { DomainProvider, useDomain } from './context/DomainContext';
 import { ToastProvider, useToast } from './context/ToastContext';
+import { SiteSettingsProvider } from './context/SiteSettingsContext';
 import * as authService from './services/authService';
 import { authUserToProfileUpdates } from './features/Auth/useAuth';
 
@@ -47,7 +48,9 @@ export default function App() {
   return (
     <DomainProvider>
       <ToastProvider>
-        <AppShell />
+        <SiteSettingsProvider>
+          <AppShell />
+        </SiteSettingsProvider>
       </ToastProvider>
     </DomainProvider>
   );

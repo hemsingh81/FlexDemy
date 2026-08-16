@@ -7,9 +7,9 @@ paradigm: 'feature-folder architecture with a repository (service) data-access b
 scope: 'FrontEnd/src -- refactor of the existing React 19 + TypeScript + Vite + Tailwind SPA into modular, reusable, component-based structure with a data-access seam ready for a future backend, plus test conventions'
 status: final
 created: '2026-08-09'
-updated: '2026-08-13'
+updated: '2026-08-15'
 binds: []
-sources: ['FrontEnd/docs/FRONTEND_PRD.md', 'FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md', '{planning_artifacts}/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md']
+sources: ['FrontEnd/docs/FRONTEND_PRD.md', 'FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md', '{planning_artifacts}/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md', '{planning_artifacts}/prds/prd-eLearning-AdminSettings-2026-08-15/prd.md']
 companions: []
 ---
 
@@ -88,6 +88,12 @@ This generalizes the one convention already present in the codebase (`src/compon
 - **Prevents:** FR-23's "hold the most recently seen Correlation ID" requirement being implemented separately — and inconsistently — per service file. Confirmed live: `services/*.ts` is inconsistent today — `courseDraftService.ts` already has a shared `write<T>()` helper that reads response bodies centrally, but `courseFileService.ts` and others still duplicate fetch logic per function. Bolting correlation-ID capture onto only the shared helper would mean calls still on the per-function pattern silently never update the retained ID — FR-23 would appear to work in some flows and silently not in others, depending on which service happened to handle a given call.
 - **Rule:** a single module-level store (not React state — this value doesn't drive rendering) holds the most recently seen `X-Correlation-Id` response header value. Every `services/*` HTTP call goes through one shared low-level request helper — generalizing `courseDraftService.ts`'s `write<T>()` pattern into `services/httpClient.ts` — that reads the header and updates the store; `courseFileService.ts`'s per-function duplicated fetch logic is retired as part of implementing this feature, not left as a second, silently-noncompliant path. `errorsService.ts`'s FR-7 report call reads the store's current value into its payload when present.
 
+### AD-8 — Site-wide settings are Context-backed via a dedicated SiteSettingsContext [ASSUMPTION]
+
+- **Binds:** the new Admin Settings feature (`prd-eLearning-AdminSettings-2026-08-15`), and any future feature reading a runtime UI setting (font today; color/spacing/logo later, per the PRD's own generic settings table)
+- **Prevents:** folding site-wide config into `DomainContext` (AD-4) and blurring its scope the same way `DomainContext.courses` almost did with drafts; and each future setting-consuming feature fetching/caching its own copy, which would let the same setting render inconsistently across the app within one session
+- **Rule:** a new `SiteSettingsContext` (`context/SiteSettingsContext.tsx`), separate from `DomainContext`, created at the `App.tsx` composition root (AD-2) — extending AD-4's existing precedent of splitting out a genuinely-different cross-cutting entity (`CourseContentContext`). It fetches active `Setting` rows only (`IsActive=true`) once at app boot via a new `services/settingsService.ts` (AD-1's data-access-boundary rule — one module per domain entity, same async/typed-Promise shape as every other service) — **the boot fetch is scoped to `Setting` rows specifically**, not the backend's separate `FontPairingDefinition` catalog rows (a distinct backend concept, see the backend spine's AD-26); disambiguating this AD's original "fetches all active Settings" phrasing, the two are not the same query. On a successful fetch, it applies the active Font Pairing by calling `document.documentElement.style.setProperty('--font-display', ...)` (and `--font-sans`, `--font-mono`) directly for each CSS custom property — not by injecting/templating a `<style>` tag — the more idiomatic, string-templating-free way to override the custom properties already defined in `index.css`'s `@theme`. **This boot fetch is fail-safe by explicit design, not by accident:** if the fetch fails (network error) or a Setting's Value doesn't resolve to a currently-known-valid value (e.g. a Font Setting whose slug isn't in the picker-list response), `SiteSettingsContext` skips calling `setProperty` entirely and leaves `index.css`'s hardcoded `@theme` defaults in effect — satisfying the PRD's NFR-4 explicitly, not as an unstated side effect of "well, if fetch fails, nothing gets called." **Preview and Apply use two different, structurally-separated mechanisms, not the same call with different callers:** Preview (PRD FR-13, "renders in the Settings screen against sample content, nothing site-wide has changed yet") scopes its candidate font to a wrapper element around only the sample-content preview area (e.g. a `<div style={{ '--font-display': candidateFont, ... }}>` — React inline style setting the same CSS custom properties, but on a local wrapper, not `document.documentElement`), so the candidate can never leak beyond that one preview surface by construction, not by relying on cleanup-on-navigate-away; Apply is the only path that (a) persists via a `settingsService.ts` write call to the backend and (b) updates `SiteSettingsContext`'s stored value, which is the only thing that ever calls `setProperty` on `document.documentElement` (the app-wide target) — Preview never calls the persisting write function and never touches `SiteSettingsContext`'s state. `SiteSettingsContext` also exposes a `useSiteSettings()` hook returning the full fetched settings map (`{ data, isLoading, error }`, matching AD-1's existing service-hook shape convention) in addition to the CSS-custom-property side effect, so this AD's claim to bind future non-CSS-representable settings (e.g. a Logo URL) actually holds — the CSS mechanism alone only covers Font today. The Admin Settings screen itself lives under the existing `features/Admin/` folder as a new `Settings/` subtab — structurally matching the `AiConfiguration/`/`TagManagement/`/`ErrorLog/` sibling precedent already in the seed (same component shape under `features/Admin/`), though its actual authorization tier is Master+Support, matching the backend spine's `FeatureKeys.SettingsManage` (its AD-27) — not `AiConfiguration`/`ErrorLog`'s Master-only gating, which the original draft of this AD cited ambiguously as one undifferentiated precedent. Per AD-2's uniform-hook rule (every feature gets one, even here), the Settings subtab gets its own colocated `useSettings.ts` hook that calls `settingsService.ts` directly for its CRUD/Apply/Restore/history UI — a normal feature hook, not an exception to AD-2. `SiteSettingsContext` remains the separate, read-only, app-wide consumption path — the two never share state.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -132,6 +138,7 @@ FrontEnd/
         Dashboard.tsx          # feature top component (orchestrates)
         useDashboard.ts        # feature-local state/data-shaping hook
         WeeklyGoalCard.tsx     # moved here from ui/ (AD-3): persists data, not a pure primitive
+        MyCoursesSection.tsx   # AdminSettings PRD FR-1: "New Course Wizard" trigger moves here (header, right-hand side) from a stats-card subcomponent -- pure component relocation within this feature folder, no new AD
         *.tsx                  # other feature-local subcomponents
       CourseDiscover/
       CourseOverview/
@@ -157,6 +164,7 @@ FrontEnd/
         AiConfiguration/          # admin AI task provider/model/fallback/budget config + usage view -- calls services/aiConfigService.ts (backend AD-19), a DIFFERENT backend surface than aiGatewayService.ts below
         TagManagement/            # Tag CRUD (FR-26) -- calls services/tagsService.ts, net-new, not masterDataService.ts
         ErrorLog/                 # ErrorObservability PRD FR-11-FR-13/FR-24: Master-only, server-side paginated list/filter/detail/trace-view -- calls services/errorsService.ts
+        Settings/                 # AdminSettings PRD: CRUD/Apply/Restore/history UI for site-wide settings (font today) -- has its own useSettings.ts hook per AD-2, calls services/settingsService.ts directly (AD-8's write path); Master+Support tier (backend FeatureKeys.SettingsManage, AD-27), not Master-only like AiConfiguration/ErrorLog
 
     ui/                       # pure reusable presentational primitives (AD-3's checkable test)
       Navbar.tsx
@@ -175,6 +183,7 @@ FrontEnd/
       CourseContentContext.tsx  # AD-4: the confirmed Chapter->Topic->Subtopic tree, draft AND published, backed by courseContentService.ts -- shared by CourseContentEditor and CoursePlayer's Review-as-Student mode
       SessionContext.tsx        # auth/session
       AccessibilityContext.tsx  # language + accessibility settings
+      SiteSettingsContext.tsx   # AD-8: fetches active Setting rows (not FontPairingDefinition catalog rows, backend AD-26) once at app boot via settingsService.ts, applies the active Font Pairing via document.documentElement.style.setProperty on --font-display/--font-sans/--font-mono, fail-safe no-op on fetch/validation failure, exposes useSiteSettings() -- read-only, app-wide consumption path, distinct from Preview's local-wrapper mechanism in features/Admin/Settings/
 
     services/                 # the data-access boundary -- only layer allowed to import data/ or lib/offlineStorage.ts, or call fetch/HTTP directly (AD-1)
       httpClient.ts             # AD-7: shared low-level request helper (generalized from courseDraftService.ts's write<T>()) -- reads X-Correlation-Id off every response into the module-level store
@@ -188,6 +197,7 @@ FrontEnd/
       userService.ts            # also owns progress/points persistence (consolidates today's duplicate localStorage logic)
       reviewsService.ts
       aiGatewayService.ts       # New Course Wizard PRD: calls the backend's IAiGateway endpoints (AD-14 in the backend spine) -- same async/typed-Promise shape as every other service, per AD-1
+      settingsService.ts        # AD-8: AdminSettings PRD -- backs SiteSettingsContext (read) and the Admin Settings/ subtab's CRUD/Apply/Restore/history UI (write)
 
     data/
       mockData.ts              # unchanged content; import access now restricted to services/
@@ -207,6 +217,8 @@ FrontEnd/
       CourseOverview/
       CoursePlayer/
       TutorHub/
+      Admin/
+        Settings/              # mirrors src/features/Admin/Settings/ (AD-8)
       ...                      # one subfolder per src/features/* entry, same file-per-file mirroring
     ui/
     services/
@@ -224,3 +236,4 @@ FrontEnd/
 - **Automated import-boundary enforcement** — AD-3's dependency direction is a code-review convention today, not tool-enforced. Revisit by adding `eslint-plugin-boundaries` (or equivalent) once the refactor lands, so the rule stops depending on reviewer vigilance.
 - **Framework majors (Vite, TypeScript)** — both inherited versions are now ~2 majors behind current npm latest. Upgrading them is a separate initiative from this component-architecture refactor; revisit if/when that's explicitly scoped.
 - **`@testing-library/jest-dom` Node requirement** — latest (v7) requires Node.js ≥22, and no Node version is pinned anywhere in `FrontEnd/` (no `engines`, no `.nvmrc`). Revisit if a CI pipeline or a contributor's local Node version turns out to be below 22.
+- **Real-time settings push** — `SiteSettingsContext` (AD-8) fetches once at app boot; it does not push live font changes to already-open sessions without a navigation/reload. Not needed per the AdminSettings PRD's NFR-1 (next-page-load propagation is sufficient). Revisit only if this becomes a real pain point.

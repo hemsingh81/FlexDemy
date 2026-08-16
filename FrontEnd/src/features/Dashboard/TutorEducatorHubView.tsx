@@ -78,21 +78,21 @@ export const TutorEducatorHubView: React.FC<TutorEducatorHubViewProps> = ({
         draftId={courseCreationFlow.contentEditorDraftId}
       />
 
-      <TeachingStatsCards
-        isContentEditorOpen={courseCreationFlow.isContentEditorOpen}
-        onOpenNewCourseWizard={courseCreationFlow.openWizard}
-      />
+      <TeachingStatsCards />
 
       {/* FR-31 (CourseWizard PRD S4.11): the "resume a course" list -- placed directly beneath
-          the New Course Wizard trigger card above, the natural "manage your courses" spot until
-          a UX pass decides otherwise (deferred per the PRD's own Notes on FR-31). Owns rendering
-          its own inline Course Content Editor instance (openDraftId/onCloseContentEditor) for the
-          Resume path -- see the comment on the top-level instance above. */}
+          the stat cards above, the natural "manage your courses" spot until a UX pass decides
+          otherwise (deferred per the PRD's own Notes on FR-31). Owns rendering its own inline
+          Course Content Editor instance (openDraftId/onCloseContentEditor) for the Resume path
+          -- see the comment on the top-level instance above. Also owns the New Course Wizard
+          trigger in its own header (FR-1, Story 5.1: relocated here from TeachingStatsCards
+          above). */}
       <MyCoursesSection
         isContentEditorOpen={courseCreationFlow.isContentEditorOpen}
         onResumeDraft={courseCreationFlow.openContentEditorForCourse}
         openDraftId={courseCreationFlow.contentEditorOrigin === 'resume' ? courseCreationFlow.contentEditorDraftId : null}
         onCloseContentEditor={courseCreationFlow.closeContentEditor}
+        onOpenNewCourseWizard={courseCreationFlow.openWizard}
       />
 
       <TeachingAnalyticsChart />

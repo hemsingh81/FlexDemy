@@ -1,5 +1,5 @@
 # generated: 2026-08-11
-# last_updated: 2026-08-14 (Epic 4 retrospective complete)
+# last_updated: 2026-08-16 (Epic 5 done; Epic 6 all 5 stories done after code review -- epic itself pending retrospective)
 # project: eLearning
 # project_key: NOKEY
 # tracking_system: file-system
@@ -46,7 +46,7 @@
 #   (see epics.md's per-epic "Parallelization note").
 
 generated: 2026-08-11
-last_updated: 2026-08-14 (Epic 4 retrospective complete)
+last_updated: 2026-08-16 (Epic 5 done; Epic 6 all 5 stories done after code review -- epic itself pending retrospective)
 project: eLearning
 project_key: NOKEY
 tracking_system: file-system
@@ -102,6 +102,18 @@ development_status:
   4-7-correlation-id-trace-view: done
   epic-4-retrospective: done
 
+  epic-5: in-progress
+  5-1-relocate-the-new-course-wizard-trigger-into-my-courses: done
+  epic-5-retrospective: optional
+
+  epic-6: in-progress
+  6-1-settings-subtab-with-the-generic-settings-data-model: done
+  6-2-curated-font-pairing-picker-with-preview-before-apply: done
+  6-3-change-history-and-one-click-restore: done
+  6-4-curated-font-size-scale-with-the-same-preview-apply-history-flow: done
+  6-5-combined-typography-presets-with-custom-fallback: done
+  epic-6-retrospective: optional
+
 action_items:
   - epic: 4
     action: "Commit Epic 4's work to git (currently 7 stories of uncommitted changes on one shared baseline)"
@@ -117,5 +129,17 @@ action_items:
     status: open
   - epic: 4
     action: "Continue using the Acceptance Auditor layer on every future story's review -- it has now twice caught a 'verified' claim that didn't hold in the code, a distinct value from adversarial bug-hunting alone"
+    owner: "Dev"
+    status: open
+  - epic: 6
+    action: "No WebApplicationFactory-based integration test infrastructure exists anywhere in this codebase (first flagged from Story 4.1's review). This let a controller-wide [Authorize] policy silently block a feature's own public-facing consumer (SiteSettingsContext) through three prior code-review passes, since every SettingsControllerTests test exercises a hand-built IAuthorizationService in isolation rather than the real ASP.NET Core pipeline. Worth building this infrastructure for real, not just working around it story-by-story."
+    owner: "Dev"
+    status: open
+  - epic: 6
+    action: "Epic 5/6's uncommitted work (5-1, 6-1 through 6-5, all now done) should be committed to git -- same standing recommendation as Epic 4's, now covering two more epics on the same shared uncommitted baseline"
+    owner: "Dev"
+    status: open
+  - epic: 6
+    action: "Story 6.5 found and fixed a real, pre-existing bug in SettingRepository.ApplyValueAsync (unaliased raw-SQL column name broke EF Core's SqlQuery<T> against real Postgres -- '42703: column s.Value does not exist') dating back to Story 6.1/6.2, invisible to every existing test because EF InMemory can't execute raw SqlQuery<T> at all. Only caught via a manual live-Docker verification step, not CI. Worth a deliberate sweep of this codebase's other raw-SQL call sites (AiTaskBudgetRepository.cs and any others) for the same unaliased-column risk, and reinforces the standing case for real Postgres-backed integration tests, not just unit tests against InMemory."
     owner: "Dev"
     status: open

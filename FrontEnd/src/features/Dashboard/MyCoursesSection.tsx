@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { deleteCourse, getMyCourses, returnToDraft, CourseDraftError, type MyCourseSummaryDto } from '../../services/courseDraftService';
 import { toState, type LifecycleState } from '../CourseContentEditor/useCourseLifecycle';
 import { CourseContentEditor } from '../CourseContentEditor/CourseContentEditor';
@@ -12,6 +13,9 @@ interface MyCoursesSectionProps {
   // existing callers that never open the editor inline don't need to pass it.
   openDraftId?: string | null;
   onCloseContentEditor?: () => void;
+  // Opens the New Course Wizard (FR-1, Story 5.1: relocated here from the Teaching stats-card
+  // row). Optional/defaulted so existing callers that don't wire it up still compile and render.
+  onOpenNewCourseWizard?: () => void;
 }
 
 const STATUS_LABEL: Record<LifecycleState, string> = {
@@ -40,6 +44,7 @@ export const MyCoursesSection: React.FC<MyCoursesSectionProps> = ({
   onResumeDraft,
   openDraftId = null,
   onCloseContentEditor = () => undefined,
+  onOpenNewCourseWizard = () => undefined,
 }) => {
   const [courses, setCourses] = useState<MyCourseSummaryDto[] | null>(null);
   // Split from actionError below: a load failure means there's nothing to show at all (courses
@@ -111,8 +116,22 @@ export const MyCoursesSection: React.FC<MyCoursesSectionProps> = ({
   };
 
   return (
-    <div className="p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs space-y-3">
-      <h3 className="text-sm font-bold text-[#142030]">My Courses</h3>
+    <div id="course-publishing" className="scroll-mt-24 p-5 rounded-2xl bg-white border border-[#E1DED4] shadow-xs space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-bold text-[#142030]">My Courses</h3>
+        <button
+          type="button"
+          onClick={onOpenNewCourseWizard}
+          // Disabled while Course Content Editor is open -- otherwise this stays keyboard-
+          // reachable and a second CourseWizard session could open on top of it (FR-1, Story
+          // 5.1: carried over unchanged from the old TeachingStatsCards.tsx trigger card).
+          disabled={isContentEditorOpen}
+          className="px-3 py-1.5 bg-[#143358] hover:bg-[#143358]/90 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Plus className="w-4 h-4" />
+          <span>New Course Wizard</span>
+        </button>
+      </div>
 
       {(loadError || actionError) && (
         <p role="alert" className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
@@ -123,7 +142,7 @@ export const MyCoursesSection: React.FC<MyCoursesSectionProps> = ({
       {!loadError && courses === null && <p className="text-xs text-[#5E6A79]">Loading your courses…</p>}
 
       {!loadError && courses !== null && courses.length === 0 && (
-        <p className="text-xs text-[#5E6A79]">No courses yet — start with New Course Wizard above.</p>
+        <p className="text-xs text-[#5E6A79]">No courses yet — use New Course Wizard above to create your first one.</p>
       )}
 
       {!loadError && courses !== null && courses.length > 0 && (

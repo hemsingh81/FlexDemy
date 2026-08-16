@@ -40,6 +40,50 @@ beforeEach(() => {
 });
 
 describe('MyCoursesSection', () => {
+  // -- Story 5.1: relocated New Course Wizard trigger + course-publishing scroll anchor --------
+
+  it('renders the New Course Wizard trigger in the section header and calls onOpenNewCourseWizard when clicked', async () => {
+    const u = userEvent.setup();
+    const onOpenNewCourseWizard = vi.fn();
+    vi.mocked(courseDraftService.getMyCourses).mockResolvedValue([]);
+
+    render(
+      <MyCoursesSection isContentEditorOpen={false} onResumeDraft={vi.fn()} onOpenNewCourseWizard={onOpenNewCourseWizard} />
+    );
+
+    const button = screen.getByRole('button', { name: 'New Course Wizard' });
+    expect(button).toBeInTheDocument();
+    await u.click(button);
+    expect(onOpenNewCourseWizard).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the New Course Wizard trigger while the Content Editor is open', () => {
+    vi.mocked(courseDraftService.getMyCourses).mockReturnValue(new Promise(() => {}));
+
+    render(<MyCoursesSection isContentEditorOpen onResumeDraft={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'New Course Wizard' })).toBeDisabled();
+  });
+
+  it('carries the course-publishing scroll anchor (id and scroll-mt-24) on its outer card', () => {
+    vi.mocked(courseDraftService.getMyCourses).mockReturnValue(new Promise(() => {}));
+
+    const { container } = render(<MyCoursesSection isContentEditorOpen={false} onResumeDraft={vi.fn()} />);
+
+    const anchor = container.querySelector('#course-publishing');
+    expect(anchor).not.toBeNull();
+    expect(anchor).toHaveClass('scroll-mt-24');
+  });
+
+  it('keeps the New Course Wizard trigger rendered when the course list fails to load', async () => {
+    vi.mocked(courseDraftService.getMyCourses).mockRejectedValue(new CourseDraftError('Could not load your courses.'));
+
+    render(<MyCoursesSection isContentEditorOpen={false} onResumeDraft={vi.fn()} />);
+
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: 'New Course Wizard' })).toBeInTheDocument();
+  });
+
   it('shows a loading state before the fetch resolves', () => {
     vi.mocked(courseDraftService.getMyCourses).mockReturnValue(new Promise(() => {}));
 
@@ -53,7 +97,7 @@ describe('MyCoursesSection', () => {
 
     render(<MyCoursesSection isContentEditorOpen={false} onResumeDraft={vi.fn()} />);
 
-    await screen.findByText('No courses yet — start with New Course Wizard above.');
+    await screen.findByText('No courses yet — use New Course Wizard above to create your first one.');
   });
 
   it('renders every course with a status badge, regardless of Lifecycle State', async () => {
@@ -191,7 +235,7 @@ describe('MyCoursesSection', () => {
     await u.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(courseDraftService.deleteCourse).toHaveBeenCalledWith('c_draft'));
-    await screen.findByText('No courses yet — start with New Course Wizard above.');
+    await screen.findByText('No courses yet — use New Course Wizard above to create your first one.');
   });
 
   it('shows a friendly error and keeps the course listed when delete fails', async () => {

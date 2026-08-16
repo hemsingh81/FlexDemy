@@ -6,6 +6,7 @@ import { RoleVisibilityManager } from './RoleVisibilityManager';
 import { TutorApprovals } from './TutorApprovals';
 import { AiConfiguration } from './AiConfiguration/AiConfiguration';
 import { ErrorLog } from './ErrorLog/ErrorLog';
+import { Settings } from './Settings/Settings';
 import { PageTransition } from '../../ui/PageTransition';
 
 interface AdminPanelProps {
@@ -55,6 +56,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ activeSubTab: controlled
         {activeSubTab === 'tutor-approvals' && <TutorApprovals />}
         {activeSubTab === 'ai-configuration' && <AiConfiguration />}
         {activeSubTab === 'errors' && <ErrorLog />}
+        {activeSubTab === 'settings' && <Settings />}
       </PageTransition>
     </div>
   );

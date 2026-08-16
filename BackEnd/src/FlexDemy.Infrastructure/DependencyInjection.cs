@@ -6,6 +6,7 @@ using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
 using FlexDemy.Application.Permissions;
 using FlexDemy.Application.Profiles;
+using FlexDemy.Application.Settings;
 using FlexDemy.Application.Tags;
 using FlexDemy.Application.Users;
 using FlexDemy.Infrastructure.AiGateway;
@@ -113,6 +114,12 @@ public static class DependencyInjection
         services.AddScoped<IAiTaskConfigRepository, AiTaskConfigRepository>();
         services.AddScoped<IAiTaskUsageRepository, AiTaskUsageRepository>();
         services.AddScoped<IAiTaskBudgetRepository, AiTaskBudgetRepository>();
+
+        services.AddScoped<ISettingRepository, SettingRepository>();
+        services.AddScoped<IFontPairingDefinitionRepository, FontPairingDefinitionRepository>();
+        services.AddScoped<IFontSizeDefinitionRepository, FontSizeDefinitionRepository>();
+        services.AddScoped<ISettingChangeHistoryRepository, SettingChangeHistoryRepository>();
+        services.AddScoped<ITypographyCombinationDefinitionRepository, TypographyCombinationDefinitionRepository>();
 
         services.AddScoped<ITagRepository, TagRepository>();
 

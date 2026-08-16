@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
-import { AlertTriangle, ClipboardCheck, Cpu, LayoutGrid, ShieldCheck, UserPlus } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Cpu, LayoutGrid, ShieldCheck, SlidersHorizontal, UserPlus } from 'lucide-react';
 import { useDomain } from '../../context/DomainContext';
 
 export type AdminSubTab =
@@ -9,8 +9,12 @@ export type AdminSubTab =
   | 'role-visibility'
   | 'tutor-approvals'
   | 'ai-configuration'
-  | 'errors';
+  | 'errors'
+  | 'settings';
 
+// 'settings' is appended at the END, after 'errors' -- ALL_SUB_TABS[0] drives Master's default
+// activeSubTab (availableSubTabs[0] ?? 'tutor-approvals') and the Navbar Admin dropdown's render
+// order, so inserting it earlier would silently change Master's default landing tab (Story 6.1).
 const ALL_SUB_TABS: AdminSubTab[] = [
   'masterdata',
   'support-users',
@@ -18,6 +22,7 @@ const ALL_SUB_TABS: AdminSubTab[] = [
   'tutor-approvals',
   'ai-configuration',
   'errors',
+  'settings',
 ];
 
 // Single source of truth for admin sub-tab label/icon metadata -- shared by AdminPanel's own
@@ -36,6 +41,9 @@ export const ADMIN_SUBTAB_META: Record<AdminSubTab, { label: string; icon: Compo
   // Master-only (ErrorObservability PRD FR-19, Story 4.5) -- not added to Support's subset below,
   // same Master-only precedent as 'ai-configuration'.
   errors: { label: 'Error Log', icon: AlertTriangle },
+  // Master AND Support (AdminSettings PRD FR-4, backend AD-27) -- mirrors 'tutor-approvals'
+  // access tier exactly, not 'ai-configuration'/'errors'' Master-only tier (Story 6.1).
+  settings: { label: 'Settings', icon: SlidersHorizontal },
 };
 
 export interface ControlledAdminSubTab {
@@ -59,7 +67,7 @@ export const useAdminPanel = (controlled?: ControlledAdminSubTab) => {
 
   const availableSubTabs = useMemo<AdminSubTab[]>(() => {
     if (user?.role === 'Master') return ALL_SUB_TABS;
-    if (user?.role === 'Support') return ['tutor-approvals', 'masterdata'];
+    if (user?.role === 'Support') return ['tutor-approvals', 'masterdata', 'settings'];
     return [];
   }, [user?.role]);
 

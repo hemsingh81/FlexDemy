@@ -7,9 +7,9 @@ paradigm: 'Clean Architecture (Onion) — Domain at the center, Application/Infr
 scope: 'BackEnd/ — greenfield ASP.NET Web API (C#) service on PostgreSQL, Docker-deployed; project structure, layering rules, and coding conventions an AI assistant or new contributor can follow consistently'
 status: final
 created: '2026-08-09'
-updated: '2026-08-13'
+updated: '2026-08-15'
 binds: []
-sources: ['FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md', '{planning_artifacts}/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md']
+sources: ['FrontEnd/docs/BACKEND_PRD.md', '{planning_artifacts}/prds/prd-eLearning-CourseWizard-2026-08-10/prd.md', '{planning_artifacts}/prds/prd-eLearning-ErrorObservability-2026-08-13/prd.md', '{planning_artifacts}/prds/prd-eLearning-AdminSettings-2026-08-15/prd.md']
 companions: []
 ---
 
@@ -186,6 +186,28 @@ flowchart TB
 - **Prevents:** FR-1's global exception middleware, FR-3's 4 job terminal-failure sites, and FR-6/FR-7's frontend-reporting path each independently reimplementing fingerprint hashing, category-mapping, or priority rules — a real risk of the four sites drifting (e.g. one site's fingerprint hash normalizes a stack trace differently than another's), silently breaking FR-8's "one row per distinct Fingerprint" dedup guarantee. Also prevents FR-7's deliberately-anonymous reporting endpoint from landing under FR-19's Master-only class-level policy — the exact conflict the PRD's own reviewer gate caught and fixed at the requirements level; encoding the two-controller split here stops it from recurring at build time.
 - **Rule:** a new `ErrorObservability` feature folder (AD-6 shape, spanning Domain/Application/Infrastructure/Api like `Courses`/`Tutoring`) exposes `Application/ErrorObservability/IErrorCaptureService` with one method, `CaptureAsync(ErrorCaptureRequest)`, owning fingerprinting (FR-8), rule-based categorization (FR-9), and rule-based priority assignment (FR-10 Phase A/B) in one place — matching AD-3's plain-service pattern, no mediator. All 4 capture sites call this one service; none reimplements the logic. It internally swallows its own failures (the PRD's own NFR: a failure writing an ErrorRecord must be swallowed, not thrown, so observability never becomes a second source of outages). Exposed over **two** controllers, never one: an anonymous `ErrorReportingController` (FR-7, `POST /api/v1/errors/client`, no `[Authorize]`) and a Master-gated `ErrorsController` (FR-11–FR-18, FR-24, `[Authorize(Policy = FeatureKeys.ErrorsManage)]` at class level, per AD-5's controller convention).
 
+### AD-25 — Settings storage is a generic Key/Value/KeyType table — a bounded exception to AD-20 [ASSUMPTION]
+
+- **Binds:** the new Settings feature's persistence (`Domain/Settings/`, `Infrastructure/Persistence/Configurations/SettingConfiguration.cs`)
+- **Prevents:** two engineers reading AD-20's "explicit entities, not generic shape" rule as forbidding a generic table here entirely, or conversely, treating this table's existence as license to genericize other structured domain data (e.g. Courses) later
+- **Rule:** A `Setting` entity (`Domain/Settings/`) holds Id (`string`, GUIDv7 via `IIdGenerator`, per AD-9 — the primary key, omitted from an earlier draft of this rule), Key, Value, KeyType, and the standard `AuditableEntity` base-class fields (CreatedAt/UpdatedAt/CreatedBy/UpdatedBy/IsDeleted, plus IsActive) rather than a hand-picked subset (`prd-eLearning-AdminSettings-2026-08-15` FR-6). Key is unique *per KeyType* — a composite unique index on (Key, KeyType), not a single globally-unique Key column — matching FR-6's literal "unique per KeyType" wording, so a future non-Font KeyType can reuse a Key name a Font setting has already claimed without a collision. KeyType is a plain string column, not a C# enum: this codebase's existing convention for category-like fields (e.g. `ErrorCategory`) is enum-first, but FR-7's "add a new KeyType by data alone, no migration" intent needs the open-ended string shape here instead, not that precedent. AD-20's rule is scoped specifically to structured, hierarchical domain content (the course tree) where explicit typed entities keep querying/validation sane; it does not extend to a small, flat, heterogeneous admin-config surface where the shape is deliberately open-ended by explicit product requirement (the PRD's own ask for a table supporting "multiple types of settings"). This table's existence is a bounded, named exception — not a precedent for genericizing other domain shapes.
+
+  Every applied change to a Setting is recorded in a companion `SettingChangeHistory` table — its own Id (GUIDv7 via `IIdGenerator`, same as `Setting`) so FR-17's "select a prior entry from history" has something unambiguous to reference, a `SettingId` foreign key back to the `Setting` it changed (never a raw copied Key string), plus OldValue, NewValue, ChangedBy, ChangedAt — one generic history table mirroring the Setting table itself, not a per-KeyType history shape (PRD FR-15/FR-16). OldValue is captured via the same atomic single-round-trip pattern AD-18 already uses for the budget counter — an `UPDATE ... RETURNING` that captures the pre-update row in the same statement as the write, never a separate load-then-save — so FR-15's "read fresh, not stale" requirement is actually enforced under concurrent Applies, not just asserted.
+
+  Both entities live in a new `Settings` feature folder (Domain/Application/Infrastructure/Api), following AD-6's feature-folder shape. `ISettingsService` (`Application/Settings/`) exposes `ApplyAsync` as the *exclusive* mutation path for a Setting's Value — there is no separate generic `UpdateAsync` alongside it — and owns FR-10's server-side curation-enforcement check (rejecting a Font-KeyType Value not present in AD-26's curated list) as ordinary validation logic inside that one method; reactivating a Setting's IsActive from `false` back to `true` re-runs the same curation check a fresh Apply does, since both make a Value effectively live again, so no CRUD or reactivation path can slip a decurated Font pairing back in unchecked. `DatabaseSeeder` also seeds the initial Font `Setting` row itself (Key/KeyType=`Font`, Value = a default `FontPairingDefinition` slug, IsActive=true) — not only the `FontPairingDefinition` rows AD-26 already covers — so the PRD's UJ-1 ("sees the current Font/Typography setting") has something to read on first admin visit.
+
+### AD-26 — Curated Font Pairing definitions are a separate typed reference table, not Settings rows [ASSUMPTION]
+
+- **Binds:** FR-9/FR-10's curated font-pairing list (`prd-eLearning-AdminSettings-2026-08-15`)
+- **Prevents:** forcing a 3-field structured shape (Display/Body/Mono font names) into the generic Setting table's scalar Value column (JSON-in-a-string), and conflating "admin-editable runtime config" (the Settings table, AD-25) with "design-vetted reference data the admin only selects from" (this table) — a real divergence risk once a future setting type also needs a curated options list and an engineer has to decide which pattern to follow
+- **Rule:** A `FontPairingDefinition` entity (`Domain/Settings/`, alongside `Setting`) holds one row per curated pairing: Id/Slug (the identifier a Setting's Value references), DisplayFont, BodyFont, MonoFont, IsActive (curated-but-currently-available toggle, distinct from a Setting row's own IsActive). Seeded via `DatabaseSeeder`, the same mechanism as `ErrorRetentionSettings`/`AiTaskConfig` (AD-19). Not exposed for admin CRUD in v1 — the Settings screen only reads it to populate the picker and to validate an incoming Apply/Restore against it (FR-10). The active Font Pairing itself is one `Setting` row (KeyType=`Font`) whose Value is a `FontPairingDefinition` slug — never the resolved font names duplicated into the Setting row. A new `GET /api/v1/settings/font-pairings` endpoint on `SettingsController` is the one sanctioned read path for this curated list, returning `FontPairingDefinitionDto[]` (Slug, DisplayFont, BodyFont, MonoFont, IsActive) for every currently-active pairing. `SettingDto`'s Value for a Font-KeyType Setting stays the raw pairing slug — never the resolved Display/Body/Mono names enriched in server-side — so the frontend resolves display names client-side by joining against this endpoint's own response, keeping the anti-duplication intent above end-to-end, storage layer and wire contract alike.
+
+### AD-27 — Settings access control follows the TutorApprove pattern, not MasterDataManage [ASSUMPTION]
+
+- **Binds:** `SettingsController`'s authorization policy, `FeatureKeys`, `RolePermissionSeedData`
+- **Prevents:** an implementer following the PRD's literal "same access level as Tag Management" comparison and locking Support admins out of a feature NFR-2 explicitly builds for them
+- **Rule:** the PRD's own "same access level as Tag Management" framing is factually wrong against the live code — `TagsController.cs` gates its writes with `FeatureKeys.MasterDataManage` (Master-only; the controller's own line-10 comment says outright "no dedicated Tag permission key exists"), not Master+Support as the PRD assumes. The actual existing Master+Support pattern in this codebase is `FeatureKeys.TutorApprove` (`AdminUsersController.cs`, `ProfilesController.cs`), which is the correct precedent for NFR-2's stated Master+Support access requirement. A new `FeatureKeys.SettingsManage` key is added and seeded for both `UserRole.Master` and `UserRole.Support`, the same way `TutorApprove` is seeded in `RolePermissionSeedData.cs` — not the Master-only way `MasterDataManage` is seeded. `SettingsController` is gated at the class level with `[Authorize(Policy = FeatureKeys.SettingsManage)]`, per AD-5's controller convention.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -242,6 +264,7 @@ flowchart TB
       AiConfig/             # AiTaskConfig, AiPromptVersion entities (AD-19)
       Tags/                 # Tag entity (FR-26, net-new -- not part of the taxonomy/Master Data scaffold)
       ErrorObservability/   # ErrorRecord entity (Fingerprint, Category, Priority, Status, CorrelationId, AD-23/AD-24)
+      Settings/              # Setting, FontPairingDefinition, SettingChangeHistory entities (AD-25/AD-26)
       FlexDemy.Domain.csproj
 
     FlexDemy.Application/
@@ -255,6 +278,7 @@ flowchart TB
       Tags/                  # ITagService, TagService, TagMapper, TagDto, ITagRepository (FR-26)
       Common/               # IUnitOfWork, IIdGenerator, IFileScanner (AD-22), ICorrelationIdAccessor (AD-23), AppException + subtypes, pagination/result wrappers
       ErrorObservability/    # IErrorCaptureService (AD-24): fingerprinting + FR-9 categorization + FR-10 priority, ErrorRecordDto, admin CRUD/lifecycle service
+      Settings/               # ISettingsService, SettingsService, SettingMapper, SettingDto/Create.../Update.../ApplyRequest, ISettingRepository, IFontPairingDefinitionRepository, ISettingChangeHistoryRepository (AD-25/AD-26)
       FlexDemy.Application.csproj
 
     FlexDemy.Infrastructure/
@@ -262,8 +286,8 @@ flowchart TB
         FlexDemyDbContext.cs
         FlexDemyDbContextFactory.cs   # IDesignTimeDbContextFactory<FlexDemyDbContext>
         Migrations/
-        Configurations/      # one IEntityTypeConfiguration<T> per entity
-      Repositories/           # CourseRepository, TutorSlotRepository, etc. — implement Application interfaces
+        Configurations/      # one IEntityTypeConfiguration<T> per entity (incl. SettingConfiguration, FontPairingDefinitionConfiguration, SettingChangeHistoryConfiguration, AD-25/AD-26)
+      Repositories/           # CourseRepository, TutorSlotRepository, etc. — implement Application interfaces (incl. SettingRepository, FontPairingDefinitionRepository, SettingChangeHistoryRepository, AD-25/AD-26)
       IdGeneration/            # UlidIdGenerator : IIdGenerator
       AiGateway/               # HTTP client implementing IAiGateway, targets self-hosted Portkey OSS gateway (AD-14)
       Parsing/                 # HTTP client calling the self-hosted Docling service (AD-21)
@@ -285,6 +309,7 @@ flowchart TB
         TagsController.cs        # FR-26
         ErrorsController.cs         # AD-24: Master-gated, FR-11-FR-18 + FR-24 trace view, [Authorize(Policy = FeatureKeys.ErrorsManage)]
         ErrorReportingController.cs # AD-24: anonymous, FR-7 POST /api/v1/errors/client only, no [Authorize]
+        SettingsController.cs       # AD-25/AD-26/AD-27: GET /api/v1/settings/font-pairings sub-route (AD-26); [Authorize(Policy = FeatureKeys.SettingsManage)] Master+Support gate (AD-27, not MasterDataManage)
       Middleware/
         ExceptionHandlingMiddleware.cs   # maps AppException subtypes -> ProblemDetails
         CorrelationIdMiddleware.cs       # AD-23: registered before ExceptionHandlingMiddleware
@@ -331,3 +356,4 @@ flowchart LR
 - **Production migration strategy** — AD-8's startup auto-migrate is a known anti-pattern at real production scale (concurrent instances racing to migrate); revisit before any production deployment.
 - **OpenTelemetry / W3C Trace Context** — AD-23's Correlation ID is a simple app-level GUID threaded through this one service's own requests and jobs, not a `traceparent`-compatible distributed-tracing identifier (matches the ErrorObservability PRD's own Non-Goal). Revisit if FlexDemy ever splits into more independently-deployed services where a real distributed-tracing standard would earn its keep.
 - **CI pipeline** — not set up in this pass; revisit once there's a remote to push to and a decision on where CI runs.
+- **Real-time settings push** — per `prd-eLearning-AdminSettings-2026-08-15` NFR-1, a Setting change propagating on the client's next page load is sufficient; no live push to already-open sessions is required. If that ever changes, the existing **WebSocket real-time protocols** Deferred item above is the natural mechanism to revisit — not a second real-time item.

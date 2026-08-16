@@ -6,6 +6,7 @@ using FlexDemy.Domain.ErrorObservability;
 using FlexDemy.Domain.MasterData;
 using FlexDemy.Domain.Permissions;
 using FlexDemy.Domain.Profiles;
+using FlexDemy.Domain.Settings;
 using FlexDemy.Domain.Tags;
 using FlexDemy.Domain.Users;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +44,12 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
 
     public DbSet<ErrorRecord> ErrorRecords => Set<ErrorRecord>();
     public DbSet<ErrorRetentionSettings> ErrorRetentionSettings => Set<ErrorRetentionSettings>();
+
+    public DbSet<Setting> Settings => Set<Setting>();
+    public DbSet<FontPairingDefinition> FontPairingDefinitions => Set<FontPairingDefinition>();
+    public DbSet<FontSizeDefinition> FontSizeDefinitions => Set<FontSizeDefinition>();
+    public DbSet<SettingChangeHistory> SettingChangeHistories => Set<SettingChangeHistory>();
+    public DbSet<TypographyCombinationDefinition> TypographyCombinationDefinitions => Set<TypographyCombinationDefinition>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

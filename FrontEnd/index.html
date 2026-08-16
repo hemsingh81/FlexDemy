@@ -7,7 +7,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600..800;1,9..144,600..800&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!--
+      Every family behind a curated Font Pairing (BackEnd DatabaseSeeder.EnsureFontPairingDefinitionsAsync)
+      must be listed here -- an admin can switch the site-wide pairing at runtime with no rebuild
+      (Story 6.2/FR-11), so all of them have to be resolvable up front or the chosen theme silently
+      falls back to the generic stack. Adding a pairing there and a family here is one change, not two.
+
+      Listing 7 extra families costs one slightly larger stylesheet request, not 7 font downloads:
+      the response is only @font-face declarations, and a browser fetches a font FILE only when
+      rendered text actually matches it. So a visitor on the Default theme pays for Fraunces/Outfit/
+      JetBrains Mono exactly as before; the rest stay declared-but-unfetched until a theme uses them.
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Baloo+2:wght@400..800&family=Cormorant+Garamond:wght@400..700&family=Fraunces:ital,opsz,wght@0,9..144,600..800;1,9..144,600..800&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600;700&family=Inter:wght@300..800&family=JetBrains+Mono:wght@400;500;600&family=Lato:wght@300;400;700;900&family=Libre+Baskerville:wght@400;700&family=Merriweather:wght@300;400;700;900&family=Montserrat:wght@300..800&family=Nunito:wght@300..800&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500..800&family=Source+Sans+3:wght@300..700&family=Space+Grotesk:wght@400..700&family=Work+Sans:wght@300..800&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

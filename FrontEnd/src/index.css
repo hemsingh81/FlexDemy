@@ -5,6 +5,11 @@
   --font-display: "Fraunces", Georgia, serif;
   --font-sans: "Outfit", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+  /* Story 6.4: runtime-overridable root-scale factor. No corresponding Tailwind utility class is
+     generated (not needed) -- this token exists purely so it compiles into a real :root custom
+     property document.documentElement.style.setProperty can override, the same mechanism the
+     three font-family tokens above already use. */
+  --root-font-scale: 100%;
 
   --color-ink-navy: #143358;
   --color-citrus-amber: #BA5012;
@@ -87,6 +92,15 @@
 }
 
 @layer base {
+  /* Story 6.4: every one of Tailwind's rem-based text-* utilities (text-xs through text-6xl+,
+     all of them -- no tailwind.config override exists in this repo) computes relative to this
+     element's font-size, so changing --root-font-scale rescales the whole app proportionally
+     with zero changes to any component. Known, accepted gap (PRD Non-Goal): a Tailwind
+     arbitrary literal-pixel class (e.g. text-[10px]) bypasses this scale entirely. */
+  html {
+    font-size: var(--root-font-scale, 100%);
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
