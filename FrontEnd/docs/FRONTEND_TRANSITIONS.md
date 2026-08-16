@@ -87,10 +87,54 @@ Example: `MasterDataTable.tsx`'s delete flow -- mark the row "exiting" (`opacity
 with a `transition-all duration-200`), then drop it from state after the transition's duration
 via `setTimeout`. See `ROW_EXIT_MS` in that file for the constant to copy.
 
+## 5. A docked side panel opens or closes
+
+Use **`ui/SidePanel.tsx`** -- it owns both halves of the motion, so no call site hand-rolls either.
+It slides in from the right on mount, and on close it slides back out *before* unmounting.
+
+The part worth understanding: a component that has already been unmounted cannot animate. Every
+call site renders the panel as `{isOpen && <SidePanel onClose={close} />}`, so if `onClose` ran
+immediately the panel would vanish on the same frame and no exit animation could ever play.
+SidePanel therefore treats `onClose` as "the panel has finished closing", not "the user asked to
+close": a close request starts the slide-out, and `onClose` fires ~200ms later, when the animation
+is done. Callers keep their existing `{isOpen && ...}` shape and get the exit for free.
+
+Two consequences to know:
+
+- **`onClose` is asynchronous.** In tests, assert on it with `waitFor`, not synchronously after
+  the click. Anything ordered *after* the panel closes is delayed by the same ~200ms.
+- **Close every path through `requestClose`, never the caller's own close handler.** A footer
+  button wired straight to the parent's setter unmounts the panel instantly and blinks out while
+  every other path slides -- exactly the inconsistency this design removes. `footer` and
+  `children` both accept a render-prop form that hands you the API:
+
+```tsx
+<SidePanel
+  title="Edit country"
+  onClose={closeEdit}                       // runs after the slide-out finishes
+  footer={({ requestClose }) => (
+    <Button variant="ghost" onClick={requestClose}>Cancel</Button>
+  )}
+>
+  {content}
+</SidePanel>
+```
+
+A handler defined in the component body (above SidePanel) can't read that API from context -- take
+it as a parameter instead, the way `ErrorDetailPanel.tsx`'s `handleDelete(recordId, requestClose)`
+does.
+
+The header X, Escape and (where enabled) the backdrop click already route through `requestClose`
+internally. Repeated requests are ignored while a close is in flight, so a double-click or a held
+Escape can't fire `onClose` twice.
+
+Under `prefers-reduced-motion: reduce`, SidePanel skips the delay entirely and closes immediately --
+`index.css` collapses the animation itself, so waiting it out would just be dead time.
+
 ## Applying this
 
 When adding a new admin (or any other) screen with an Add/Edit panel, a confirm step, a
-dismissible list item, or a trigger+menu dropdown, reach for the matching pattern above instead
+dismissible list item, a docked side panel, or a trigger+menu dropdown, reach for the matching pattern above instead
 of a plain `{condition && <X />}` swap or a hand-rolled `useRef`/`useClickOutside`. See
 [FRONTEND_CONTROLS.md](./FRONTEND_CONTROLS.md) for the full list of `src/ui/` controls meant to be
 reused directly rather than re-implemented per-screen.

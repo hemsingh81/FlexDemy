@@ -24,7 +24,7 @@ import {
   VisibilityMode,
 } from '../../types';
 import { CourseAssignmentEntry } from './useAssignmentsHub';
-import { SidePanel } from '../../ui/SidePanel';
+import { SidePanel, type SidePanelCloseApi } from '../../ui/SidePanel';
 import { Button } from '../../ui/Button';
 
 // A single Source-tagged entry the unified Available Assignments list (PRD FR-5) can render,
@@ -286,8 +286,10 @@ const AssignmentQuizRunner: React.FC<{
   const isHoldPending = isSubmitted && result?.status === 'submitted';
   const formId = `assignment-quiz-form-${entry.id}`;
 
-  const footer = isHoldPending ? (
-    <Button variant="secondary" size="sm" onClick={onClose}>
+  // Takes SidePanel's close API rather than closing through `onClose` directly, so Done dismisses
+  // with the same slide-out as the header X and Escape (see ui/SidePanel.tsx).
+  const footer = ({ requestClose }: SidePanelCloseApi) => isHoldPending ? (
+    <Button variant="secondary" size="sm" onClick={requestClose}>
       Done
     </Button>
   ) : isSubmitted ? (
@@ -296,7 +298,7 @@ const AssignmentQuizRunner: React.FC<{
         <RotateCcw className="w-3.5 h-3.5" />
         <span>Close this panel and re-attempt from Available Assignments.</span>
       </span>
-      <Button variant="secondary" size="sm" onClick={onClose}>
+      <Button variant="secondary" size="sm" onClick={requestClose}>
         Done
       </Button>
     </>

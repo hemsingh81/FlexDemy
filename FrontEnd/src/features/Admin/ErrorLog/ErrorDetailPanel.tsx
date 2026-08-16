@@ -63,7 +63,7 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
 
   // Code-review patch: idRef/mountedRef guard every fetch (initial load AND the post-action
   // silent refetch below) against applying a stale result -- either because the panel was
-  // closed (SidePanel calls onClose synchronously for both Escape and closeOnBackdropClick) or
+  // closed (SidePanel keeps the panel mounted through its close animation, then calls onClose) or
   // because `id` changed to a different record while a fetch was still in flight.
   const idRef = useRef(id);
   const mountedRef = useRef(true);
@@ -129,14 +129,14 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
   // Unlike runAction's targets, a successful delete leaves nothing here to silently re-fetch --
   // the record is gone, so this closes the panel outright (after telling ErrorLog.tsx to refetch
   // the list behind it) instead of following runAction's in-place-refresh pattern.
-  const handleDelete = (recordId: string) => {
+  const handleDelete = (recordId: string, requestClose: () => void) => {
     setIsDeleting(true);
     setActionError(null);
     errorsService
       .deleteError(recordId)
       .then(() => {
         onActionSuccess?.();
-        onClose();
+        requestClose();
       })
       .catch((err: unknown) => {
         if (mountedRef.current) {
@@ -162,140 +162,144 @@ export const ErrorDetailPanel: React.FC<ErrorDetailPanelProps> = ({ id, onClose,
 
   return (
     <SidePanel title="Error Detail" onClose={onClose} closeOnBackdropClick width="lg" resizable>
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12 text-[#5E6A79]">
-          <Spinner size="lg" className="mr-2" />
-          <span className="text-sm">Loading...</span>
-        </div>
-      ) : error ? (
-        <p role="alert" className="text-xs font-semibold text-red-600">
-          {error}
-        </p>
-      ) : detail ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              isLoading={pendingAction === 'archive'}
-              disabled={detail.status === 'Archived' || pendingAction !== null || isConfirmingDelete || isDeleting}
-              onClick={() => runAction('archive', () => errorsService.archiveError(detail.id))}
-            >
-              Archive
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              isLoading={pendingAction === 'resolve'}
-              disabled={detail.status === 'Resolved' || pendingAction !== null || isConfirmingDelete || isDeleting}
-              onClick={() => runAction('resolve', () => errorsService.resolveError(detail.id))}
-            >
-              Mark Resolved
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              isLoading={pendingAction === 'increase-priority'}
-              disabled={detail.priority === 'P0' || pendingAction !== null || isConfirmingDelete || isDeleting}
-              onClick={() => runAction('increase-priority', () => errorsService.increasePriority(detail.id))}
-            >
-              Increase Priority
-            </Button>
-            {/* Visually separated (border + own spacing) from the lifecycle actions above --
-                this is the one irreversible action in the row and shouldn't blend in with
-                Archive/Resolve/Increase Priority, which are all reversible state transitions. */}
-            <div className="ml-auto pl-2 border-l border-[#E1DED4]">
-              {isConfirmingDelete ? (
-                <ConfirmDialog
-                  message="Delete permanently?"
-                  confirmLabel="Delete"
-                  variant="danger"
-                  isConfirming={isDeleting}
-                  onConfirm={() => handleDelete(detail.id)}
-                  onCancel={() => setIsConfirmingDelete(false)}
-                />
-              ) : (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon={<Trash2 className="w-3.5 h-3.5" />}
-                  disabled={pendingAction !== null}
-                  onClick={() => setIsConfirmingDelete(true)}
-                >
-                  Delete
-                </Button>
-              )}
+      {({ requestClose }) => (
+        <>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12 text-[#5E6A79]">
+              <Spinner size="lg" className="mr-2" />
+              <span className="text-sm">Loading...</span>
             </div>
-          </div>
-          {actionError && (
+          ) : error ? (
             <p role="alert" className="text-xs font-semibold text-red-600">
-              {actionError}
+              {error}
             </p>
-          )}
-          <div className="grid grid-cols-2 gap-4">
-            <Tag label="Priority" value={detail.priority} colorClasses={PRIORITY_BADGE_CLASSES[detail.priority] ?? 'bg-slate-100 text-slate-600'} />
-            <Tag label="Status" value={detail.status} colorClasses={STATUS_BADGE_CLASSES[detail.status] ?? 'bg-slate-100 text-slate-600'} />
-          </div>
-          <Field label="Category">{humanizeEnumValue(detail.category)}</Field>
-          <Field label="Message">{detail.message}</Field>
-          {detail.exceptionType && <Field label="Exception Type">{detail.exceptionType}</Field>}
-          <Field label="Source">{detail.source}</Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Occurrences">{detail.occurrenceCount}</Field>
-            <Field label="First Occurred">{new Date(detail.firstOccurredAt).toLocaleString()}</Field>
-          </div>
-          <Field label="Last Occurred">{new Date(detail.lastOccurredAt).toLocaleString()}</Field>
-          {detail.requestPath && <Field label="Request Path">{detail.requestPath}</Field>}
-          {detail.originContext && <Field label="Origin Context">{detail.originContext}</Field>}
-          {detail.correlationId && (
-            <div>
-              <div className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide mb-1">Correlation ID</div>
-              <button
-                type="button"
-                className="text-sm text-[#BA5012] font-semibold underline underline-offset-2 hover:text-[#BA5012]/80 cursor-pointer"
-                onClick={() => {
-                  onCorrelationIdClick(detail.correlationId!);
-                  onClose();
-                }}
-              >
-                {detail.correlationId}
-              </button>
-            </div>
-          )}
-          {detail.relatedEntityType && (
-            <Field label="Related Entity">
-              {detail.relatedEntityType} ({detail.relatedEntityId})
-            </Field>
-          )}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <div className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide">Stack Trace</div>
-              {detail.stackTrace && (
-                <button
-                  type="button"
-                  onClick={() => copyStackTrace(detail.stackTrace!)}
-                  className="inline-flex items-center gap-1 text-[10px] font-bold text-[#5E6A79] hover:text-[#142030] transition-colors cursor-pointer"
+          ) : detail ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isLoading={pendingAction === 'archive'}
+                  disabled={detail.status === 'Archived' || pendingAction !== null || isConfirmingDelete || isDeleting}
+                  onClick={() => runAction('archive', () => errorsService.archiveError(detail.id))}
                 >
-                  {stackTraceCopied ? (
-                    <>
-                      <Check className="w-3 h-3 text-green-600" aria-hidden="true" />
-                      Copied
-                    </>
+                  Archive
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  isLoading={pendingAction === 'resolve'}
+                  disabled={detail.status === 'Resolved' || pendingAction !== null || isConfirmingDelete || isDeleting}
+                  onClick={() => runAction('resolve', () => errorsService.resolveError(detail.id))}
+                >
+                  Mark Resolved
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  isLoading={pendingAction === 'increase-priority'}
+                  disabled={detail.priority === 'P0' || pendingAction !== null || isConfirmingDelete || isDeleting}
+                  onClick={() => runAction('increase-priority', () => errorsService.increasePriority(detail.id))}
+                >
+                  Increase Priority
+                </Button>
+                {/* Visually separated (border + own spacing) from the lifecycle actions above --
+                    this is the one irreversible action in the row and shouldn't blend in with
+                    Archive/Resolve/Increase Priority, which are all reversible state transitions. */}
+                <div className="ml-auto pl-2 border-l border-[#E1DED4]">
+                  {isConfirmingDelete ? (
+                    <ConfirmDialog
+                      message="Delete permanently?"
+                      confirmLabel="Delete"
+                      variant="danger"
+                      isConfirming={isDeleting}
+                      onConfirm={() => handleDelete(detail.id, requestClose)}
+                      onCancel={() => setIsConfirmingDelete(false)}
+                    />
                   ) : (
-                    <>
-                      <Copy className="w-3 h-3" aria-hidden="true" />
-                      Copy
-                    </>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<Trash2 className="w-3.5 h-3.5" />}
+                      disabled={pendingAction !== null}
+                      onClick={() => setIsConfirmingDelete(true)}
+                    >
+                      Delete
+                    </Button>
                   )}
-                </button>
+                </div>
+              </div>
+              {actionError && (
+                <p role="alert" className="text-xs font-semibold text-red-600">
+                  {actionError}
+                </p>
               )}
+              <div className="grid grid-cols-2 gap-4">
+                <Tag label="Priority" value={detail.priority} colorClasses={PRIORITY_BADGE_CLASSES[detail.priority] ?? 'bg-slate-100 text-slate-600'} />
+                <Tag label="Status" value={detail.status} colorClasses={STATUS_BADGE_CLASSES[detail.status] ?? 'bg-slate-100 text-slate-600'} />
+              </div>
+              <Field label="Category">{humanizeEnumValue(detail.category)}</Field>
+              <Field label="Message">{detail.message}</Field>
+              {detail.exceptionType && <Field label="Exception Type">{detail.exceptionType}</Field>}
+              <Field label="Source">{detail.source}</Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Occurrences">{detail.occurrenceCount}</Field>
+                <Field label="First Occurred">{new Date(detail.firstOccurredAt).toLocaleString()}</Field>
+              </div>
+              <Field label="Last Occurred">{new Date(detail.lastOccurredAt).toLocaleString()}</Field>
+              {detail.requestPath && <Field label="Request Path">{detail.requestPath}</Field>}
+              {detail.originContext && <Field label="Origin Context">{detail.originContext}</Field>}
+              {detail.correlationId && (
+                <div>
+                  <div className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide mb-1">Correlation ID</div>
+                  <button
+                    type="button"
+                    className="text-sm text-[#BA5012] font-semibold underline underline-offset-2 hover:text-[#BA5012]/80 cursor-pointer"
+                    onClick={() => {
+                      onCorrelationIdClick(detail.correlationId!);
+                      requestClose();
+                    }}
+                  >
+                    {detail.correlationId}
+                  </button>
+                </div>
+              )}
+              {detail.relatedEntityType && (
+                <Field label="Related Entity">
+                  {detail.relatedEntityType} ({detail.relatedEntityId})
+                </Field>
+              )}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[10px] font-bold text-[#5E6A79] uppercase tracking-wide">Stack Trace</div>
+                  {detail.stackTrace && (
+                    <button
+                      type="button"
+                      onClick={() => copyStackTrace(detail.stackTrace!)}
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-[#5E6A79] hover:text-[#142030] transition-colors cursor-pointer"
+                    >
+                      {stackTraceCopied ? (
+                        <>
+                          <Check className="w-3 h-3 text-green-600" aria-hidden="true" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" aria-hidden="true" />
+                          Copy
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <pre className="whitespace-pre-wrap text-xs bg-[#F3F0E6] rounded-lg p-3 overflow-x-auto text-[#142030]">
+                  {detail.stackTrace ?? 'No stack trace captured.'}
+                </pre>
+              </div>
             </div>
-            <pre className="whitespace-pre-wrap text-xs bg-[#F3F0E6] rounded-lg p-3 overflow-x-auto text-[#142030]">
-              {detail.stackTrace ?? 'No stack trace captured.'}
-            </pre>
-          </div>
-        </div>
-      ) : null}
+          ) : null}
+        </>
+      )}
     </SidePanel>
   );
 };

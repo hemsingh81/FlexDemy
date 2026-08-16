@@ -103,8 +103,10 @@ describe('SupportUserCreation', () => {
     expect(screen.queryByLabelText('First Name')).not.toBeInTheDocument();
 
     // Dismissing the panel (Done) collapses everything back to the toolbar's closed state.
+    // Awaited, not synchronous: SidePanel keeps the panel mounted through its slide-out and only
+    // then invokes onClose (see docs/FRONTEND_TRANSITIONS.md § 5).
     await uiUser.click(screen.getByText('Done'));
-    expect(screen.queryByText('Tmp-8f3k2Az')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Tmp-8f3k2Az')).not.toBeInTheDocument());
     expect(getToolbarButton()).toHaveTextContent('Add Support User');
   });
 

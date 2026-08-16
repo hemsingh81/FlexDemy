@@ -26,16 +26,16 @@ export const BookingSidePanel: React.FC<BookingSidePanelProps> = ({
       subtitle="Confirm Tutoring Booking"
       onClose={onClose}
       closeOnBackdropClick={false}
-      footer={
+      footer={({ requestClose }) => (
         <>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={requestClose}>
             Cancel
           </Button>
           <Button variant="secondary" size="sm" onClick={onConfirm}>
             Confirm & Pay
           </Button>
         </>
-      }
+      )}
     >
       <div className="space-y-5">
         <div className="p-4 rounded-2xl bg-[#FAF7EC] border border-[#E1DED4] space-y-2 text-xs text-[#142030]">

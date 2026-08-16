@@ -134,14 +134,14 @@ export const SupportUserCreation: React.FC = () => {
           title={result ? 'Support account created' : 'Add Support User'}
           onClose={closeForm}
           closeOnBackdropClick={false}
-          footer={
+          footer={({ requestClose }) => (
             result ? (
-              <Button variant="secondary" size="sm" onClick={closeForm}>
+              <Button variant="secondary" size="sm" onClick={requestClose}>
                 Done
               </Button>
             ) : (
               <>
-                <Button variant="ghost" size="sm" type="button" onClick={closeForm}>
+                <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
                   Cancel
                 </Button>
                 <Button variant="secondary" size="sm" type="submit" form={`${formIdPrefix}-create-form`} disabled={isSaving}>
@@ -149,7 +149,7 @@ export const SupportUserCreation: React.FC = () => {
                 </Button>
               </>
             )
-          }
+          )}
         >
           {result ? (
             <div className="space-y-3">

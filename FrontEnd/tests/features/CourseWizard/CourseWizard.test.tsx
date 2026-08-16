@@ -370,8 +370,11 @@ describe('CourseWizard', () => {
 
     await u.type(screen.getByLabelText('Course Title:'), 'First Course');
     // The panel's own Close (X) button -- SidePanel's onClose, wired to CourseWizard's handleClose.
+    // Awaited: SidePanel plays its slide-out first and only then invokes onClose, so handleClose
+    // (and the draft reset it performs) has not run yet at click time -- see
+    // docs/FRONTEND_TRANSITIONS.md § 5.
     await u.click(screen.getByLabelText('Close panel'));
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
 
     // Simulate the parent flipping isOpen back to false then true again (as TutorEducatorHubView does).
     rerender(<CourseWizard isOpen={false} onClose={onClose} onComplete={vi.fn()} />);

@@ -25,16 +25,16 @@ export const RequestGroupSidePanel: React.FC<RequestGroupSidePanelProps> = ({
       title="Request New Student Group Pool"
       onClose={onClose}
       closeOnBackdropClick={false}
-      footer={
+      footer={({ requestClose }) => (
         <>
-          <Button variant="ghost" size="sm" type="button" onClick={onClose}>
+          <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
             Cancel
           </Button>
           <Button variant="secondary" size="sm" type="submit" form="request-group-form">
             Publish Group Pool
           </Button>
         </>
-      }
+      )}
     >
       <form id="request-group-form" onSubmit={onSubmit} className="space-y-3 text-xs">
         <div>

@@ -222,9 +222,9 @@ const CreateAssignmentModal: React.FC<{
       onClose={onClose}
       closeOnBackdropClick={false}
       width="lg"
-      footer={
+      footer={({ requestClose }) => (
         <>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={requestClose}>
             Cancel
           </Button>
           <Button variant="secondary" size="sm" onClick={() => onCreate(buildData(), false)}>
@@ -240,7 +240,7 @@ const CreateAssignmentModal: React.FC<{
             Save &amp; Publish
           </Button>
         </>
-      }
+      )}
     >
         <div className="space-y-4 text-xs">
           <div>

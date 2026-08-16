@@ -213,16 +213,16 @@ export const AdminUserStatusList: React.FC<AdminUserStatusListProps> = ({ fetchU
           title={`Edit ${editingUser.firstName} ${editingUser.lastName}`}
           onClose={closeEdit}
           closeOnBackdropClick={false}
-          footer={
+          footer={({ requestClose }) => (
             <>
-              <Button variant="ghost" size="sm" type="button" onClick={closeEdit}>
+              <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
                 Cancel
               </Button>
               <Button variant="secondary" size="sm" type="submit" form={editFormId} disabled={isSavingEdit}>
                 {isSavingEdit ? 'Saving...' : 'Save'}
               </Button>
             </>
-          }
+          )}
         >
           <form id={editFormId} onSubmit={handleSaveEdit} className="space-y-3">
             {editFormError && <Alert variant="danger">{editFormError}</Alert>}

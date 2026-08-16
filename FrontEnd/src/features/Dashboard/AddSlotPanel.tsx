@@ -37,16 +37,18 @@ export const AddSlotPanel: React.FC<AddSlotPanelProps> = ({
       title="Add Teaching Calendar Slot"
       onClose={onClose}
       closeOnBackdropClick={false}
-      footer={
+      footer={({ requestClose }) => (
         <>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          {/* requestClose, not onClose: it plays the panel's slide-out first, so Cancel dismisses
+              the same way the header X and Escape do (see ui/SidePanel.tsx). */}
+          <Button variant="ghost" size="sm" onClick={requestClose}>
             Cancel
           </Button>
           <Button variant="secondary" size="sm" onClick={onSave}>
             Save Slot
           </Button>
         </>
-      }
+      )}
     >
       <div className="space-y-3 text-xs">
         <div>

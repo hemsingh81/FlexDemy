@@ -190,9 +190,9 @@ export const TutorApprovals: React.FC = () => {
           title={`Reject ${rejectingApp.firstName} ${rejectingApp.lastName}`}
           onClose={() => setRejectingUserId(null)}
           closeOnBackdropClick={false}
-          footer={
+          footer={({ requestClose }) => (
             <>
-              <Button variant="ghost" size="sm" type="button" onClick={() => setRejectingUserId(null)}>
+              <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
                 Cancel
               </Button>
               <Button
@@ -205,7 +205,7 @@ export const TutorApprovals: React.FC = () => {
                 {processingUserId === rejectingApp.userId ? 'Rejecting...' : 'Confirm Rejection'}
               </Button>
             </>
-          }
+          )}
         >
           <div className="space-y-2">
             {error && <Alert variant="danger">{error}</Alert>}

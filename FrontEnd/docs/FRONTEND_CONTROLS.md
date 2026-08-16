@@ -161,6 +161,43 @@ swap. Used by `App.tsx` (top-level tabs) and `AdminPanel.tsx` (Admin sub-tabs).
 </PageTransition>
 ```
 
+## SidePanel (`ui/SidePanel.tsx`)
+
+Docked-right "blade" overlay (header / scrollable body / optional sticky footer) -- the app's
+standard replacement for a centred dialog on anything form-shaped. Owns the backdrop, Escape and
+optional click-outside handling, an optional drag-to-resize left edge, and both halves of its
+slide animation.
+
+```tsx
+<SidePanel
+  title="Add Country"
+  subtitle="Master data"
+  onClose={closeAddForm}          // fires AFTER the slide-out completes -- see below
+  width="lg"                      // 'md' (480px) | 'lg' (640px)
+  closeOnBackdropClick            // off by default: a stray click shouldn't discard typed input
+  resizable                       // off by default; opt in for long content like a stack trace
+  footer={({ requestClose }) => (
+    <>
+      <Button variant="ghost" size="sm" onClick={requestClose}>Cancel</Button>
+      <Button variant="secondary" size="sm" type="submit" form={formId}>Save</Button>
+    </>
+  )}
+>
+  {content}
+</SidePanel>
+```
+
+**`onClose` is deferred, and close buttons must use `requestClose`.** Both points, and the reason
+for them, are covered in
+[FRONTEND_TRANSITIONS.md § 5](./FRONTEND_TRANSITIONS.md#5-a-docked-side-panel-opens-or-closes) --
+read that before wiring a new panel, especially if you're writing tests against one (`onClose`
+needs `waitFor`).
+
+Used by: `MasterDataTable` (add + edit), `AdminUserStatusList`, `SupportUserCreation`,
+`TutorApprovals`, `ErrorDetailPanel` (resizable), `CourseWizard`, `AddSlotPanel`,
+`BookingSidePanel`, `RequestGroupSidePanel`, `PublicClassEditorPanel`, `AdaptiveSchedule`,
+`StudentAssignmentsSection`, `TutorAssignmentsSection`.
+
 ## useClickOutside (`hooks/useClickOutside.ts`)
 
 Not a component, but the shared hook every dropdown/popover above is built on: closes on an

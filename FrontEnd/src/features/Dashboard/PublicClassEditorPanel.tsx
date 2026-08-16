@@ -75,16 +75,16 @@ export const PublicClassEditorPanel: React.FC<PublicClassEditorPanelProps> = ({
       onClose={onClose}
       closeOnBackdropClick={false}
       width="lg"
-      footer={
+      footer={({ requestClose }) => (
         <>
-          <Button variant="ghost" size="sm" type="button" onClick={onClose}>
+          <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
             Cancel
           </Button>
           <Button variant="primary" size="sm" type="submit" form="public-class-form" icon={<Sparkles className="w-4 h-4" />}>
             {editingPublicClass ? 'Save Changes' : '🚀 Save & Broadcast Public Session'}
           </Button>
         </>
-      }
+      )}
     >
       <form id="public-class-form" onSubmit={onSubmit} className="space-y-4 text-xs">
         {/* Session Type Toggle */}

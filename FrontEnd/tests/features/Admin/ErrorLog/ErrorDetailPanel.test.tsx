@@ -177,7 +177,8 @@ describe('ErrorDetailPanel', () => {
     await user.click(screen.getByRole('button', { name: 'corr_abc123' }));
 
     expect(onCorrelationIdClick).toHaveBeenCalledWith('corr_abc123');
-    expect(onClose).toHaveBeenCalled();
+    // onClose lands after the panel's slide-out, not on the click (docs/FRONTEND_TRANSITIONS.md § 5).
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
   it('does not render a clickable Correlation ID when the record has none', async () => {

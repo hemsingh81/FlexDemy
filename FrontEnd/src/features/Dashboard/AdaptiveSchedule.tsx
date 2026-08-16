@@ -305,16 +305,16 @@ export const AdaptiveSchedule: React.FC<AdaptiveScheduleProps> = ({
           title={`Schedule Lesson on ${selectedDayToAdd}`}
           onClose={() => setIsAddModalOpen(false)}
           closeOnBackdropClick={false}
-          footer={
+          footer={({ requestClose }) => (
             <>
-              <Button variant="ghost" size="sm" type="button" onClick={() => setIsAddModalOpen(false)}>
+              <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
                 Cancel
               </Button>
               <Button variant="secondary" size="sm" type="submit" form="schedule-lesson-form">
                 Save to Schedule
               </Button>
             </>
-          }
+          )}
         >
             <form id="schedule-lesson-form" onSubmit={handleAddLessonToSchedule} className="space-y-4">
               <div className="space-y-1">

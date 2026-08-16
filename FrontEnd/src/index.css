@@ -194,6 +194,47 @@
   }
 }
 
+/* Exit counterparts to slide-in-right / fade-in-scale, for SidePanel's close. Always applied with
+   `forwards` at the call site: without that fill-mode the element snaps back to its start state on
+   the final frame -- a visible flash of the fully-open panel right before it unmounts, which is
+   worse than having no exit animation at all. Separate keyframes rather than a reversed
+   animation-direction so the enter/exit timings and easings can differ (exit is slightly faster
+   and eases in, which reads as "getting out of the way" rather than "being placed"). */
+@keyframes slide-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Respect an explicit OS-level "reduce motion" preference. Deliberately near-zero rather than
+   `animation: none`: SidePanel's exit keyframe carries `forwards`, and the JS that unmounts the
+   panel waits out the same duration -- killing the animation outright would leave the panel
+   sitting fully visible for that wait. 0.01ms keeps the end state correct while removing the
+   motion. SidePanel separately skips its own close delay under this preference, so the unmount
+   stays snappy too (see PANEL_EXIT_MS / prefersReducedMotion in SidePanel.tsx). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Lumen Style Guide Narration Highlight -- references tokens, never raw hex (Style Guide p.2 rule 2) */
 .active-sentence-highlight {
   position: relative;

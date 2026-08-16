@@ -495,16 +495,16 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
           title={`Add ${entityLabel}`}
           onClose={closeAddForm}
           closeOnBackdropClick={false}
-          footer={
+          footer={({ requestClose }) => (
             <>
-              <Button variant="ghost" size="sm" type="button" onClick={closeAddForm}>
+              <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
                 Cancel
               </Button>
               <Button variant="secondary" size="sm" type="submit" form={`${formIdPrefix}-add-form`} disabled={isSaving}>
                 {isSaving ? 'Saving...' : 'Save'}
               </Button>
             </>
-          }
+          )}
         >
           <form id={`${formIdPrefix}-add-form`} onSubmit={handleCreate} className="space-y-3">
             {formError && <Alert variant="danger">{formError}</Alert>}
@@ -605,16 +605,16 @@ export function MasterDataTable<T extends { id: string; isActive: boolean }, TCr
           title={`Edit ${entityLabel}`}
           onClose={closeEdit}
           closeOnBackdropClick={false}
-          footer={
+          footer={({ requestClose }) => (
             <>
-              <Button variant="ghost" size="sm" type="button" onClick={closeEdit}>
+              <Button variant="ghost" size="sm" type="button" onClick={requestClose}>
                 Cancel
               </Button>
               <Button variant="secondary" size="sm" type="submit" form={editFormId} disabled={isSavingEdit}>
                 {isSavingEdit ? 'Saving...' : 'Save'}
               </Button>
             </>
-          }
+          )}
         >
           <form
             id={editFormId}
