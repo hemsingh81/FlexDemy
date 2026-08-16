@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Code2, Eye, Maximize2, Minimize2, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { useFileUpload, type FileUploadEntry, type FileUploadStatus } from './useFileUpload';
 import { ConfirmModal } from '../../ui/ConfirmModal';
 import { PublishLifecycleBar } from './PublishLifecycleBar';
 import { Spinner } from '../../ui/Spinner';
+import { MarkdownViewer } from '../../ui/MarkdownViewer';
+import { SegmentedTabs, type SegmentedTab } from '../../ui/SegmentedTabs';
 
 interface CourseContentEditorProps {
   isOpen: boolean;
@@ -110,27 +112,66 @@ interface FileContentCardProps {
   onDelete: () => void;
 }
 
-// The raw text Docling parsed from this file, shown as-is -- no AI structuring step in between.
-const FileContentCard: React.FC<FileContentCardProps> = ({ file, onDelete }) => (
-  <div className="rounded-xl border border-[#E1DED4] bg-white overflow-hidden">
-    <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[#E1DED4] bg-[#FAF7EC]">
-      <span className="text-xs font-bold text-[#142030] truncate" title={file.name}>
-        {file.name}
-      </span>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label={`Delete ${file.name}`}
-        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors shrink-0"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
+type ContentView = 'viewer' | 'code';
+
+const CONTENT_VIEW_TABS: SegmentedTab<ContentView>[] = [
+  { value: 'viewer', label: 'Viewer', icon: <Eye className="w-3.5 h-3.5" /> },
+  { value: 'code', label: 'Code', icon: <Code2 className="w-3.5 h-3.5" /> },
+];
+
+// What Docling parses out of a file is Markdown, not flat text -- headings, lists and (in most
+// real documents) pipe tables. Showing only the raw source made a table effectively unreadable, so
+// this offers both: Viewer renders the Markdown, Code shows the exact source it was rendered from.
+//
+// Viewer is the default because it's the readable one; Code stays one click away for checking what
+// the parser actually extracted, which is the reason a tutor looks at this card at all when an
+// extraction looks wrong. The choice is per-card state -- files differ, and a tutor comparing a
+// clean file against a suspect one shouldn't have their view flipped on both at once.
+const FileContentCard: React.FC<FileContentCardProps> = ({ file, onDelete }) => {
+  const [view, setView] = useState<ContentView>('viewer');
+  const hasContent = Boolean(file.parsedContent);
+  const panelId = `file-content-${file.id}`;
+
+  return (
+    <div className="rounded-xl border border-[#E1DED4] bg-white overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[#E1DED4] bg-[#FAF7EC]">
+        <span className="text-xs font-bold text-[#142030] truncate" title={file.name}>
+          {file.name}
+        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Nothing to switch between when extraction produced no text -- the tabs would offer a
+              choice between two identical empty states. */}
+          {hasContent && (
+            <SegmentedTabs
+              tabs={CONTENT_VIEW_TABS}
+              value={view}
+              onChange={setView}
+              ariaLabel={`Content view for ${file.name}`}
+            />
+          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Delete ${file.name}`}
+            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div id={panelId} role="tabpanel" aria-label={`${file.name} content`} className="max-h-96 overflow-y-auto">
+        {!hasContent ? (
+          <p className="text-xs text-[#5E6A79] p-4">No text was extracted from this file.</p>
+        ) : view === 'viewer' ? (
+          <MarkdownViewer source={file.parsedContent!} className="p-4" />
+        ) : (
+          <pre className="whitespace-pre-wrap break-words text-xs text-[#142030] p-4 font-mono">{file.parsedContent}</pre>
+        )}
+      </div>
     </div>
-    <pre className="whitespace-pre-wrap break-words text-xs text-[#142030] p-4 max-h-96 overflow-y-auto font-sans">
-      {file.parsedContent || 'No text was extracted from this file.'}
-    </pre>
-  </div>
-);
+  );
+};
 
 // Full-width surface (a takeover, not a SidePanel blade) per UX-DR5 -- Course Content Editor's
 // real shell. Shows each uploaded file's raw parsed text directly, with no AI structuring step

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CourseContentEditor } from '@/src/features/CourseContentEditor/CourseContentEditor';
 import { FILE_POLL_INTERVAL_MS } from '@/src/features/CourseContentEditor/useFileUpload';
@@ -375,6 +375,72 @@ describe('CourseContentEditor', () => {
       render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
 
       expect(await screen.findByText('No text was extracted from this file.')).toBeInTheDocument();
+    });
+
+    // What Docling extracts is Markdown, so the card offers both a rendered Viewer and the raw
+    // source. These pin the switch itself; the rendering and parsing rules have their own suites
+    // (tests/ui/MarkdownViewer.test.tsx, tests/lib/markdown.test.ts).
+    it('defaults to the rendered Viewer, showing Markdown structure rather than its source', async () => {
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({
+          id: 'file_1',
+          fileName: 'notes.pdf',
+          status: 'Done',
+          parsedContent: '## Chapter One\n\n| Term | Meaning |\n| --- | --- |\n| Ion | Charged atom |',
+        }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      expect(await screen.findByRole('heading', { level: 2, name: 'Chapter One' })).toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: 'Term' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /viewer/i })).toHaveAttribute('aria-selected', 'true');
+      // The raw pipe-table source is what the Viewer exists to replace.
+      expect(screen.queryByText(/\| --- \| --- \|/)).not.toBeInTheDocument();
+    });
+
+    it('switching to Code shows the exact source and drops the rendered structure', async () => {
+      const u = userEvent.setup();
+      const source = '## Chapter One\n\nSome body text.';
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'notes.pdf', status: 'Done', parsedContent: source }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await screen.findByRole('heading', { level: 2, name: 'Chapter One' });
+
+      await u.click(screen.getByRole('tab', { name: /code/i }));
+
+      // Compared against the panel's raw textContent rather than getByText: the default matcher
+      // collapses whitespace, which would let a Code view that had lost the blank line still pass.
+      expect(screen.getByRole('tabpanel')).toHaveTextContent(source, { normalizeWhitespace: false });
+      expect(screen.queryByRole('heading', { level: 2, name: 'Chapter One' })).not.toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /code/i })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('keeps each file card on its own view, so switching one does not switch the others', async () => {
+      const u = userEvent.setup();
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'first.pdf', status: 'Done', parsedContent: '# First' }),
+        makeDto({ id: 'file_2', fileName: 'second.pdf', status: 'Done', parsedContent: '# Second' }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await screen.findByRole('heading', { level: 1, name: 'First' });
+
+      const firstCardTabs = screen.getByRole('tablist', { name: /content view for first.pdf/i });
+      await u.click(within(firstCardTabs).getByRole('tab', { name: /code/i }));
+
+      expect(screen.getByText('# First')).toBeInTheDocument();
+      // The second card is untouched and still rendering.
+      expect(screen.getByRole('heading', { level: 1, name: 'Second' })).toBeInTheDocument();
+    });
+
+    it('offers no view tabs when a Done file produced no text to switch between', async () => {
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'empty.pdf', status: 'Done', parsedContent: null }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      await screen.findByText('No text was extracted from this file.');
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     });
 
     it('deleting a file opens ConfirmModal and only calls deleteFile on confirm', async () => {

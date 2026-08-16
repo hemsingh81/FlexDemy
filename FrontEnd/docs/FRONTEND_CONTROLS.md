@@ -149,6 +149,48 @@ as removable chips. Replaces the old plain checkbox-grid pattern for multi-selec
 />
 ```
 
+## SegmentedTabs (`ui/SegmentedTabs.tsx`)
+
+The pill-in-a-tray toggle for switching between views of one thing. Emits proper
+`role="tablist"`/`role="tab"` + `aria-selected`; give the region it reveals a `role="tabpanel"`.
+
+```tsx
+<SegmentedTabs
+  tabs={[{ value: 'viewer', label: 'Viewer', icon: <Eye className="w-3.5 h-3.5" /> },
+         { value: 'code', label: 'Code', icon: <Code2 className="w-3.5 h-3.5" /> }]}
+  value={view}
+  onChange={setView}
+  ariaLabel="Content view"
+/>
+```
+
+Used by: `CourseContentEditor`'s per-file Code/Viewer switch. `SupportUserCreation` and
+`TutorApprovals` still hand-roll the same visual via a local `viewToggleButtonClassName` helper --
+worth folding into this control next time either is touched.
+
+## MarkdownViewer (`ui/MarkdownViewer.tsx`)
+
+Renders a Markdown string as React elements. Backed by `lib/markdown.ts`, a small hand-written
+parser covering the subset Docling emits (headings, paragraphs, ordered/unordered lists incl.
+nesting, tables, fenced code, blockquotes, thematic breaks, and inline bold/italic/code/links).
+
+```tsx
+<MarkdownViewer source={file.parsedContent} className="p-4" />
+```
+
+**No `dangerouslySetInnerHTML` anywhere in this path, by design.** The parser emits React elements
+and never an HTML string, so embedded markup in a document renders as visible text and there is no
+sanitiser to keep patched. Two rules if you extend it:
+
+- Keep it emitting elements. The moment it produces HTML you have inherited an XSS problem and
+  need DOMPurify.
+- Link `href`s are scheme-checked (`http`, `https`, `mailto`, `#`, root-relative). Anything else --
+  `javascript:`, `data:`, protocol-relative `//host` -- renders as plain text instead of a link.
+  Don't relax that without a reason.
+
+Unsupported syntax degrades to plain text rather than throwing. If a document needs more (task
+lists, footnotes, reference links), extend `lib/markdown.ts` and its tests.
+
 ## PageTransition (`ui/PageTransition.tsx`)
 
 Crossfades a "whichever tab/sub-tab is active" content area instead of an instant unmount+mount
