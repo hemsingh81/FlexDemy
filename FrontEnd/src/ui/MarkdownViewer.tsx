@@ -1,6 +1,6 @@
 import React, { useContext, useMemo } from 'react';
-import { Paperclip, StickyNote } from 'lucide-react';
-import { parseMarkdown, type InlineNode, type MarkdownBlock, type ListItem } from '../lib/markdown';
+import { AlertTriangle, CheckCircle2, ChevronRight, Info, Lightbulb, Paperclip, StickyNote, XCircle } from 'lucide-react';
+import { parseMarkdown, type CalloutVariant, type InlineNode, type MarkdownBlock, type ListItem } from '../lib/markdown';
 import { renderLatex } from '../lib/renderLatex';
 import { useResolvedResourceUrl } from '../hooks/useResolvedResourceUrl';
 
@@ -20,13 +20,15 @@ import { useResolvedResourceUrl } from '../hooks/useResolvedResourceUrl';
 type ResolveResourceUrl = (resourceId: string) => Promise<string>;
 const ResourceResolverContext = React.createContext<ResolveResourceUrl | null>(null);
 
-const ResolvedResourceImage: React.FC<{ resourceId: string; alt: string }> = ({ resourceId, alt }) => {
+const ResolvedResourceImage: React.FC<{ resourceId: string; alt: string; width?: number }> = ({ resourceId, alt, width }) => {
   const resolve = useContext(ResourceResolverContext);
   const { url: src, failed } = useResolvedResourceUrl(resolve, resourceId);
 
   if (!resolve || failed) return <span className="italic text-[#5E6A79]">{alt}</span>;
   if (!src) return <span className="italic text-[#5E6A79]">{alt}</span>;
-  return <img src={src} alt={alt} className="max-w-full rounded-lg my-2" />;
+  // width is a percentage of the reading column (see lib/markdown.ts). max-w-full still caps it,
+  // so a 100% image can never overflow its container on a narrow screen.
+  return <img src={src} alt={alt} style={width ? { width: `${width}%` } : undefined} className="max-w-full rounded-lg my-2" />;
 };
 
 // Story 9.2, FR-28/FR-30/FR-31, Task 2: a download-card resolving its resourceId through the same
@@ -92,7 +94,7 @@ const renderInline = (nodes: InlineNode[], keyPrefix: string): React.ReactNode =
           </a>
         );
       case 'resourceImage':
-        return <ResolvedResourceImage key={key} resourceId={node.resourceId} alt={node.alt} />;
+        return <ResolvedResourceImage key={key} resourceId={node.resourceId} alt={node.alt} width={node.width} />;
       default:
         return null;
     }
@@ -107,10 +109,41 @@ const HEADING_CLASSES: Record<number, string> = {
   6: 'text-xs font-semibold uppercase tracking-wide mt-3 mb-1 text-[#5E6A79]',
 };
 
+// Confluence's panel palette, mapped onto this app's existing semantic colours rather than a new
+// set: signal-green for success (the same #179765 the confirmation glyphs and Done badges use),
+// the error red already used by failed-file rows, amber for warning, navy for info/note, and the
+// accent orange the original single-variant callout shipped with for `tip`. No new colour language
+// (DESIGN.md), just an existing one applied consistently.
+const CALLOUT_STYLES: Record<CalloutVariant, { label: string; icon: React.ComponentType<{ className?: string }>; wrapper: string; accent: string }> = {
+  note: { label: 'Note', icon: StickyNote, wrapper: 'border-[#143358]/25 bg-[#143358]/5', accent: 'text-[#143358]' },
+  info: { label: 'Info', icon: Info, wrapper: 'border-[#143358]/25 bg-[#143358]/5', accent: 'text-[#143358]' },
+  tip: { label: 'Tip', icon: Lightbulb, wrapper: 'border-[#BA5012]/30 bg-[#BA5012]/5', accent: 'text-[#BA5012]' },
+  success: { label: 'Success', icon: CheckCircle2, wrapper: 'border-[#179765]/30 bg-[#179765]/5', accent: 'text-[#179765]' },
+  warning: { label: 'Warning', icon: AlertTriangle, wrapper: 'border-[#B45309]/30 bg-[#B45309]/5', accent: 'text-[#B45309]' },
+  error: { label: 'Error', icon: XCircle, wrapper: 'border-[#DC2626]/30 bg-[#DC2626]/5', accent: 'text-[#DC2626]' },
+};
+
 const renderListItems = (items: ListItem[], keyPrefix: string): React.ReactNode =>
   items.map((item, index) => (
-    <li key={`${keyPrefix}-li-${index}`} className="leading-relaxed">
-      {renderInline(item.content, `${keyPrefix}-li-${index}`)}
+    <li
+      key={`${keyPrefix}-li-${index}`}
+      className={item.checked === undefined ? 'leading-relaxed' : 'leading-relaxed flex items-start gap-2 list-none -ml-6'}
+    >
+      {/* A read-only checkbox, not an interactive one: this is the STUDENT reading surface, and a
+          student ticking a box here would have nowhere to persist it. `disabled` + aria-checked
+          keeps it announced correctly as a checkbox in a known state rather than as a control the
+          student can operate and silently lose. */}
+      {item.checked !== undefined && (
+        <input
+          type="checkbox"
+          checked={item.checked}
+          disabled
+          readOnly
+          aria-label={item.checked ? 'Completed' : 'Not completed'}
+          className="mt-1 shrink-0 accent-[#179765]"
+        />
+      )}
+      <span className={item.checked ? 'line-through text-[#5E6A79]' : undefined}>{renderInline(item.content, `${keyPrefix}-li-${index}`)}</span>
       {item.children.map((child, childIndex) => (
         <BlockRenderer key={`${keyPrefix}-li-${index}-c-${childIndex}`} block={child} keyPrefix={`${keyPrefix}-li-${index}-c-${childIndex}`} />
       ))}
@@ -192,17 +225,41 @@ const BlockRenderer: React.FC<{ block: MarkdownBlock; keyPrefix: string }> = ({ 
     // Story 9.2: no dedicated content-callout DESIGN.md token was found during this story's
     // research -- composed from this app's existing card-shell/badge-pill visual language rather
     // than inventing new unreviewed tokens; flagged here for a future UX pass.
-    case 'callout':
+    case 'callout': {
+      // Variant-driven, defaulting to `note` -- a callout parsed before variants existed carries
+      // `note` explicitly, and an unknown variant string can never reach here (parseMarkdown only
+      // emits a callout for a keyword in CALLOUT_VARIANTS), but the `?? note` keeps this total.
+      const style = CALLOUT_STYLES[block.variant] ?? CALLOUT_STYLES.note;
+      const Icon = style.icon;
       return (
-        <div className="my-3 p-3 rounded-xl border border-[#BA5012]/30 bg-[#BA5012]/5">
-          <div className="flex items-center gap-1.5 mb-1 text-[10px] font-extrabold uppercase tracking-wide text-[#BA5012]">
-            <StickyNote className="w-3.5 h-3.5" />
-            Note
+        <div className={`my-3 p-3 rounded-xl border ${style.wrapper}`}>
+          <div className={`flex items-center gap-1.5 mb-1 text-[10px] font-extrabold uppercase tracking-wide ${style.accent}`}>
+            <Icon className="w-3.5 h-3.5" />
+            {style.label}
           </div>
           {block.children.map((child, index) => (
             <BlockRenderer key={`${keyPrefix}-co-${index}`} block={child} keyPrefix={`${keyPrefix}-co-${index}`} />
           ))}
         </div>
+      );
+    }
+    // Native <details>/<summary>: the collapse behaviour, keyboard operability and screen-reader
+    // announcement all come from the browser for free. A hand-rolled button+state version would
+    // have to reimplement all three, and would also break in-page find (browsers expand a closed
+    // <details> when its text matches a find) -- which matters a lot on a study page.
+    case 'expand':
+      return (
+        <details className="my-3 rounded-xl border border-[#E1DED4] bg-white group">
+          <summary className="flex items-center gap-1.5 px-3 py-2 cursor-pointer text-xs font-bold text-[#142030] list-none marker:hidden">
+            <ChevronRight className="w-3.5 h-3.5 shrink-0 transition-transform group-open:rotate-90" />
+            {block.title || 'Details'}
+          </summary>
+          <div className="px-3 pb-3 pt-0 border-t border-[#E1DED4]">
+            {block.children.map((child, index) => (
+              <BlockRenderer key={`${keyPrefix}-ex-${index}`} block={child} keyPrefix={`${keyPrefix}-ex-${index}`} />
+            ))}
+          </div>
+        </details>
       );
     case 'resourceCard':
       return <ResolvedResourceCard resourceId={block.resourceId} label={block.label} />;

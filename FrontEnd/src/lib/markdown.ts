@@ -37,11 +37,19 @@ export type InlineNode =
   // Story 8.3, FR-30: an image whose href is a `resource:{resourceId}` URI -- the one exception
   // to "images render as alt text only" below. Never carries a raw storage URL; resolving
   // resourceId to a real served URL happens at render time (MarkdownViewer.tsx), not here.
-  | { type: 'resourceImage'; resourceId: string; alt: string };
+  // `width` is an optional display width as a PERCENTAGE of the reading column, carried in the
+  // resource URI as `resource:{id}?w=50` (see extensions/Image.ts for why it lives in the URI
+  // rather than a separate attribute). Absent for every image authored before resizing existed.
+  | { type: 'resourceImage'; resourceId: string; alt: string; width?: number };
 
 export interface ListItem {
   content: InlineNode[];
   children: MarkdownBlock[];
+  // Confluence-style action items: `- [ ] todo` / `- [x] done`. `undefined` (not `false`) means
+  // "an ordinary bullet, no checkbox" -- the three states have to stay distinguishable, since a
+  // list whose items are ALL undefined is what makes it render as a plain <ul> rather than a
+  // checkbox list.
+  checked?: boolean;
 }
 
 export type MarkdownBlock =
@@ -59,7 +67,13 @@ export type MarkdownBlock =
   // stripped from that first line's content once recognized. Any blockquote without the marker
   // stays a plain `blockquote` (unchanged, pre-existing behavior) -- this IS the mechanism behind
   // AC #2's "degrading to a plain blockquote anywhere unsupported."
-  | { type: 'callout'; children: MarkdownBlock[] }
+  // The variant is Confluence's panel palette. `note` is the original, still the default for a
+  // bare `[!note]`, so every callout written before variants existed parses unchanged.
+  | { type: 'callout'; variant: CalloutVariant; children: MarkdownBlock[] }
+  // Confluence's "Expand" macro: a collapsible section with a summary line. Same `> [!expand]`
+  // blockquote family as callouts so it needs no new block-level syntax -- the title is whatever
+  // follows the marker on the first quoted line.
+  | { type: 'expand'; title: string; children: MarkdownBlock[] }
   // Story 9.2, FR-28/FR-30/FR-31: promoted from an ordinary paragraph only when its entire
   // content is exactly one `[label](resource:{id})` link and nothing else -- a `resource:` link
   // sharing a paragraph with other text stays an ordinary inline link (see the promotion check
@@ -117,8 +131,15 @@ export const parseInline = (text: string): InlineNode[] => {
       // Story 8.3, FR-30: a `resource:{id}` URI is the one image href this parser resolves at
       // all -- everything else still degrades to alt text only (no remote fetches from document
       // text, unchanged from before this story).
-      const resourceMatch = /^resource:(.+)$/.exec(imageHref ?? '');
-      if (resourceMatch) nodes.push({ type: 'resourceImage', resourceId: resourceMatch[1], alt: imageAlt });
+      const resourceMatch = /^resource:([^?]+)(?:\?w=(\d{1,3}))?$/.exec(imageHref ?? '');
+      if (resourceMatch) {
+        // Clamped, and only accepted as a whole number 1-100 by the pattern above -- a malformed
+        // or out-of-range width degrades to "no width" (natural size) rather than producing a
+        // broken style, matching how every other unsupported construct here degrades.
+        const parsedWidth = resourceMatch[2] ? Number(resourceMatch[2]) : undefined;
+        const width = parsedWidth && parsedWidth > 0 && parsedWidth <= 100 ? parsedWidth : undefined;
+        nodes.push({ type: 'resourceImage', resourceId: resourceMatch[1], alt: imageAlt, ...(width ? { width } : {}) });
+      }
       else pushText(imageAlt);
     } else if (linkText !== undefined) {
       if (SAFE_LINK.test(linkHref ?? '')) nodes.push({ type: 'link', href: linkHref, children: parseInline(linkText) });
@@ -142,7 +163,15 @@ const ORDERED = /^(\s*)\d+[.)]\s+(.*)$/;
 // Story 9.2: a line that is exactly `$$` (block math fence) -- mirrors FENCE's own "collect until
 // the matching closing marker" shape.
 const MATH_FENCE = /^\s*\$\$\s*$/;
-const CALLOUT_MARKER = /^\[!note\]\s*/i;
+export const CALLOUT_VARIANTS = ['note', 'info', 'tip', 'success', 'warning', 'error'] as const;
+export type CalloutVariant = (typeof CALLOUT_VARIANTS)[number];
+
+// One marker pattern for the whole `> [!x]` family. Capturing the keyword rather than hard-coding
+// `note` is what lets variants and `expand` share a single parse branch below.
+const BLOCKQUOTE_MARKER = /^\[!([a-z]+)\]\s*/i;
+// `- [ ] ` / `- [x] ` immediately after a bullet marker. Ordered lists deliberately excluded --
+// GFM only defines task items on unordered lists, and Confluence action items are bullets too.
+const TASK_MARKER = /^\[([ xX])\]\s+(.*)$/;
 
 // Flattens an inline tree back to plain text -- used for a Resource card's own `label` (its link
 // text is always plain, since it's tutor-typed via the "Resource card" command's own UI, not
@@ -201,7 +230,14 @@ export const parseMarkdown = (source: string): MarkdownBlock[] => {
       }
       // Same level, but a different marker kind starts a NEW list rather than continuing this one.
       if (ORDERED.test(line) !== ordered) break;
-      items.push({ content: parseInline(match[2]), children: [] });
+      // A `[ ]`/`[x]` prefix makes this a task item; the checkbox text is stripped from the
+      // rendered content. Only unordered lists are eligible (see TASK_MARKER's own comment).
+      const task = ordered ? null : TASK_MARKER.exec(match[2]);
+      items.push(
+        task
+          ? { content: parseInline(task[2]), children: [], checked: task[1].toLowerCase() === 'x' }
+          : { content: parseInline(match[2]), children: [] },
+      );
       i += 1;
     }
 
@@ -266,13 +302,21 @@ export const parseMarkdown = (source: string): MarkdownBlock[] => {
         quoted.push(BLOCKQUOTE.exec(lines[i])![1]);
         i += 1;
       }
-      // Story 9.2: a `[!note]` marker on the first quoted line promotes this from a plain
-      // blockquote to a callout -- the marker is stripped before re-parsing the quoted lines as
-      // the callout's own children. No marker -- unchanged, pre-existing blockquote behavior.
-      const calloutMatch = CALLOUT_MARKER.exec(quoted[0] ?? '');
-      if (calloutMatch) {
-        quoted[0] = quoted[0].slice(calloutMatch[0].length);
-        blocks.push({ type: 'callout', children: parseMarkdown(quoted.join('\n')) });
+      // Story 9.2: a `[!x]` marker on the first quoted line promotes this from a plain blockquote
+      // to a callout/expand -- the marker is stripped before re-parsing the quoted lines as that
+      // block's own children. An UNRECOGNISED keyword (`[!banana]`) deliberately falls through to
+      // a plain blockquote with the marker text left intact rather than being silently swallowed:
+      // that is FR-28's "degrading to a plain blockquote anywhere unsupported", and it is what
+      // keeps a future Confluence macro this parser has never heard of readable instead of lossy.
+      const markerMatch = BLOCKQUOTE_MARKER.exec(quoted[0] ?? '');
+      const keyword = markerMatch?.[1]?.toLowerCase();
+      if (keyword === 'expand') {
+        // Everything after the marker on the FIRST line is the summary/title; the rest is body.
+        const title = quoted[0].slice(markerMatch![0].length).trim();
+        blocks.push({ type: 'expand', title, children: parseMarkdown(quoted.slice(1).join('\n')) });
+      } else if (keyword && (CALLOUT_VARIANTS as readonly string[]).includes(keyword)) {
+        quoted[0] = quoted[0].slice(markerMatch![0].length);
+        blocks.push({ type: 'callout', variant: keyword as CalloutVariant, children: parseMarkdown(quoted.join('\n')) });
       } else {
         blocks.push({ type: 'blockquote', children: parseMarkdown(quoted.join('\n')) });
       }

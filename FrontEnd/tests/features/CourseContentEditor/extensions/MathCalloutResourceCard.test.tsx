@@ -12,6 +12,8 @@ import { MarkdownManager } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import { MathBlock } from '@/src/features/CourseContentEditor/extensions/Math';
 import { Callout } from '@/src/features/CourseContentEditor/extensions/Callout';
+import { Expand } from '@/src/features/CourseContentEditor/extensions/Expand';
+import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { ResourceCard } from '@/src/features/CourseContentEditor/extensions/ResourceCard';
 import { parseMarkdown } from '@/src/lib/markdown';
 import type { ResourceDto } from '@/src/services/courseContentService';
@@ -33,7 +35,11 @@ const { getResourcesByOwner, resolveResourceUrl } = vi.hoisted(() => ({
 
 vi.mock('@/src/services/courseContentService', () => ({ getResourcesByOwner, resolveResourceUrl }));
 
-const CONTENT_EXTENSIONS = [StarterKit, MathBlock, Callout, ResourceCard];
+// Mirrors DocumentCanvas.tsx's own CONTENT_EXTENSIONS for the nodes this file round-trips. Kept
+// as a local list (not imported from DocumentCanvas) so these serialization tests stay independent
+// of that component's React/service imports -- but it has to gain each new node type as it lands,
+// or a round-trip test silently asserts against an empty document instead of failing loudly.
+const CONTENT_EXTENSIONS = [StarterKit, MathBlock, Callout, Expand, ResourceCard, TaskList, TaskItem.configure({ nested: false })];
 
 describe('Math NodeView', () => {
   it('renders an editable LaTeX source field seeded from the node value', async () => {
@@ -164,10 +170,101 @@ describe('Syntax-parity round-trips (Story 9.2, AC #6, AD-12)', () => {
     const markdown = manager.serialize(editor.getJSON());
     const reparsed = parseMarkdown(markdown);
 
+    // A callout with no explicit variant serializes as `> [!note]` and parses back as
+    // variant: 'note' -- i.e. every callout authored before panel variants existed keeps its exact
+    // prior meaning, which is the compatibility guarantee the variant work rests on.
     expect(reparsed).toEqual([
-      { type: 'callout', children: [{ type: 'paragraph', content: [{ type: 'text', value: 'Remember to check units.' }] }] },
+      {
+        type: 'callout',
+        variant: 'note',
+        children: [{ type: 'paragraph', content: [{ type: 'text', value: 'Remember to check units.' }] }],
+      },
     ]);
     editor.destroy();
+  });
+
+  it.each(['info', 'tip', 'success', 'warning', 'error'] as const)(
+    'Callout: the %s panel variant round-trips through the `> [!variant]` marker',
+    (variant) => {
+      const editor = new Editor({
+        extensions: CONTENT_EXTENSIONS,
+        content: {
+          type: 'doc',
+          content: [{ type: 'callout', attrs: { variant }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Panel body.' }] }] }],
+        },
+      });
+
+      const markdown = manager.serialize(editor.getJSON());
+      expect(markdown).toContain(`[!${variant}]`);
+      expect(parseMarkdown(markdown)).toEqual([
+        { type: 'callout', variant, children: [{ type: 'paragraph', content: [{ type: 'text', value: 'Panel body.' }] }] },
+      ]);
+      editor.destroy();
+    },
+  );
+
+  it('Expand: Tiptap-serialize -> lib/markdown.ts-parse round-trips the title and body separately', () => {
+    const editor = new Editor({
+      extensions: CONTENT_EXTENSIONS,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'expand',
+            attrs: { title: 'Show the full derivation' },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Step one follows from the law of conservation of mass.' }] }],
+          },
+        ],
+      },
+    });
+
+    const markdown = manager.serialize(editor.getJSON());
+    const reparsed = parseMarkdown(markdown);
+
+    expect(reparsed).toEqual([
+      {
+        type: 'expand',
+        title: 'Show the full derivation',
+        children: [{ type: 'paragraph', content: [{ type: 'text', value: 'Step one follows from the law of conservation of mass.' }] }],
+      },
+    ]);
+    editor.destroy();
+  });
+
+  it('Action items: Tiptap-serialize -> lib/markdown.ts-parse round-trips each checkbox state', () => {
+    const taskItem = (text: string, checked: boolean) => ({
+      type: 'taskItem',
+      attrs: { checked },
+      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+    });
+    const editor = new Editor({
+      extensions: CONTENT_EXTENSIONS,
+      content: { type: 'doc', content: [{ type: 'taskList', content: [taskItem('Balance the equation', true), taskItem('Name the reaction type', false)] }] },
+    });
+
+    const markdown = manager.serialize(editor.getJSON());
+    const reparsed = parseMarkdown(markdown);
+
+    expect(reparsed).toEqual([
+      {
+        type: 'list',
+        ordered: false,
+        items: [
+          { content: [{ type: 'text', value: 'Balance the equation' }], children: [], checked: true },
+          { content: [{ type: 'text', value: 'Name the reaction type' }], children: [], checked: false },
+        ],
+      },
+    ]);
+    editor.destroy();
+  });
+
+  it('an unrecognised `[!marker]` degrades to a plain blockquote rather than being swallowed', () => {
+    // FR-28's degradation rule, asserted on the read side directly: a keyword this parser has
+    // never heard of must keep its text visible, not vanish into an unrenderable block.
+    const reparsed = parseMarkdown('> [!banana] Something new\n');
+    expect(reparsed).toEqual([
+      { type: 'blockquote', children: [{ type: 'paragraph', content: [{ type: 'text', value: '[!banana] Something new' }] }] },
+    ]);
   });
 
   it('Resource card: Tiptap-serialize -> lib/markdown.ts-parse round-trips resourceId and label intact', () => {

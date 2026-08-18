@@ -236,3 +236,37 @@ describe('SAFE_LINK -- `resource:` scheme (Story 9.2)', () => {
     ]);
   });
 });
+
+describe('resource image display width', () => {
+  it('parses a `?w=` query on a resource image into a width', () => {
+    const [block] = parseMarkdown('![A diagram](resource:res-1?w=50)');
+    expect(block).toEqual({
+      type: 'paragraph',
+      content: [{ type: 'resourceImage', resourceId: 'res-1', alt: 'A diagram', width: 50 }],
+    });
+  });
+
+  it('omits width entirely for an image with no query -- every pre-resize image is unaffected', () => {
+    const [block] = parseMarkdown('![A diagram](resource:res-1)');
+    expect(block).toEqual({
+      type: 'paragraph',
+      content: [{ type: 'resourceImage', resourceId: 'res-1', alt: 'A diagram' }],
+    });
+  });
+
+  it('keeps the resource id clean of the query string', () => {
+    const [block] = parseMarkdown('![x](resource:abc-123?w=25)');
+    const image = (block as { content: { resourceId: string }[] }).content[0];
+    expect(image.resourceId).toBe('abc-123');
+  });
+
+  it.each(['0', '101', '999', 'abc'])('degrades an out-of-range or malformed width (%s) to no width', (bad) => {
+    const [block] = parseMarkdown(`![x](resource:res-1?w=${bad})`);
+    const nodes = (block as { content: { type: string; width?: number }[] }).content;
+    // Either it parsed as an image with no width, or the whole href failed the resource pattern
+    // and degraded to alt text -- both are acceptable degradations; what must never happen is a
+    // width outside 1-100 reaching the renderer as a style.
+    const image = nodes.find((n) => n.type === 'resourceImage');
+    expect(image?.width).toBeUndefined();
+  });
+});

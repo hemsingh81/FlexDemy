@@ -13,6 +13,11 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
+// TaskList/TaskItem ship inside @tiptap/extension-list, already a transitive dependency of
+// StarterKit -- no new package. Both carry their own renderMarkdown/parseMarkdown (GFM
+// `- [ ]`/`- [x]`), which lib/markdown.ts now parses on the read side too.
+import { TaskItem, TaskList } from '@tiptap/extension-list';
+import { Placeholder } from '@tiptap/extensions';
 import { SlashCommandExtension } from '../../lib/editor/SlashCommandExtension';
 import { PlusAffordanceButton } from '../../lib/editor/PlusAffordanceButton';
 import type { SlashCommandItem } from '../../lib/editor/slashMenuTypes';
@@ -22,11 +27,13 @@ import { RawBlock } from './extensions/RawBlock';
 import { LearningResourcesBlock } from './extensions/LearningResourcesBlock';
 import { PageImage } from './extensions/Image';
 import { MathBlock } from './extensions/Math';
-import { Callout } from './extensions/Callout';
+import { Callout, CALLOUT_VARIANTS, type CalloutVariant } from './extensions/Callout';
+import { Expand } from './extensions/Expand';
 import { ResourceCard } from './extensions/ResourceCard';
 import { resolveInheritedResources } from './resolveInheritedResources';
 import { HeadingControls, collectHeadings, type HeadingEntry } from './HeadingControls';
 import { BodyBlockControls } from './BodyBlockControls';
+import { TableControls } from './TableControls';
 import { TableOfContentsRail } from './TableOfContentsRail';
 import { PagePreviewPanel, type PagePreviewMode } from './PagePreviewPanel';
 import { ConfirmationGlyphs } from './ConfirmationGlyphs';
@@ -93,6 +100,10 @@ interface DocumentCanvasProps {
   // heading's own HeadingControls row -- opens CourseContentEditor.tsx's own PreviewAsStudent
   // overlay, which this component doesn't render itself (it needs no Tiptap editor at all).
   onPreviewAsStudent: (scope: PreviewScope) => void;
+  /** Hands this canvas's autosave flush up to the parent, so a preview launched from OUTSIDE the
+   * canvas (the header's whole-course "Preview as student") can await the same save the in-canvas
+   * previews do. Without it that button reads server state that may be a debounce-interval stale. */
+  onRegisterFlush?: (flush: () => Promise<void>) => void;
 }
 
 // Story 7.1's "Basic" command list, still minimal beyond Paragraph -- Story 7.3's own additions
@@ -124,10 +135,19 @@ const CONTENT_EXTENSIONS = [
   RawBlock,
   MathBlock,
   Callout,
-  Table,
+  Expand,
+  // resizable: column widths are draggable via ProseMirror's own columnResizing plugin. The
+  // resulting colwidth attrs are editor-only chrome -- Markdown has no column-width concept, so
+  // serialization is unaffected and the standalone markdownManager sharing this array is fine.
+  Table.configure({ resizable: true }),
   TableRow,
   TableHeader,
   TableCell,
+  TaskList,
+  // nested: false -- a task list inside a task item is a shape lib/markdown.ts's own list parser
+  // handles (it nests by indent like any other list), but it has no place in course content and
+  // it makes the `- [ ]` round-trip meaningfully harder to reason about. Flat only.
+  TaskItem.configure({ nested: false }),
 ];
 
 // Story 9.1/9.2: markdownManager gets the plain stock Image and the unconfigured ResourceCard
@@ -139,6 +159,70 @@ const CONTENT_EXTENSIONS = [
 // for Image, Story 9.1, and for Table here) that each stock/custom node's default markdown
 // serialization needs no customization beyond what each extension's own renderMarkdown provides.
 const markdownManager = new MarkdownManager({ extensions: [...CONTENT_EXTENSIONS, Image, ResourceCard] });
+
+// One slash command per Confluence panel variant, generated from the variant list rather than
+// hand-written six times -- adding a seventh variant is then a one-word change in Callout.ts, and
+// the menu can never drift out of sync with what the node/parser actually accept.
+//
+// Menu order follows CALLOUT_VARIANTS (note, info, tip, success, warning, error) -- roughly
+// neutral-to-severe, which is also how Confluence's own panel picker is ordered.
+const CALLOUT_PANEL_LABELS: Record<CalloutVariant, { label: string; description: string }> = {
+  note: { label: 'Note panel', description: 'A neutral aside worth remembering' },
+  info: { label: 'Info panel', description: 'Background or context' },
+  tip: { label: 'Tip panel', description: 'A shortcut or piece of advice' },
+  success: { label: 'Success panel', description: 'A correct result or good practice' },
+  warning: { label: 'Warning panel', description: 'A common mistake or caution' },
+  error: { label: 'Error panel', description: 'Something that is wrong or must be avoided' },
+};
+
+const CALLOUT_PANEL_COMMANDS: SlashCommandItem[] = CALLOUT_VARIANTS.map((variant) => ({
+  id: `callout-${variant}`,
+  category: 'Media & data',
+  label: CALLOUT_PANEL_LABELS[variant].label,
+  description: CALLOUT_PANEL_LABELS[variant].description,
+  execute: ({ editor, range }) =>
+    prepareBlockTarget(editor, range)
+      .insertContent({ type: 'callout', attrs: { variant }, content: [{ type: 'paragraph' }] })
+      .run(),
+}));
+
+// Deletes the slash-command range and guarantees the caret is somewhere a CONTENT block can
+// actually go, returning a chain ready for the command's own operation.
+//
+// THE BUG THIS FIXES: "Bulleted list", "Numbered list" and "Code" silently did nothing whenever
+// the caret sat in a structural heading -- which, since content commands became available outside
+// Page bodies, is most of the time (the Chapter title, a Topic/Sub-Topic heading, a Page marker).
+// `toggleBulletList` wraps the current block in `bulletList > listItem`, and listItem's content
+// expression is `paragraph block*` -- a heading is not a legal first child, so ProseMirror
+// rejected the transform and returned false. No error, no insert: the typed "/bulleted" just
+// vanished. Same root cause for the other list and for code.
+//
+// The naive fix -- setNode('paragraph') before toggling -- is WRONG here and would be worse than
+// the bug: h1-h4 are not decorative headings, they ARE the Chapter/Topic/Sub-Topic/Page structure
+// (StructuralHeading, carrying the entityId that ties the node to its backend row). Converting one
+// to a paragraph would silently destroy a Topic and orphan everything under it.
+//
+// So: on a structural heading (h1-h4), insert a fresh paragraph AFTER the heading and move the
+// caret into it -- the new block lands below the title, which is where a tutor typing "/" on a
+// title line means it to go. On an ordinary paragraph or an in-page h5/h6, convert in place, which
+// is the Notion/Confluence behaviour for a normal line.
+const STRUCTURAL_HEADING_MAX_LEVEL = 4;
+
+export const prepareBlockTarget = (editor: Editor, range: { from: number; to: number }) => {
+  editor.chain().focus().deleteRange(range).run();
+
+  const { $from } = editor.state.selection;
+  const parent = $from.parent;
+  const isStructuralHeading = parent.type.name === 'heading' && ((parent.attrs.level as number) ?? 1) <= STRUCTURAL_HEADING_MAX_LEVEL;
+
+  if (isStructuralHeading) {
+    const after = $from.after();
+    // +1 lands the caret INSIDE the new paragraph rather than at the document position before it.
+    editor.chain().insertContentAt(after, { type: 'paragraph' }).setTextSelection(after + 1).run();
+  }
+
+  return editor.chain().focus();
+};
 
 const insertStructuralHeading = (editor: Editor, range: { from: number; to: number }, level: 2 | 3) => {
   editor.chain().focus().deleteRange(range).setNode('heading', { level }).run();
@@ -153,14 +237,39 @@ interface NearestHeadingInfo {
 
 // Finds the nearest heading strictly before the cursor -- the single primitive every
 // position-aware slash-menu filter in this file is built from.
+//
+// PERFORMANCE, and why the shape below matters: this is called several times per keystroke while
+// the slash menu is open (isInsidePageBody, isNestedUnderTopic, getNearestPersistedPage,
+// getNearestPersistedOwner each ask for it independently, and filterCommands re-runs all of them
+// on every character typed). The previous implementation used doc.descendants with an early
+// `return false` -- but `false` from a descendants callback only skips that node's CHILDREN, it
+// does not stop the traversal, so every call walked the ENTIRE chapter document regardless of
+// where the cursor was. On a chapter with a few hundred nodes that is several full walks per
+// keystroke, which is exactly the "slash menu takes a moment to appear" lag.
+//
+// Two changes: nodesBetween(0, cursorPos) bounds the walk to the document actually before the
+// cursor, and a one-entry memo keyed on the editor's current doc+selection collapses the several
+// calls within a single keystroke down to one real walk.
+let nearestHeadingMemo: { doc: unknown; pos: number; result: NearestHeadingInfo | null } | null = null;
+
 const findNearestHeadingBefore = (editor: Editor): NearestHeadingInfo | null => {
-  const cursorPos = editor.state.selection.$from.pos;
+  const { doc, selection } = editor.state;
+  const cursorPos = selection.$from.pos;
+  // Identity comparison on the ProseMirror doc node is safe and cheap: every edit produces a NEW
+  // doc object (PM documents are persistent/immutable), so a hit here means genuinely nothing has
+  // changed since the last call, not merely that the content looks equal.
+  if (nearestHeadingMemo && nearestHeadingMemo.doc === doc && nearestHeadingMemo.pos === cursorPos) {
+    return nearestHeadingMemo.result;
+  }
+
   let nearest: NearestHeadingInfo | null = null;
-  editor.state.doc.descendants((node, pos) => {
+  doc.nodesBetween(0, cursorPos, (node, pos) => {
     if (pos >= cursorPos) return false;
     if (node.type.name === 'heading') nearest = { level: node.attrs.level, entityId: node.attrs.entityId ?? null };
     return true;
   });
+
+  nearestHeadingMemo = { doc, pos: cursorPos, result: nearest };
   return nearest;
 };
 
@@ -172,6 +281,18 @@ const findNearestHeadingBefore = (editor: Editor): NearestHeadingInfo | null => 
 export const isNestedUnderTopic = (editor: Editor): boolean => {
   const nearest = findNearestHeadingBefore(editor);
   return nearest?.level === 2 || nearest?.level === 3;
+};
+
+// True when the cursor sits inside a Topic/Sub-Topic Description zone, whose schema is restricted
+// to `(paragraph|bulletList)+` by DescriptionZone.ts (FR-4, enforced by ProseMirror itself). Every
+// richer block is filtered out of the menu here rather than offered and then silently dropped on
+// insert -- the schema would reject it either way; this just makes the menu honest about it.
+export const isInsideDescriptionZone = (editor: Editor): boolean => {
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === 'descriptionZone') return true;
+  }
+  return false;
 };
 
 // Story 7.3: "Sub-heading" (h5/h6) and the other page-body-only commands are only reachable once
@@ -197,6 +318,34 @@ export const getNearestPersistedOwner = (editor: Editor): { ownerType: ContentOw
 // Story 8.1, Task 6: the "Learning Resources" command needs a real, already-persisted Page to
 // attach to (a Resource's OwnerId must be a real Page id), same AD-11 reasoning
 // getNearestPersistedOwner above already applies to Topic/Sub-Topic.
+// Resolves the nearest persisted node that can OWN a resource, at any level of the document.
+//
+// Why this exists alongside getNearestPersistedPage: image/file insertion used to be gated on
+// `getNearestPersistedPage`, i.e. offered only once the cursor was inside a saved Page. That made
+// "insert an image" unavailable in the majority of the document -- under the Chapter title, in a
+// Topic's opening prose, anywhere a Page had not been created yet -- with no explanation, since a
+// command that is filtered out of the menu simply is not there to ask about.
+//
+// A resource only needs SOME persisted owner, and Chapter/Topic/Sub-Topic are all valid owners in
+// the resource model (ContentOwnerType). So: walk to the nearest persisted heading and use it,
+// falling back to the Chapter itself, which exists as soon as the editor has anything to show.
+// The stricter Page-only resolver is still used for the Learning Resources block, which is
+// deliberately a per-Page shelf.
+export const getNearestResourceOwner = (
+  editor: Editor,
+  chapterId: string | null
+): { ownerType: ContentOwnerType; ownerId: string } | null => {
+  const nearest = findNearestHeadingBefore(editor);
+  if (nearest?.entityId) {
+    if (nearest.level === 4) return { ownerType: 'Page', ownerId: nearest.entityId };
+    if (nearest.level === 3) return { ownerType: 'Subtopic', ownerId: nearest.entityId };
+    if (nearest.level === 2) return { ownerType: 'Topic', ownerId: nearest.entityId };
+  }
+  // Level 1 (the Chapter title) carries no entityId in the document JSON -- the chapter's own id
+  // is held by the component, so it is passed in rather than read off the node.
+  return chapterId ? { ownerType: 'Chapter', ownerId: chapterId } : null;
+};
+
 export const getNearestPersistedPage = (editor: Editor): { ownerType: ContentOwnerType; ownerId: string } | null => {
   const nearest = findNearestHeadingBefore(editor);
   if (nearest?.level === 4 && nearest.entityId) return { ownerType: 'Page', ownerId: nearest.entityId };
@@ -407,6 +556,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   pendingFocusNodeId,
   onFocusHandled,
   onPreviewAsStudent,
+  onRegisterFlush,
 }) => {
   const courseContent = useCourseContent();
   const { showToast } = useToast();
@@ -522,36 +672,53 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     return items;
   };
 
+  // Renamed in spirit if not in name: these are the GENERIC content blocks, and they are offered
+  // anywhere the schema can actually hold them -- not only inside a Page body, which is where they
+  // were originally gated when Page was the only place content existed.
+  //
+  // Why that gate was wrong for a Confluence-style editor: a tutor typing "/" anywhere outside a
+  // Page body (at the Chapter title, between Topics, in the chapter intro area) got a menu
+  // containing nothing but "Paragraph" plus a couple of structure commands, and typing "/table" or
+  // "/warning" there produced a literal "No matching blocks" box. The menu looked broken because
+  // effectively it was: the blocks a tutor wanted were filtered out by position rather than by
+  // whether they could legally be inserted.
+  //
+  // The one place that genuinely cannot hold them is a Description zone, whose schema really does
+  // reject anything but paragraphs and bullet lists -- so THAT is the guard now, and it is a
+  // statement about the schema rather than about document structure. Resource-bound blocks (Image,
+  // Resource card, Learning Resources, Insert from file) keep their own, stricter gate further
+  // down: they need a persisted Page to own the resource, which getNearestPersistedPage supplies
+  // or refuses independently of this check.
   const pageBodyCommands = (editor: Editor): SlashCommandItem[] => {
-    if (!isInsidePageBody(editor)) return [];
+    if (isInsideDescriptionZone(editor)) return [];
     const items: SlashCommandItem[] = [
       {
         id: 'subheading',
         category: 'Basic',
         label: 'Sub-heading',
         description: 'A minor heading inside this page',
-        execute: ({ editor: e, range }) => e.chain().focus().deleteRange(range).setNode('heading', { level: 5 }).run(),
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).setNode('heading', { level: 5 }).run(),
       },
       {
         id: 'bulleted-list',
         category: 'Basic',
         label: 'Bulleted list',
         description: 'Create a simple bulleted list',
-        execute: ({ editor: e, range }) => e.chain().focus().deleteRange(range).toggleBulletList().run(),
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).toggleBulletList().run(),
       },
       {
         id: 'numbered-list',
         category: 'Basic',
         label: 'Numbered list',
         description: 'Create a numbered list',
-        execute: ({ editor: e, range }) => e.chain().focus().deleteRange(range).toggleOrderedList().run(),
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).toggleOrderedList().run(),
       },
       {
         id: 'code-block',
         category: 'Basic',
         label: 'Code',
         description: 'A code block with an optional language',
-        execute: ({ editor: e, range }) => e.chain().focus().deleteRange(range).toggleCodeBlock().run(),
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).toggleCodeBlock().run(),
       },
       // Story 9.2, Task 3/AC #1: block-level `$$…$$` math, rendered live via KaTeX.
       {
@@ -559,17 +726,45 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
         category: 'Media & data',
         label: 'Math',
         description: 'Mathematical notation, rendered via KaTeX',
-        execute: ({ editor: e, range }) => e.chain().focus().deleteRange(range).insertContent({ type: 'math', attrs: { value: '' } }).run(),
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).insertContent({ type: 'math', attrs: { value: '' } }).run(),
       },
       // Story 9.2, Task 3/AC #2: a blockquote-based styled card, degrading to a plain blockquote
-      // anywhere unsupported.
+      // anywhere unsupported. Now one command per Confluence panel variant rather than a single
+      // generic "Callout" -- a tutor picks the meaning ("Warning") from the menu instead of
+      // inserting a neutral box and then hunting for a variant control. All six share one node
+      // type and one Markdown marker family; only the `variant` attribute differs.
+      ...CALLOUT_PANEL_COMMANDS,
+      // Confluence's Expand macro -- the collapsible section. Seeded with a placeholder title so
+      // the summary line is never blank before the tutor types one (a blank <summary> renders as
+      // an unlabelled twisty a student cannot interpret).
       {
-        id: 'callout',
+        id: 'expand',
         category: 'Media & data',
-        label: 'Callout',
-        description: 'A styled note box',
+        label: 'Expand',
+        description: 'A collapsible section a student opens on demand',
         execute: ({ editor: e, range }) =>
-          e.chain().focus().deleteRange(range).insertContent({ type: 'callout', content: [{ type: 'paragraph' }] }).run(),
+          prepareBlockTarget(e, range).insertContent({ type: 'expand', attrs: { title: 'Details' }, content: [{ type: 'paragraph' }] }).run(),
+      },
+      {
+        id: 'task-list',
+        category: 'Basic',
+        label: 'Action items',
+        description: 'A checklist of tasks',
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).toggleTaskList().run(),
+      },
+      {
+        id: 'blockquote',
+        category: 'Basic',
+        label: 'Quote',
+        description: 'Set text apart as a quotation',
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).toggleBlockquote().run(),
+      },
+      {
+        id: 'divider',
+        category: 'Basic',
+        label: 'Divider',
+        description: 'A horizontal rule between sections',
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).setHorizontalRule().run(),
       },
       // Story 9.2, Task 4/AC #3: a minimal default grid -- serialization round-trips through
       // lib/markdown.ts's existing table support with no changes needed there (verified directly).
@@ -578,33 +773,20 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
         category: 'Media & data',
         label: 'Table',
         description: 'A simple data table',
-        execute: ({ editor: e, range }) =>
-          e.chain().focus().deleteRange(range).insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run(),
+        execute: ({ editor: e, range }) => prepareBlockTarget(e, range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
       },
     ];
     // Story 8.1, Task 6: "Learning Resources" only offered once the nearest Page marker is
     // already persisted (AD-11 -- same reasoning as "New Page" above requiring a real owner id).
     // Story 8.2: also omitted once a block already exists at this Page's own position.
-    const pageOwner = getNearestPersistedPage(editor);
-    if (pageOwner && !hasResourcesBlockAt(editor, pageOwner.ownerType, pageOwner.ownerId)) {
-      items.push({
-        id: 'learning-resources',
-        category: 'Resources',
-        label: 'Learning Resources',
-        description: 'Attach files as resources on this page',
-        execute: ({ editor: e, range }) => {
-          const { document: doc } = latestRef.current;
-          const inherited = doc ? resolveInheritedResources(doc, pageOwner.ownerType, pageOwner.ownerId) : [];
-          e.chain()
-            .focus()
-            .deleteRange(range)
-            .insertContent({
-              type: 'learningResourcesBlock',
-              attrs: { ownerType: pageOwner.ownerType, ownerId: pageOwner.ownerId, resources: [], inherited },
-            })
-            .run();
-        },
-      });
+    // Image and Resource card are offered at ANY level of the document, not only inside a saved
+    // Page: both only need some persisted owner for the uploaded file to belong to, and
+    // getNearestResourceOwner supplies the nearest one (Page / Sub-Topic / Topic, else the Chapter
+    // itself). Previously both sat inside the `pageOwner` branch below, so "insert an image" was
+    // simply absent from the menu anywhere a Page had not been created yet -- which is most of a
+    // chapter while it is being written.
+    const resourceOwner = getNearestResourceOwner(editor, latestRef.current.chapterId);
+    if (resourceOwner) {
       // Story 9.1, Task 1: inserts an empty Image node -- the tutor uploads/drags a file into it
       // via its own NodeView (Upload/drag-drop controls), which reuses uploadResource outright
       // (the resulting Resource simultaneously shows up in this page's Learning Resources block
@@ -621,7 +803,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             .deleteRange(range)
             .insertContent({
               type: 'image',
-              attrs: { src: '', alt: '', ownerType: pageOwner.ownerType, ownerId: pageOwner.ownerId },
+              attrs: { src: '', alt: '', ownerType: resourceOwner.ownerType, ownerId: resourceOwner.ownerId },
             })
             .run();
         },
@@ -633,14 +815,36 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
         id: 'resource-card',
         category: 'Media & data',
         label: 'Resource card',
-        description: 'Link to a resource already attached to this page',
+        description: 'Link to a file attached at this point in the document',
         execute: ({ editor: e, range }) => {
           e.chain()
             .focus()
             .deleteRange(range)
             .insertContent({
               type: 'resourceCard',
-              attrs: { resourceId: null, label: '', ownerType: pageOwner.ownerType, ownerId: pageOwner.ownerId },
+              attrs: { resourceId: null, label: '', ownerType: resourceOwner.ownerType, ownerId: resourceOwner.ownerId },
+            })
+            .run();
+        },
+      });
+    }
+
+    const pageOwner = getNearestPersistedPage(editor);
+    if (pageOwner && !hasResourcesBlockAt(editor, pageOwner.ownerType, pageOwner.ownerId)) {
+      items.push({
+        id: 'learning-resources',
+        category: 'Resources',
+        label: 'Learning Resources',
+        description: 'Attach files as resources on this page',
+        execute: ({ editor: e, range }) => {
+          const { document: doc } = latestRef.current;
+          const inherited = doc ? resolveInheritedResources(doc, pageOwner.ownerType, pageOwner.ownerId) : [];
+          e.chain()
+            .focus()
+            .deleteRange(range)
+            .insertContent({
+              type: 'learningResourcesBlock',
+              attrs: { ownerType: pageOwner.ownerType, ownerId: pageOwner.ownerId, resources: [], inherited },
             })
             .run();
         },
@@ -688,6 +892,44 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       // Story 9.2: replaces markdownManager's unconfigured ResourceCard (see CONTENT_EXTENSIONS
       // comment above) with the courseId-configured instance the live editor's own NodeView needs.
       ResourceCard.configure({ courseId }),
+      // Empty-line affordance: the "/" menu is the primary way to insert anything, and nothing on
+      // screen said so -- a tutor faced with a blank document had no way to discover it. Deliberately
+      // NOT in CONTENT_EXTENSIONS: Placeholder is pure editor chrome (a ProseMirror decoration), and
+      // the headless markdownManager must never see it.
+      Placeholder.configure({
+        // showOnlyCurrent (the default, stated explicitly because it is load-bearing) restricts the
+        // hint to the node the CURSOR is in. It was previously defeated by includeChildren: true,
+        // which paints every empty node in the document at once -- a chapter with three empty lines
+        // showed three identical "Type '/'..." hints stacked on top of each other, which reads as a
+        // rendering fault rather than a hint.
+        //
+        // Losing includeChildren also loses the per-cell hint inside tables (Placeholder only
+        // reaches top-level nodes without it). That is the right trade: the table now has visible
+        // gridlines, so an empty cell is already legible as an empty cell, whereas duplicated hints
+        // down the page were actively confusing.
+        showOnlyCurrent: true,
+        includeChildren: false,
+        // Per-node text, because one generic string would be wrong nearly everywhere: the structural
+        // headings want to say what they ARE, and only ordinary body lines should advertise "/".
+        placeholder: ({ node, pos, editor: e }) => {
+          if (node.type.name === 'heading') {
+            const level = (node.attrs.level as number) ?? 1;
+            if (level === 1) return 'Chapter title';
+            if (level === 2) return 'Topic name';
+            if (level === 3) return 'Sub-Topic name';
+            if (level === 4) return 'Page title';
+            return 'Sub-heading';
+          }
+          if (node.type.name !== 'paragraph') return '';
+          // A Description zone's schema rejects everything but paragraphs and bullet lists, so
+          // advertising "/" inside one would promise a menu that is (correctly) almost empty.
+          const resolved = e.state.doc.resolve(pos);
+          for (let depth = resolved.depth; depth > 0; depth -= 1) {
+            if (resolved.node(depth).type.name === 'descriptionZone') return 'Describe what a student will get from this';
+          }
+          return "Type '/' to insert a block";
+        },
+      }),
       SlashCommandExtension.configure({ getItems: ({ query, editor: e }) => filterCommandsRef.current(query, e) }),
     ],
     content: buildDocJSON(document, title),
@@ -702,6 +944,11 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   const { status: autosaveStatus, scheduleSave, flushNow } = useContentAutosave(async () => {
     if (editorRef.current) await performSync(editorRef.current);
   });
+
+  useEffect(() => {
+    onRegisterFlush?.(flushNow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRegisterFlush, flushNow]);
 
   useEffect(() => {
     if (!editor) return undefined;
@@ -1187,7 +1434,17 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
         )}
         <EditorContent
           editor={editor}
-          className="content-doc-heading prose prose-slate max-w-none [&_.ProseMirror]:outline-none [&_.ProseMirror_h1]:font-display [&_.ProseMirror_h1]:text-3xl [&_.ProseMirror_h1]:font-extrabold [&_.ProseMirror_h1]:text-foreground [&_.ProseMirror_h2]:font-display [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:text-foreground [&_.ProseMirror_h2]:mt-6 [&_.ProseMirror_h3]:font-display [&_.ProseMirror_h3]:text-base [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:text-foreground [&_.ProseMirror_h3]:mt-4"
+          // px-10: the document used to run edge-to-edge against the rail and the viewport, which
+          // is the single biggest reason it did not read like a Confluence page. The horizontal
+          // breathing room is also what gives the hover controls (PlusAffordanceButton,
+          // HeadingControls) somewhere to sit without overlapping the text they belong to.
+          // py-8 + a max-w measure keeps long prose from stretching to unreadable line lengths on
+          // a wide monitor, which is what Confluence's own fixed content column does.
+          // `prose prose-slate` was removed: @tailwindcss/typography is not a dependency of this
+          // project, so those classes never matched a rule -- they read as if the document were
+          // typographically styled when nothing was applying. Editor typography lives in
+          // index.css's own .ProseMirror rules instead.
+          className="content-doc-heading max-w-none px-10 py-8 [&_.ProseMirror]:outline-none [&_.ProseMirror_h1]:font-display [&_.ProseMirror_h1]:text-3xl [&_.ProseMirror_h1]:font-extrabold [&_.ProseMirror_h1]:text-foreground [&_.ProseMirror_h2]:font-display [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:text-foreground [&_.ProseMirror_h2]:mt-6 [&_.ProseMirror_h3]:font-display [&_.ProseMirror_h3]:text-base [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:text-foreground [&_.ProseMirror_h3]:mt-4"
         />
         <ConfirmationGlyphs editor={editor ?? null} chapterId={chapterId} />
         {!isReadOnly && (
@@ -1201,16 +1458,25 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               onPreview={(entry) => openPanel(entry, 'preview')}
               onEditMarkdown={(entry) => openPanel(entry, 'markdown')}
               onMoveTo={openMovePicker}
+              // AWAIT the flush before opening the preview. PreviewAsStudent re-fetches the
+              // chapter/page from the SERVER (it renders through lib/markdown.ts, never the live
+              // Tiptap doc), so anything still sitting in the 1.5s autosave debounce simply is not
+              // there yet. Clicking the control does blur the editor, which fires flushNow -- but
+              // that is a race the preview's own fetch usually won, and the tutor saw an empty
+              // preview of content plainly visible behind it.
               onPreviewAsStudent={(entry) => {
                 if (!chapterId) return;
-                onPreviewAsStudent(
-                  entry.kind === 'page'
-                    ? { kind: 'page', pageId: entry.entityId }
-                    : { kind: 'node', chapterId, nodeType: entry.kind === 'topic' ? 'Topic' : 'Subtopic', nodeId: entry.entityId }
+                void flushNow().then(() =>
+                  onPreviewAsStudent(
+                    entry.kind === 'page'
+                      ? { kind: 'page', pageId: entry.entityId }
+                      : { kind: 'node', chapterId, nodeType: entry.kind === 'topic' ? 'Topic' : 'Subtopic', nodeId: entry.entityId }
+                  )
                 );
               }}
             />
             <BodyBlockControls editor={editor} />
+            <TableControls editor={editor ?? null} />
           </>
         )}
 

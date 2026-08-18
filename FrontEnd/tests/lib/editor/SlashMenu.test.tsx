@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -180,5 +180,90 @@ describe('SlashCommandExtension', () => {
 
     expect(handled).toBe(false);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+// Regression suite for the arrow-key traversal order. The bug: the menu renders items GROUPED by
+// category, but every selection path indexed into the flat `items` array as supplied. When the two
+// orders disagree -- which they do for the real command list, where a "Structure" command sits at
+// array index 1 but renders several rows further down -- one ArrowDown from the top jumped the
+// highlight to a visually distant row, and Enter then inserted a block the tutor never picked.
+//
+// INTERLEAVED ON PURPOSE: the array below alternates categories so that flat order and grouped
+// order cannot coincide. A fixture already grouped by category would pass either way and prove
+// nothing.
+const interleavedCommands = (): SlashCommandItem[] => [
+  { id: 'a1', category: 'Alpha', label: 'Alpha One', description: 'a', execute: () => {} },
+  { id: 'b1', category: 'Beta', label: 'Beta One', description: 'b', execute: () => {} },
+  { id: 'a2', category: 'Alpha', label: 'Alpha Two', description: 'a', execute: () => {} },
+  { id: 'b2', category: 'Beta', label: 'Beta Two', description: 'b', execute: () => {} },
+];
+// Grouped render order is therefore: Alpha One, Alpha Two, Beta One, Beta Two.
+
+describe('SlashMenuList traversal order', () => {
+  const openMenu = async (u: ReturnType<typeof userEvent.setup>) => {
+    render(<Harness items={interleavedCommands()} />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+    await u.type(document.querySelector('.ProseMirror')!, '/');
+    return screen.findByRole('listbox');
+  };
+
+  it('renders options grouped by category, not in the order supplied', async () => {
+    const u = userEvent.setup();
+    const menu = await openMenu(u);
+    const labels = within(menu)
+      .getAllByRole('option')
+      .map((option) => option.textContent?.split('a')[0] ?? '');
+    // Sanity: the fixture really is interleaved, so DOM order differs from array order.
+    expect(within(menu).getAllByRole('option').map((o) => o.getAttribute('id'))).toEqual([
+      'slash-menu-option-a1',
+      'slash-menu-option-a2',
+      'slash-menu-option-b1',
+      'slash-menu-option-b2',
+    ]);
+    expect(labels.length).toBe(4);
+  });
+
+  it('ArrowDown moves the highlight to the next VISIBLE row, not the next array entry', async () => {
+    const u = userEvent.setup();
+    const menu = await openMenu(u);
+    const options = within(menu).getAllByRole('option');
+
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+
+    await u.keyboard('{ArrowDown}');
+
+    // The second rendered row is "Alpha Two" (id a2). Before the fix this selected `items[1]`,
+    // which is "Beta One" -- the THIRD rendered row.
+    await waitFor(() => expect(within(menu).getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true'));
+    expect(within(menu).getAllByRole('option')[1]).toHaveAttribute('id', 'slash-menu-option-a2');
+    expect(within(menu).getAllByRole('option')[2]).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('Enter commits the visually-highlighted option, not the same-indexed array entry', async () => {
+    const u = userEvent.setup();
+    const items = interleavedCommands();
+    const executed: string[] = [];
+    const spied = items.map((item) => ({ ...item, execute: () => executed.push(item.id) }));
+
+    render(<Harness items={spied} />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+    await u.type(document.querySelector('.ProseMirror')!, '/');
+    await screen.findByRole('listbox');
+
+    await u.keyboard('{ArrowDown}');
+    await u.keyboard('{Enter}');
+
+    // "Alpha Two" is the row below the top one. The pre-fix behaviour committed 'b1'.
+    expect(executed).toEqual(['a2']);
+  });
+
+  it('wraps from the last visible row back to the first', async () => {
+    const u = userEvent.setup();
+    const menu = await openMenu(u);
+
+    for (let i = 0; i < 4; i += 1) await u.keyboard('{ArrowDown}');
+
+    await waitFor(() => expect(within(menu).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true'));
   });
 });

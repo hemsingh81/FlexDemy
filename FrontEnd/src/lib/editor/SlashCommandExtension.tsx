@@ -23,6 +23,11 @@ export interface SlashCommandOptions {
 
 const ARIA_LIVE_REGION_ID = 'slash-menu-announcer';
 
+// One step above this app's overlay tier (z-50: SidePanel, ConfirmModal, CourseReviewModal, and
+// the Course Content Editor's own maximized takeover). The slash menu is always summoned FROM one
+// of those surfaces, so it has to outrank them rather than merely match them.
+const SLASH_MENU_Z_INDEX = '60';
+
 // aria-live="polite" announcer for "what was inserted" (UX-DR6) -- a single, reused region
 // rather than one created per mount, matching this codebase's existing batched-announcer
 // convention (CourseContentEditor.tsx's own aria-live region for file-status updates).
@@ -63,6 +68,19 @@ export const SlashCommandExtension = Extension.create<SlashCommandOptions>({
         char: '/',
         allowSpaces: false,
         startOfLine: false,
+
+        // BROWSER-ONLY BUG FIX (invisible to jsdom, which has no layout or stacking contexts, so
+        // every existing slash-menu test passed while the menu was unusable in a real browser):
+        //
+        // `props.mount()` appends the popup to document.body and positions it with Floating UI,
+        // whose default strategy is "absolute". Absolute coordinates resolve against the document
+        // origin, but Floating UI computes them from getBoundingClientRect, i.e. VIEWPORT
+        // coordinates. Inside the Course Content Editor's maximized `fixed inset-0` takeover --
+        // and on any scrolled page -- those two frames disagree by the scroll offset, so the menu
+        // is positioned somewhere off the visible area entirely. `fixed` makes the popup resolve
+        // in the same viewport frame Floating UI measured in, which is the frame a fixed-position
+        // editor already lives in.
+        floatingUi: { strategy: 'fixed' },
 
         items: ({ query, editor }) => extensionThis.options.getItems({ query, editor }),
 
@@ -110,6 +128,15 @@ export const SlashCommandExtension = Extension.create<SlashCommandOptions>({
                 editor: props.editor,
               });
               renderer.element.id = 'slash-menu-listbox';
+              // The second half of the same browser-only bug: the popup is a document.body child
+              // with no z-index of its own, so it sits at z-auto in the root stacking context --
+              // underneath the Course Content Editor's own `fixed inset-0 z-50` takeover (and the
+              // Navbar's z-50). It mounted, it was in the DOM, tests found it by role, and a real
+              // user saw nothing because it was painted behind an opaque white surface.
+              //
+              // Set imperatively rather than as a Tailwind class because this element is
+              // ReactRenderer's own wrapper div, not markup SlashMenuList controls.
+              renderer.element.style.zIndex = SLASH_MENU_Z_INDEX;
 
               // Managed mounting/positioning (Floating UI under the hood, already a transitive
               // dependency of @tiptap/suggestion -- no new package added) -- anchors the menu to
@@ -126,7 +153,15 @@ export const SlashCommandExtension = Extension.create<SlashCommandOptions>({
             onKeyDown: (props: SuggestionKeyDownProps): boolean => {
               // Escape: close without inserting, strip the typed "/"+query, and return focus to
               // the exact document position "/" was typed at.
+              // Code-review fix: returning `true` only tells Tiptap/ProseMirror's own keymap
+              // chain this key was handled -- it does NOT stop the native DOM KeyboardEvent from
+              // continuing to bubble up to CourseContentEditor.tsx's own document-level Escape
+              // listener, which closes the whole editor. Without stopPropagation(), dismissing
+              // the menu with Escape also closed the entire Course Content Editor on the same
+              // keypress, silently discarding any not-yet-synced Topic/Sub-Topic the tutor had
+              // just typed.
               if (!props.event.isComposing && props.event.key === 'Escape') {
+                props.event.stopPropagation();
                 extensionThis.editor.chain().focus().deleteRange(props.range).run();
                 return true;
               }

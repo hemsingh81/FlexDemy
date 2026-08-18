@@ -150,7 +150,25 @@ export const PreviewAsStudent: React.FC<PreviewAsStudentProps> = ({ courseId, sc
       <div className="flex-1 overflow-y-auto px-6 py-6">
         {state.status === 'loading' && <p className="text-sm text-[#5E6A79]">Loading preview…</p>}
         {state.status === 'error' && <p className="text-sm text-destructive">Could not load this preview. Please try again.</p>}
-        {state.status === 'ready' && (
+        {/* A preview with nothing in it used to render as a blank white sheet, indistinguishable
+            from a broken screen -- the tutor could see their content in the editor behind it and
+            had no idea why none of it appeared. Both empty shapes now say what happened and why.
+            (The usual cause was unsaved content, which the flush at every preview entry point now
+            prevents; this is the honest fallback for a genuinely empty chapter.) */}
+        {state.status === 'ready' && state.pages.length === 0 && (
+          <div className="max-w-3xl mx-auto text-center py-16">
+            <p className="text-sm font-bold text-[#142030]">Nothing to preview yet</p>
+            <p className="text-sm text-[#5E6A79] mt-1">Add a topic or a page to this chapter, then preview again.</p>
+          </div>
+        )}
+        {state.status === 'ready' && state.pages.length > 0 && state.pages.every((section) => !section.body.trim()) && (
+          <div className="max-w-3xl mx-auto mb-6 rounded-xl border border-[#E1DED4] bg-[#FAF7EC] px-4 py-3">
+            <p className="text-xs text-[#5E6A79]">
+              This chapter has structure but no written content yet — only its headings appear below.
+            </p>
+          </div>
+        )}
+        {state.status === 'ready' && state.pages.length > 0 && (
           <div className="max-w-3xl mx-auto space-y-6">
             {state.pages.map((section, index) => (
               <div key={index}>

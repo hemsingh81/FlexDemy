@@ -6,7 +6,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import type { NodeViewProps } from '@tiptap/core';
 import { NodeViewWrapper } from '@tiptap/react';
-import { Upload } from 'lucide-react';
+import { Trash2, Upload } from 'lucide-react';
 import { Spinner } from '../../../ui/Spinner';
 import { uploadResource, resolveResourceUrl } from '../../../services/courseContentService';
 import { useResolvedResourceUrl } from '../../../hooks/useResolvedResourceUrl';
@@ -14,7 +14,14 @@ import type { ContentOwnerType } from '../../../types';
 
 const RESOURCE_PREFIX = 'resource:';
 
-export const ImageNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes, extension }) => {
+// Preset widths rather than a drag handle. A drag handle needs pointer capture, a live preview and
+// its own min/max clamping, and it fights ProseMirror for mouse events inside a stopEvent NodeView.
+// Four presets cover what a tutor actually wants (a diagram at full width, a screenshot at half, an
+// icon small) with no ambiguity about what they will get, and each is keyboard-reachable -- which a
+// drag handle is not.
+const WIDTH_PRESETS = [25, 50, 75, 100] as const;
+
+export const ImageNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes, deleteNode, extension }) => {
   const courseId = (extension.options as { courseId: string }).courseId;
   const src = (node.attrs.src as string | null) ?? '';
   const alt = (node.attrs.alt as string | null) ?? '';
@@ -27,7 +34,16 @@ export const ImageNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes,
   const fileInputRef = useRef<HTMLInputElement>(null);
   const altInputRef = useRef<HTMLInputElement>(null);
 
-  const resourceId = src.startsWith(RESOURCE_PREFIX) ? src.slice(RESOURCE_PREFIX.length) : null;
+  // The width lives in the src URI as `resource:{id}?w=NN` (see Image.ts) -- split here so the
+  // rest of this component works with a clean id, and recombined by setWidth below.
+  const rawRef = src.startsWith(RESOURCE_PREFIX) ? src.slice(RESOURCE_PREFIX.length) : null;
+  const [resourceId, widthQuery] = rawRef ? [rawRef.split('?')[0], /\?w=(\d{1,3})/.exec(rawRef)?.[1]] : [null, undefined];
+  const width = widthQuery ? Number(widthQuery) : null;
+
+  const setWidth = (next: number | null) => {
+    if (!resourceId) return;
+    updateAttributes({ src: next ? `${RESOURCE_PREFIX}${resourceId}?w=${next}` : `${RESOURCE_PREFIX}${resourceId}` });
+  };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const resolve = useCallback((id: string) => resolveResourceUrl(courseId, id), [courseId]);
@@ -83,6 +99,16 @@ export const ImageNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes,
             Upload image
           </button>
           <span className="text-xs text-muted-foreground">or drag and drop an image here</span>
+          {/* An empty image block was previously unremovable from its own UI -- inserting one by
+              mistake left a dropzone the tutor had to delete with a careful backspace. */}
+          <button
+            type="button"
+            onClick={deleteNode}
+            aria-label="Remove image block"
+            className="text-xs font-bold text-muted-foreground hover:text-destructive underline"
+          >
+            Remove
+          </button>
           {uploadFailed && <span className="text-xs text-destructive">Could not upload this image. Please try again.</span>}
         </div>
       )}
@@ -97,7 +123,39 @@ export const ImageNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes,
       {resourceId &&
         !isUploading &&
         (resolvedUrl ? (
-          <img src={resolvedUrl} alt={alt} className="max-w-full rounded-lg" />
+          <div className="group relative inline-block max-w-full">
+            <img src={resolvedUrl} alt={alt} style={width ? { width: `${width}%` } : undefined} className="max-w-full rounded-lg" />
+            {/* Size + delete, revealed on hover/focus-within so they never sit permanently on top
+                of the content. focus-within is what keeps them reachable by keyboard -- a
+                hover-only toolbar would make resizing and deleting mouse-only. */}
+            <div className="absolute top-2 right-2 flex items-center gap-0.5 rounded-lg border border-border bg-card/95 shadow-sm px-1 py-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+              {WIDTH_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setWidth(preset === 100 ? null : preset)}
+                  aria-label={`Set image width to ${preset}%`}
+                  aria-pressed={preset === 100 ? width === null : width === preset}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                    (preset === 100 ? width === null : width === preset)
+                      ? 'bg-[#BA5012] text-white'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {preset}%
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={deleteNode}
+                aria-label="Delete image"
+                title="Delete image"
+                className="p-1 rounded text-destructive hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
         ) : (
           <div role="status" className="rounded-lg border border-border bg-muted/30 p-6 flex items-center justify-center gap-2">
             <Spinner size="sm" />

@@ -347,3 +347,253 @@
   border-left: 5px solid var(--accent) !important;
   border-radius: 1.25rem;
 }
+
+/* Callout / panel variants in the EDITOR surface. The reading surface styles these in React
+   (ui/MarkdownViewer.tsx's CALLOUT_STYLES); the editor renders the same node through plain CSS
+   because Callout deliberately has no NodeView -- ProseMirror's native contentEditable handles the
+   nested editing, and a NodeView would only add a re-render path for zero behavioural gain.
+   The two palettes are kept deliberately in step: same six variants, same six hues. Colours are
+   literal hex rather than tokens because these six semantic hues (navy/accent/green/amber/red) are
+   not in the theme's token set -- the same literals MarkdownViewer.tsx uses, so a change has
+   exactly two places to touch, both named in each other's comments. */
+.callout-block {
+  border-left: 3px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+  background: var(--color-muted);
+}
+.callout-block[data-variant='note'],
+.callout-block[data-variant='info'] {
+  border-left-color: #143358;
+  background: color-mix(in srgb, #143358 5%, transparent);
+}
+.callout-block[data-variant='tip'] {
+  border-left-color: #ba5012;
+  background: color-mix(in srgb, #ba5012 5%, transparent);
+}
+.callout-block[data-variant='success'] {
+  border-left-color: #179765;
+  background: color-mix(in srgb, #179765 5%, transparent);
+}
+.callout-block[data-variant='warning'] {
+  border-left-color: #b45309;
+  background: color-mix(in srgb, #b45309 5%, transparent);
+}
+.callout-block[data-variant='error'] {
+  border-left-color: #dc2626;
+  background: color-mix(in srgb, #dc2626 5%, transparent);
+}
+/* The uppercase variant name as a generated label, so the six panels are distinguishable while
+   authoring without the node carrying a redundant text child that would then serialize into the
+   Markdown body. */
+.callout-block::before {
+  content: attr(data-variant);
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted-foreground);
+  margin-bottom: 0.25rem;
+}
+
+/* Expand macro. Only reached when the node renders WITHOUT its React NodeView (a
+   MarkdownManager-driven HTML render outside a live editor) -- the live editor path is
+   extensions/ExpandNodeView.tsx. Kept so that fallback is not an unstyled bare div. */
+.expand-block {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+/* Action items (taskList/taskItem). Tiptap renders ul[data-type='taskList'] with a checkbox in a
+   label per item; without this the list keeps its default disc markers alongside the checkboxes. */
+.ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+.ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.ProseMirror ul[data-type='taskList'] li > label {
+  margin-top: 0.2rem;
+  user-select: none;
+}
+.ProseMirror ul[data-type='taskList'] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ─── Editor surface polish (Confluence-page feel) ───────────────────────────────────────────
+   Everything below styles the LIVE editing surface only (.ProseMirror). The student reading
+   surface is React-rendered by ui/MarkdownViewer.tsx and is deliberately not affected. */
+
+/* Placeholder text on empty lines -- the affordance that tells a tutor "/" exists at all.
+   Rendered by @tiptap/extensions' Placeholder as a ::before on the empty node, so it is never
+   real document text and never serializes into the Markdown body. */
+.ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--color-muted-foreground);
+  opacity: 0.6;
+}
+
+/* Selected-node treatment. ProseMirror's default for an atom/NodeView block
+   (.ProseMirror-selectednode) is a hard 2px outline that reads as an error state on a document
+   surface, and the generic `*:focus-visible` ring at the top of this file compounds it by drawing
+   a second box around NodeView internals. Both are replaced by a soft tint: the selection stays
+   unmistakable without boxing the content in. The focus ring is suppressed ONLY inside the
+   document surface -- every button, input and control elsewhere in the app keeps its ring, since
+   that is a real accessibility affordance rather than decoration. */
+.ProseMirror-selectednode {
+  outline: none;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.ProseMirror:focus,
+.ProseMirror:focus-visible,
+.ProseMirror [contenteditable]:focus,
+.ProseMirror [contenteditable]:focus-visible {
+  outline: none;
+}
+
+/* Tables. Previously a table rendered with no visible cell edges at all while editing, so a tutor
+   could not see the grid they were filling in -- the single most-reported thing about the table
+   block. Borders here are editor-affordance only; the reading surface draws its own in
+   MarkdownViewer.tsx. */
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+.ProseMirror table td,
+.ProseMirror table th {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.625rem;
+  vertical-align: top;
+  position: relative;
+  min-width: 3rem;
+}
+.ProseMirror table th {
+  background: var(--color-muted);
+  font-weight: 700;
+  text-align: left;
+}
+/* Per-cell placeholder, kept for the cursor's own cell: Placeholder now runs with
+   showOnlyCurrent (see DocumentCanvas.tsx) so at most one of these is ever painted, and a table
+   cell wants a quieter hint than the body's "Type '/'..." either way. */
+.ProseMirror table td > p.is-empty::before,
+.ProseMirror table th > p.is-empty::before {
+  content: 'Cell';
+  opacity: 0.35;
+}
+/* The active cell and any multi-cell selection, so it is obvious what a table command will act on. */
+.ProseMirror table .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  pointer-events: none;
+}
+/* Draggable column-width handle, from Table.configure({ resizable: true })'s columnResizing
+   plugin. Invisible until hovered, like Confluence's own. */
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  pointer-events: none;
+  z-index: 5;
+}
+.ProseMirror.resize-cursor .column-resize-handle,
+.ProseMirror table:hover .column-resize-handle {
+  opacity: 0.5;
+}
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Code blocks: they had no surface of their own on the editing side, so a code block was
+   indistinguishable from a paragraph until previewed. */
+.ProseMirror pre {
+  background: #142030;
+  color: #f3f0e6;
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid var(--color-border);
+  padding-left: 0.875rem;
+  margin: 0.75rem 0;
+  color: var(--color-muted-foreground);
+}
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.5rem 0;
+}
+
+/* Lists in the editor.
+   THE BUG THIS FIXES: EditorContent carries `prose prose-slate`, but @tailwindcss/typography is
+   NOT a dependency of this project -- those two classes have never matched a single rule. Tailwind
+   v4's Preflight, meanwhile, resets `ol, ul, menu { list-style: none; margin: 0; padding: 0 }`.
+   So a bulleted or numbered list inserted from the slash menu was created correctly in the
+   document and then rendered with no marker, no indent and no spacing -- pixel-identical to a
+   paragraph. It looked exactly like the command had done nothing, and every DOM-level test passed
+   because the <ul> really was there.
+   Restoring markers explicitly here (rather than adding the typography plugin) keeps the editor
+   surface styled by the same stylesheet as the rest of this file, and avoids pulling in a plugin
+   whose opinionated defaults would restyle every other block type as a side effect. */
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.ProseMirror ul {
+  list-style: disc outside;
+}
+.ProseMirror ol {
+  list-style: decimal outside;
+}
+.ProseMirror ul ul {
+  list-style: circle outside;
+}
+.ProseMirror ul ul ul {
+  list-style: square outside;
+}
+.ProseMirror ol ol {
+  list-style: lower-alpha outside;
+}
+.ProseMirror li {
+  margin: 0.125rem 0;
+}
+.ProseMirror li::marker {
+  color: var(--color-muted-foreground);
+}
+/* Tiptap wraps each list item's content in a <p>; without this every item gains a full paragraph's
+   vertical margin and the list reads as a stack of separate blocks. */
+.ProseMirror li > p {
+  margin: 0;
+}
+/* Action items opt OUT of markers -- their checkbox is the marker. This rule has to come after the
+   ul rules above to win on source order. */
+.ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}

@@ -280,6 +280,156 @@ describe('CourseContentEditor -- Topic/Sub-Topic structure (Story 7.2)', () => {
     expect(screen.getByLabelText('Delete Combustion')).toBeInTheDocument();
   });
 
+  // Code-review fix regression test: SlashCommandExtension's own Escape handler (menu-close)
+  // returning `true` only stops Tiptap/ProseMirror's own keymap chain -- it never stopped the
+  // native KeyboardEvent from also bubbling up to this component's own document-level Escape
+  // listener, which used to close the WHOLE editor on the same keypress, silently discarding any
+  // not-yet-synced Topic/Sub-Topic the tutor had just typed.
+  it('Escape while the slash-menu is open closes only the menu, not the whole Course Content Editor', async () => {
+    const u = userEvent.setup();
+    const onClose = vi.fn();
+    // No chapters yet -- `autofocus: 'start'` lands the cursor in the empty Chapter-title heading,
+    // an empty line the slash menu can trigger on (AC #2), with no click/caret-navigation needed
+    // (jsdom's setSelectionRange is unreliable for click-based caret positioning -- see the
+    // "real simulated keystroke" comment on the Story 7.1 describe block above).
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={onClose} draftId="draft-1" />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+
+    await u.type(document.querySelector('.ProseMirror')!, '/para');
+    await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
+
+    await u.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
+    expect(screen.getByText('Course Content Editor')).toBeInTheDocument(); // editor still open
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  // Regression guard for the slash menu itself, exercised against the REAL DocumentCanvas command
+  // list rather than SlashMenu.test.tsx's synthetic three-item fixture. BASIC_COMMANDS ("Paragraph")
+  // is appended unconditionally, with no position gating at all, so a bare "/" must ALWAYS produce
+  // a non-empty listbox no matter where the caret sits -- if this ever fails, the menu is broken as
+  // a mechanism, not merely offering nothing at that position.
+  it('typing a bare "/" opens the slash menu with at least the always-available Paragraph command', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+
+    await u.type(document.querySelector('.ProseMirror')!, '/');
+
+    const menu = await screen.findByRole('listbox');
+    expect(within(menu).getAllByRole('option').length).toBeGreaterThan(0);
+    expect(within(menu).getByText('Paragraph')).toBeInTheDocument();
+  });
+
+  // The Confluence block types added alongside the outline-tree work. Filtering by a query that
+  // only their own labels match proves they are genuinely reachable from the menu, not merely
+  // present in the source array.
+  it.each([
+    ['expand', 'Expand'],
+    ['action', 'Action items'],
+    ['quote', 'Quote'],
+    ['divider', 'Divider'],
+    ['warning', 'Warning panel'],
+  ])('offers the "%s" query as the %s command', async (query, label) => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+
+    await u.type(document.querySelector('.ProseMirror')!, `/${query}`);
+
+    const menu = await screen.findByRole('listbox');
+    expect(within(menu).getByText(label)).toBeInTheDocument();
+  });
+
+  // Menu visibility is not the same as insertability -- a command can be offered and then have its
+  // node rejected by the schema at the actual caret position. This asserts the whole path: type the
+  // query, commit it, and find the resulting node in the document.
+  it('committing a slash command outside a Page body actually inserts the block', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+
+    await u.type(document.querySelector('.ProseMirror')!, '/warning');
+    await screen.findByRole('listbox');
+    await u.keyboard('{Enter}');
+
+    await waitFor(() => expect(document.querySelector('.ProseMirror [data-callout][data-variant="warning"]')).toBeInTheDocument());
+  });
+
+  // The three block types reported as "still not working". Asserted through the REAL slash-command
+  // path (type the query, commit with Enter) and against the resulting document, not the menu.
+  it.each([
+    ['bulleted', 'ul'],
+    ['numbered', 'ol'],
+    ['code', 'pre'],
+  ])('committing the "%s" command produces a <%s> in the document', async (query, tag) => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+
+    await u.type(document.querySelector('.ProseMirror')!, `/${query}`);
+    await screen.findByRole('listbox');
+    await u.keyboard('{Enter}');
+
+    await waitFor(() => expect(document.querySelector(`.ProseMirror ${tag}`)).toBeInTheDocument());
+  });
+
+  // The hint must mark exactly the line the cursor is on. With includeChildren: true it decorated
+  // EVERY empty node at once, so a chapter with several blank lines showed a column of identical
+  // "Type '/'..." hints, which reads as a rendering fault rather than an affordance.
+  it("shows the '/' placeholder on only one line at a time", async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    const prose = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>('.ProseMirror');
+      if (!el) throw new Error('editor not mounted');
+      return el;
+    });
+
+    // Produce several empty blocks -- the exact condition that used to multiply the hint.
+    await u.type(prose, 'Chapter{Enter}{Enter}{Enter}');
+
+    await waitFor(() => {
+      const decorated = prose.querySelectorAll('[data-placeholder]');
+      expect(decorated.length).toBeLessThanOrEqual(1);
+    });
+  });
+
+  // Image and Resource card used to require the cursor to be inside an already-saved Page, so
+  // "insert an image" was simply missing from the menu across most of a chapter being written.
+  // Here there are no topics and no pages at all -- only the Chapter exists -- which is the exact
+  // position that previously offered neither.
+  it.each([
+    ['image', 'Image'],
+    ['resource card', 'Resource card'],
+  ])('offers "%s" with only a Chapter present, before any Page exists', async (_name, label) => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Maths', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue({
+      id: 'chapter-1',
+      courseId: 'draft-1',
+      title: 'Maths',
+      description: '',
+      isConfirmed: false,
+      topics: [],
+      pages: [],
+      resources: [],
+    } as unknown as courseContentService.ChapterDocumentDto);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+
+    await u.type(document.querySelector('.ProseMirror')!, '/');
+    const menu = await screen.findByRole('listbox');
+    expect(within(menu).getByText(label)).toBeInTheDocument();
+  });
+
   it('clicking a Topic delete control fetches the delete-impact count and opens ConfirmModal with a kind-broken-out message', async () => {
     const u = userEvent.setup();
     vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);

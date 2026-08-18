@@ -17,6 +17,13 @@
 // a real `resource:{id}`, they're never read again, so a reloaded node having them null is a
 // non-issue.
 //
+// DISPLAY WIDTH lives in the `src` URI as a query (`resource:{id}?w=50`), NOT as a separate node
+// attribute. One source of truth, and it round-trips through the stock Markdown serializer for
+// free -- `src` is already carried verbatim, so no custom renderMarkdown/parseMarkdown pair and no
+// new Markdown syntax are needed for a resized image to survive a reload. lib/markdown.ts splits
+// the query off on the reading side. A percentage (not pixels) because the student reading column
+// is a different width from the editor's, and a pixel width chosen here would overflow there.
+//
 // Deliberately NOT added to DocumentCanvas.tsx's markdownManager (the standalone parser/
 // serializer used outside a live editor) -- that manager uses the plain stock `Image` instead
 // (no NodeView, no courseId option needed, since it's never rendered to screen), avoiding a

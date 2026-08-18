@@ -227,6 +227,23 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
   // editor at all and rendering it at this top level keeps its fixed inset-0 z-50 takeover clean
   // of DocumentCanvas's own layout/scroll containers.
   const [previewScope, setPreviewScope] = useState<PreviewScope | null>(null);
+  // DocumentCanvas owns the autosave; this is its flush, handed up so every preview entry point --
+  // in-canvas and the header button below alike -- saves before PreviewAsStudent re-fetches from
+  // the server. `null` while no canvas is mounted (no chapter yet), in which case there is nothing
+  // unsaved to flush and the preview opens immediately.
+  const canvasFlushRef = useRef<(() => Promise<void>) | null>(null);
+  const openPreview = (scope: PreviewScope) => {
+    const flush = canvasFlushRef.current;
+    if (!flush) {
+      setPreviewScope(scope);
+      return;
+    }
+    // A failed save must not block the preview -- the tutor still gets to see the last saved
+    // state, and the canvas's own "Save failed / Retry" indicator is what surfaces the failure.
+    void flush()
+      .catch(() => undefined)
+      .then(() => setPreviewScope(scope));
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   // requestKey bumps on every open, even for the same file id -- ConfirmModal now animates its
   // own close (a real delay before the real onConfirm/onCancel fires), so re-requesting delete
@@ -452,7 +469,7 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
             {draftId && (
               <button
                 type="button"
-                onClick={() => setPreviewScope({ kind: 'course' })}
+                onClick={() => openPreview({ kind: 'course' })}
                 aria-label="Preview whole course as student"
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#5E6A79] hover:bg-white hover:text-[#142030] transition-colors"
               >
@@ -536,6 +553,9 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
             pendingFocusNodeId={pendingFocusNodeId}
             onFocusHandled={clearPendingFocus}
             onPreviewAsStudent={setPreviewScope}
+            onRegisterFlush={(flush) => {
+              canvasFlushRef.current = flush;
+            }}
           />
         )}
 
