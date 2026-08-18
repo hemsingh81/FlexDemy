@@ -1,7 +1,7 @@
 import React from 'react';
 import { Sparkles, ChevronDown, ChevronUp, NotebookPen } from 'lucide-react';
 import { Sentence, TopicDrilldown } from '../../types';
-import { renderLatex } from './renderLatex';
+import { renderLatex } from '../../lib/renderLatex';
 import { InlineDrilldownDetail } from './InlineDrilldownDetail';
 import { InlineDrilldownState } from './useInlineDrilldownState';
 

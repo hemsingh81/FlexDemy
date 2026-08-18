@@ -1,10 +1,16 @@
-// Real-backend Settings calls (Story 6.1, backend AD-25/AD-27). Same get/write + fetch pattern
-// as services/aiConfigService.ts -- this project has no shared HTTP client wrapper, each service
-// file is self-contained. Every route is Master+Support server-side (FeatureKeys.SettingsManage,
-// AD-27), unlike aiConfigService's Master-only ai-configuration routes.
-import { getToken } from './authService';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+// Real-backend Settings calls (Story 6.1, backend AD-25/AD-27). Every route is Master+Support
+// server-side (FeatureKeys.SettingsManage, AD-27), unlike aiConfigService's Master-only
+// ai-configuration routes.
+//
+// Code-review patch (2026-08-18): routed through httpClient.ts's shared request() (AD-7) instead
+// of hand-rolled fetch() calls -- this file previously bypassed the one place correlation-ID
+// capture (FR-23) is supposed to happen, meaning a Settings-related failure never had a
+// correlation id available to the frontend, unlike every other AD-7-compliant service. get()/
+// getPublic()/write() are now thin wrappers that translate httpClient's HttpClientError into this
+// file's own SettingsError, preserving this service's existing public error type (Settings.tsx
+// and its tests both check `e instanceof settingsService.SettingsError`) while gaining
+// correlation-ID capture for free.
+import { request, HttpClientError } from './httpClient';
 
 // Field names/casing mirror the backend's SettingDto exactly (BackEnd Application/Settings/SettingDto.cs).
 // createdAt/createdBy are included alongside updatedAt/updatedBy because a seeded-but-never-edited
@@ -89,66 +95,38 @@ export interface TypographyApplyResultDto {
 
 export class SettingsError extends Error {}
 
+// Translates httpClient's HttpClientError (its message is already the server's own `.detail`,
+// or a friendly network/parse fallback -- see httpClient.ts) into this file's own SettingsError,
+// so every existing `e instanceof settingsService.SettingsError` call site keeps working
+// unmodified.
+const asSettingsError = (e: unknown): SettingsError =>
+  new SettingsError(e instanceof HttpClientError || e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+
 const get = async <T>(path: string): Promise<T> => {
-  let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
+    return await request<T>(path, 'GET');
   } catch (e) {
-    throw new SettingsError('Could not reach the server. Please try again.');
+    throw asSettingsError(e);
   }
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null);
-    throw new SettingsError(problem?.detail || 'Something went wrong. Please try again.');
-  }
-
-  return response.json();
 };
 
 // Code-review patch (2026-08-16): for genuinely [AllowAnonymous] routes only (today: just
-// effective-fonts). get() always attaches an Authorization header even when getToken() is null,
-// which the server harmlessly ignores for an anonymous route -- but sending "Bearer null" is a
-// live footgun for a future refactor that might read "this call sends a token" as evidence the
-// route requires one. This helper omits the header entirely, matching what the route actually is.
+// effective-fonts) -- `{ skipAuth: true }` omits the Authorization header entirely rather than
+// sending "Bearer null", matching what the route actually is.
 const getPublic = async <T>(path: string): Promise<T> => {
-  let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`);
+    return await request<T>(path, 'GET', undefined, { skipAuth: true });
   } catch (e) {
-    throw new SettingsError('Could not reach the server. Please try again.');
+    throw asSettingsError(e);
   }
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null);
-    throw new SettingsError(problem?.detail || 'Something went wrong. Please try again.');
-  }
-
-  return response.json();
 };
 
 const write = async <T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T> => {
-  let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify(body),
-    });
+    return await request<T>(path, method, body);
   } catch (e) {
-    throw new SettingsError('Could not reach the server. Please try again.');
+    throw asSettingsError(e);
   }
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null);
-    throw new SettingsError(problem?.detail || 'Something went wrong. Please try again.');
-  }
-
-  return response.json();
 };
 
 export const getSettings = (): Promise<SettingDto[]> => get('/api/v1/settings');
@@ -156,9 +134,6 @@ export const getSettings = (): Promise<SettingDto[]> => get('/api/v1/settings');
 export const getFontPairings = (): Promise<FontPairingDefinitionDto[]> => get('/api/v1/settings/font-pairings');
 
 export const getFontSizes = (): Promise<FontSizeDefinitionDto[]> => get('/api/v1/settings/font-sizes');
-
-export const applySetting = (id: string, value: string): Promise<SettingDto> =>
-  write(`/api/v1/settings/${encodeURIComponent(id)}/apply`, 'PUT', { value });
 
 export const getSettingHistory = (id: string): Promise<SettingChangeHistoryDto[]> =>
   get(`/api/v1/settings/${encodeURIComponent(id)}/history`);
@@ -180,7 +155,8 @@ export const applyTypographyCombination = (slug: string): Promise<TypographyAppl
   write(`/api/v1/settings/typography-combinations/${encodeURIComponent(slug)}/apply`, 'PUT', {});
 
 // The Advanced composer's save: a font pairing + size scale chosen independently, applied together.
-// Deliberately NOT two applySetting calls -- the backend writes both Settings in one transaction, so
-// a failure can't leave the site on the new font at the old size (see SettingsService.ApplyTypographyAsync).
+// Deliberately ONE call, not two independent writes -- the backend writes both Settings in one
+// transaction, so a failure can't leave the site on the new font at the old size (see
+// SettingsService.ApplyTypographyAsync).
 export const applyTypography = (fontPairingSlug: string, fontSizeSlug: string): Promise<TypographyApplyResultDto> =>
   write('/api/v1/settings/typography/apply', 'PUT', { fontPairingSlug, fontSizeSlug });

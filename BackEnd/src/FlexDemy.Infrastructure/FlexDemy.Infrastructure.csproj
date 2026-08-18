@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
+    <!-- Story 8.1/AD-28: SVG sanitization on the Resource upload path. First consumer. -->
+    <PackageReference Include="HtmlSanitizer" Version="9.1.973" />
     <!-- Hangfire.AspNetCore brings in Hangfire.Core + Hangfire.NetCore transitively; it's what
          actually exposes the AddHangfire()/app.UseHangfireServer() extension methods Task 2 uses
          (Hangfire.Core alone only has the low-level API). -->

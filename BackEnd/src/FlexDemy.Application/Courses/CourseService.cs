@@ -1,16 +1,21 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Domain.Courses;
-using FlexDemy.Domain.Jobs;
+using FlexDemy.Domain.Users;
 
 namespace FlexDemy.Application.Courses;
 
 public class CourseService(
     ICourseRepository repository,
-    ICourseFileRepository courseFileRepository,
     IUnitOfWork unitOfWork,
     IIdGenerator idGenerator,
     IFileStorageService fileStorage,
-    ICurrentUserService currentUserService) : ICourseService
+    ICurrentUserService currentUserService,
+    // Story 11.1, FR-45: MoveToReviewAsync's own gate now needs to know whether anything in the
+    // course's content tree is Unconfirmed -- depends on the repository directly (not
+    // IContentService) to avoid a circular DI dependency, since ContentService already depends on
+    // ICourseService. Replaces the old file-parsed check, which was this class's only remaining use
+    // of ICourseFileRepository -- removed outright rather than left as dead-parameter cruft.
+    IContentRepository contentRepository) : ICourseService
 {
     // Story 2.4/AC#3: server-side twin of the frontend's MAX_THUMBNAILS -- the backend must
     // not trust the client alone here either.
@@ -233,19 +238,54 @@ public class CourseService(
             throw new UnauthorizedAppException("You do not have permission to modify this course.");
     }
 
+    // Story 11.3, AD-29: the reviewer-access read gate, retrofitted (Task 3) into every
+    // ContentAuthoring read method built across Epics 7-11. Deliberately does NOT call
+    // RequireCurrentUserId() -- that throws UnauthorizedAppException for an unauthenticated
+    // caller, but this method's whole contract is "NotFoundException in every non-granted case,
+    // never UnauthorizedAppException" (matching GetCourseByIdAsync's own existence-hiding
+    // precedent), so an unauthenticated caller simply falls through to the final throw below
+    // rather than short-circuiting with a different exception type.
+    public async Task EnsureReadableAsync(string courseId, CancellationToken cancellationToken = default)
+    {
+        var course = await repository.GetByIdAsync(courseId, cancellationToken)
+            ?? throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
+
+        var currentUserId = currentUserService.UserId;
+        if (currentUserId is not null && course.TutorId == currentUserId) return;
+
+        var role = currentUserService.Role;
+        if ((role == UserRole.Master || role == UserRole.Support)
+            && course.LifecycleState is LifecycleState.InReview or LifecycleState.ReviewConfirmed or LifecycleState.Published)
+        {
+            return;
+        }
+
+        // Student/enrollment branch deliberately absent (AC #3, AD-29 Deferred) -- not a
+        // commented-out placeholder. The absence of a branch IS the correct deny-by-default
+        // behavior until a real Enrollment primitive exists.
+        throw new NotFoundException(nameof(Domain.Courses.Course), courseId);
+    }
+
     // Real Draft -> InReview transition. The old confirmation-scoped gate (every Chapter/Topic/
     // Subtopic/ContentBlock must be Confirmed) was removed along with the tree itself -- the
     // simplest honest replacement is "there's real content here": at least one uploaded file has
     // successfully parsed.
+    // Story 11.1, FR-45: the file-parsed check this replaced is gone outright, not kept as a
+    // redundant second guard -- a CourseFile's parse status has no relationship to whether the
+    // course's actual content (the outline) is ready to review. The new condition is "no Chapter,
+    // Topic, Subtopic, or Page in this course is Unconfirmed" -- Page confirmation counts
+    // identically to node confirmation here, per FR-44's own "node or page" scope. A course with
+    // zero content (no Chapters at all) vacuously passes this gate (nothing to be Unconfirmed) --
+    // deliberate: FR-45 only gates on *existing* Unconfirmed items, an empty-course rejection is a
+    // separate, out-of-scope product question this story doesn't take a position on.
     public async Task MoveToReviewAsync(string courseId, CancellationToken cancellationToken = default)
     {
         var course = await LoadOwnedCourseAsync(courseId, cancellationToken);
         if (course.LifecycleState != LifecycleState.Draft)
             throw new ValidationException("A course can only move to review from Draft.");
 
-        var files = await courseFileRepository.GetByCourseIdAsync(courseId, cancellationToken);
-        if (!files.Any(f => f.Status == JobItemStatus.Done))
-            throw new ValidationException("Upload at least one file before this course can move to review.");
+        if (await contentRepository.HasUnconfirmedContentAsync(courseId, cancellationToken))
+            throw new ValidationException("Confirm every chapter, topic, sub-topic, and page before this course can move to review.");
 
         course.LifecycleState = LifecycleState.InReview;
         await unitOfWork.SaveChangesAsync(cancellationToken);

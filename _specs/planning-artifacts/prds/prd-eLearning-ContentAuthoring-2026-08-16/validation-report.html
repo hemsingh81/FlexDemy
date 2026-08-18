@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PRD Validation: Tutor Content Authoring — Wizard, Pages &amp; Per-Page Resources</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+
+    --grade-exc: #16a34a;
+    --grade-good: #65a30d;
+    --grade-fair: #d97706;
+    --grade-poor: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .grade {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: white;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .grade-excellent { background: var(--grade-exc); }
+  .grade-good { background: var(--grade-good); }
+  .grade-fair { background: var(--grade-fair); }
+  .grade-poor { background: var(--grade-poor); }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .badge-sev-note { background: rgba(120, 113, 108, 0.14); color: var(--muted); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>Tutor Content Authoring — Wizard, Pages &amp; Per-Page Resources — Validation Report</h1>
+        <div class="subtitle">_specs/planning-artifacts/prds/prd-eLearning-ContentAuthoring-2026-08-16/prd.md</div>
+      </div>
+      <div class="grade grade-fair">Fair</div>
+    </header>
+
+    <div class="synthesis">
+      <p>This is a rigorous, decision-dense PRD: the design decisions carry real rationale and named costs, the brownfield grounding (§1.1's verified-against-<code>main</code> table) is unusually honest, and the FRs are testable enough to slice directly into the Appendix C story list. The rubric pass found the risk mechanical rather than conceptual — a self-contradicting DD count in §0, an Assumptions Index that only half round-trips to inline tags, a dangling Appendix A cross-reference (FR-42), and one FR (FR-48) that never lands in a story.</p>
+      <p>The adversarial pass materially shifts that picture. It went beyond the PRD text and checked the claims against the actual codebase (<code>git show f3131d9</code>, <code>CourseService.MoveToReviewAsync</code>, <code>LifecycleState</code>), and surfaced substantive gaps the rubric pass couldn't see from the document alone: FR-45's new confirmation gate never reconciles with the file-parsed check that exists in code today; a brand-new <code>Confirmation</code> concept collides in name with the existing <code>ReviewConfirmed</code> lifecycle state; the publish/versioning pipeline (heavily rewritten in the same commit that removed the old content tree) is never addressed for the new Page/Resource graph; and Appendix B's entire API is gated to tutor-owned-Draft with no stated access path for student or reviewer consumption of the same resources — a real authorization gap, not a nicety. It also flagged an SVG upload path (FR-42) with no XSS discussion despite FR-48's no-raw-HTML guarantee. These are the kind of findings that argue for a resolution pass before this PRD is treated as build-ready, even though none of them individually break the PRD's structure.</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card">
+        <div class="dim-name">Decision-readiness</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Substance over theater</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Strategic coherence</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Done-ness clarity</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Scope honesty</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Downstream usability</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">Shape fit</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+    </div>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Decision-readiness</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Decisions are stated as decisions (DD-1…DD-7), each with a named rationale and, where relevant, an explicit accepted cost — DD-3's "Cost, accepted: block identity is positional, so a block-level comment/anchor feature would need this revisited" is exactly the honest trade-off framing the rubric asks for. §6.3 names the migration question as needing "a product decision, not an engineering default," ranks three options with a recommendation, and explicitly scopes the blocking radius. Open Questions are genuinely open — OQ-3 and OQ-6 each state the tension rather than answering themselves in the next sentence.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">Medium</span>
+              <h3 class="finding-title">No [NOTE FOR PM] callouts anywhere in the document</h3>
+              <span class="finding-location">§ whole doc</span>
+            </header>
+            <div class="finding-note">The two real PM-facing decisions (§6.3 migration option, OQ-6 confirmation granularity) are only reachable by reading prose and the Open Questions list end-to-end, not by grepping a callout marker.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Tag §6.3's option choice and OQ-6 with [NOTE FOR PM] so they're distinguishable from lower-stakes OQ-2/OQ-3/OQ-5 items.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Substance over theater</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>No persona theater: exactly one named protagonist (Meera) reused across all four UJs, each driving a specific FR or edge case. No forced differentiation section. NFRs are specific, not boilerplate — FR-47 names <code>aria-live</code> and a concrete existing pattern to extend; FR-48 names a concrete guarantee ("nothing in this PRD introduces <code>dangerouslySetInnerHTML</code>") rather than "the system must be secure." The Vision (§1) is product-specific and would not swap cleanly into an unrelated PRD.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">No findings</span>
+              <h3 class="finding-title">Nothing to flag in this dimension</h3>
+              <span class="finding-location">—</span>
+            </header>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Strategic coherence</h2>
+          <span class="verdict-pill verdict-adequate">Adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>The thesis is explicit and singular: "the tutor decides the shape of every page" (§1), and DD-2/DD-5/DD-6 all serve it directly. Feature ordering in §6.1 follows the thesis rather than "what's easy first." Success Metrics are thesis-specific rather than activity metrics — each of M-1…M-5 states in parentheses exactly what failure mode it's catching.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">Medium</span>
+              <h3 class="finding-title">No counter-metric for M-3</h3>
+              <span class="finding-location">§7</span>
+            </header>
+            <div class="finding-note">M-3 rewards Insert-from-file usage, but nothing measures whether extracted text is actually reshaped afterward. A tutor who inserts-and-never-edits would score well on M-3 while quietly defeating DD-6's "the tutor disposes" premise.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a guardrail metric, e.g. "% of extracted pages with at least one post-insert edit beyond the extraction," alongside M-3.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Done-ness clarity</h2>
+          <span class="verdict-pill verdict-adequate">Adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Most FRs carry a testable consequence: numeric bounds (FR-4, Appendix A's limits), explicit state machines (FR-34), and named degradation behavior instead of hand-waving (FR-33, FR-28). No instances of "handles gracefully" or "reasonable performance" were found.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">High</span>
+              <h3 class="finding-title">FR-42's code/text extension allowlist is never delivered</h3>
+              <span class="finding-location">§4.5, Appendix A</span>
+            </header>
+            <div class="finding-note">FR-42 says accepted code/text file types are "a bounded extension allowlist — see Appendix A," but Appendix A contains no such list. An engineer cannot determine what a resource upload should accept or reject for this file class.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add the allowlist to Appendix A, or state it inline in FR-42 and drop the cross-reference.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">Low</span>
+              <h3 class="finding-title">FR-16's partial-scaffold detection doesn't cover the sub-topic branch</h3>
+              <span class="finding-location">§4.2</span>
+            </header>
+            <div class="finding-note">"Continue" triggers on "a chapter with no topics, or a topic with no pages," but doesn't say what happens when a topic has sub-topics and the topic itself has none.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Extend FR-16's parenthetical to state the rule for topics that have sub-topics.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Scope honesty</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>§5's Non-Goals section does real work (10 explicit items, several with a one-line reason), and §6.2 separately and honestly names MVP de-scopes rather than leaving them to be inferred. Two inline [ASSUMPTION: …] tags (FR-20, FR-44) are used precisely where the PRD is guessing rather than stating fact. Open-items density (6 OQs, 6 Assumptions-Index entries, 0 NOTE-FOR-PM) is proportionate for a 48-FR chain-top brownfield PRD.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">Medium</span>
+              <h3 class="finding-title">Assumptions Index only half round-trips to inline tags</h3>
+              <span class="finding-location">§9</span>
+            </header>
+            <div class="finding-note">A-3 through A-6 are indexed without a corresponding inline [ASSUMPTION: …] marker, so a reader scanning the body for bracketed assumptions will miss four of the six.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add inline [ASSUMPTION: …] markers at the sections A-3…A-6 cite, or note in §9 that some entries are body-implicit.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Downstream usability</h2>
+          <span class="verdict-pill verdict-adequate">Adequate</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>The Glossary (§3) is used consistently across FR text and Appendix A. FR IDs, JTBD IDs, UJ IDs, OQ IDs and Assumption IDs are all contiguous with no gaps or duplicates. UJs each have a named, consistent protagonist (Meera). Appendix C maps almost every MVP FR to a story with explicit dependencies.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">High</span>
+              <h3 class="finding-title">§0's DD count contradicts the document's own content</h3>
+              <span class="finding-location">§0 vs §6.1</span>
+            </header>
+            <div class="finding-note">§0 states "Named design decisions are DD-1 … DD-10," but only DD-1 through DD-7 exist anywhere in the PRD, and §6.1 itself correctly scopes MVP as "DD-1 … DD-7." A document that says "an FR that contradicts a DD is a bug in this PRD" should not get its own DD range wrong in the framing section.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Correct §0 to "DD-1 … DD-7."</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">Medium</span>
+              <h3 class="finding-title">FR-48 is not assigned to any story in Appendix C</h3>
+              <span class="finding-location">Appendix C</span>
+            </header>
+            <div class="finding-note">Every other in-scope FR appears in at least one story's FR list; FR-48 ("Safety and scale") does not appear in C-1…C-11. An unassigned cross-cutting FR is easy for sprint planning to drop.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add FR-48 explicitly to C-1 (server-side bounds) and C-7 (renderer guarantee), or note it's a cross-cutting acceptance criterion applied to every relevant story.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>Shape fit</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>Brownfield treatment is a standout: §1.1's table cites exact file/entity names, line counts, and the specific commit that removed the prior implementation, and DD-1 explicitly distinguishes "re-introduces the outline" from "revert <code>f3131d9</code>." As a chain-top PRD, the extra rigor in Appendix A/B/C is appropriate rather than over-formalized. UJ density (one protagonist, four UJs) fits a single-operator-role authoring tool without being under-formalized.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">Low</span>
+              <h3 class="finding-title">Appendix A edges toward architecture-phase decisions</h3>
+              <span class="finding-location">Appendix A</span>
+            </header>
+            <div class="finding-note">The repository-pattern call and the CLR-default ordinal rationale for the Confirmation enum are implementation choices, not product requirements. Self-labelled as a "sketch," which mitigates this.</div>
+            <div class="finding-fix"><strong>Fix:</strong> None required; consider a one-line disclaimer that Appendix A is non-binding on the architecture phase.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details>
+        <summary>
+          <h2>Adversarial review</h2>
+          <span class="reviewer-source">review-adversarial-general.md</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>A cynical pass that cross-checked the PRD's claims against the actual codebase rather than treating the document as ground truth. It found the PRD's brownfield narrative in §1.1 undersells the real blast radius of the commit it cites, surfaced an unreconciled conflict between the new confirmation gate and code that exists today, a naming collision on "Confirmation," an internal contradiction in DD-2/FR-5, several data-model and cross-reference gaps, a security gap on SVG uploads, an authorization gap in Appendix B, and understated migration risk. 17 findings total; the most consequential are surfaced below.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">§1.1's "what exists today" table understates f3131d9's actual scope</h3>
+              <span class="finding-location">§1.1</span>
+            </header>
+            <div class="finding-note">Inspecting the commit itself shows it also deleted the entire AdaptiveLearning/Exercise/AiGateway application slice and substantially rewrote PublishService.cs and VersionService.cs — none of which §1.1 mentions. FR-24 describes a future story "reinstating" AI extraction as if only the staging tables are missing, but the AI gateway infrastructure it would depend on is also gone.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">FR-45's confirmation gate never reconciles with the gate that already exists in code</h3>
+              <span class="finding-location">FR-45</span>
+            </header>
+            <div class="finding-note"><code>CourseService.MoveToReviewAsync</code> currently blocks Draft→InReview on "at least one uploaded file has successfully parsed" — a check DD-5 makes semantically wrong once uploaded files stop being content. FR-45 never says whether that existing check is replaced, kept, or removed.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">"Confirmation" collides with an existing, unrelated concept of the same name</h3>
+              <span class="finding-location">FR-44 vs LifecycleState</span>
+            </header>
+            <div class="finding-note"><code>LifecycleState</code> already has <code>ReviewConfirmed</code>, a course-level reviewer-driven action. This PRD introduces an unrelated per-node/per-page <code>Confirmation</code> enum that is tutor-driven. Two different actors, two different granularities, same name, undisambiguated.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">DD-2's "flat page sequence" claim is contradicted by FR-5</h3>
+              <span class="finding-location">DD-2, FR-5</span>
+            </header>
+            <div class="finding-note">DD-2 claims "the student reader is a flat page sequence, not a recursive renderer." FR-5 has a node's Description render as a section-opening card before that node's first page — exactly the node-aware, hierarchy-sensitive rendering DD-2 claims to avoid.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">FR-10's "What you'll learn" bullet list has no home in the data model</h3>
+              <span class="finding-location">FR-10, Appendix A</span>
+            </header>
+            <div class="finding-note">Appendix A's Chapter/Topic/Subtopic rows expose exactly one text field (Description) for what FR-10 collects as chapter overview prose plus a separate repeatable bullet list. As written, an engineer cannot determine where the bullets are stored.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">FR-8 + DD-7 leave in-body resource references dangling after a page move</h3>
+              <span class="finding-location">FR-8, DD-7, FR-30</span>
+            </header>
+            <div class="finding-note">If a page body embeds a reference to an inherited ancestor resource and the page is then moved to a different chapter (FR-8), that resource may no longer be an ancestor. FR-8 only describes the resource panel re-resolving, not what happens to an existing in-body reference. FR-31's in-use guard only fires on explicit deletion, not on a move.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">FR-6's cascade-delete wording omits node-owned resources' fate</h3>
+              <span class="finding-location">FR-6</span>
+            </header>
+            <div class="finding-note">FR-6 names "their pages and their page-scoped resources" in the cascade but never confirms node-owned (chapter/topic/sub-topic-level) resources are included, or shown in the destruction count.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">FR-42 permits SVG uploads with no XSS discussion</h3>
+              <span class="finding-location">FR-42, FR-48</span>
+            </header>
+            <div class="finding-note">SVG can carry &lt;script&gt; elements and event-handler attributes. FR-41's malware scan is not the same control as sanitizing scriptable SVG content, and this isn't connected to FR-48's separately-asserted no-raw-HTML guarantee.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">Appendix B has no access path for student/reviewer resource consumption</h3>
+              <span class="finding-location">Appendix B</span>
+            </header>
+            <div class="finding-note">Every route, including <code>GET /resources/{id}/content</code>, is gated to <code>EnsureOwnedDraftAsync</code> (tutor, owner, Draft-only). FR-46 and UJ-3/UJ-4 assume student- and reviewer-facing access to the same resources, but no route describes that authorization path. A security-relevant gap, not a documentation nicety.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">§6.3 understates migration risk — DD-5 can blank live Draft courses before the backfill ships</h3>
+              <span class="finding-location">§6.3, Appendix C</span>
+            </header>
+            <div class="finding-note">"Blocking for §6.3 only" glosses over the fact that shipping DD-5's behavior change is not safe independently of the migration decision — Appendix C's migration story (C-11) is listed last, dependent on C-9, with no stated requirement that it ship atomically with or before the DD-5 change.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">The recommended migration option is silently contingent on an assumption flagged unverified elsewhere</h3>
+              <span class="finding-location">§6.3 option 1, FR-20, OQ-4</span>
+            </header>
+            <div class="finding-note">Option 1 reuses FR-20's section splitter, which is explicitly [ASSUMPTION]-tagged and tied to OQ-4 ("Confirm against real Docling output during dev"). If the heuristic doesn't hold, the recommended one-time backfill produces a bad starting outline for every migrated course — a much bigger blast radius than a single mis-split page in ordinary authoring.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">The publish/versioning pipeline is never addressed for the new content graph</h3>
+              <span class="finding-location">whole doc</span>
+            </header>
+            <div class="finding-note"><code>PublishService.cs</code> and <code>VersionService.cs</code> were substantially rewritten in the same commit that removed the old content tree. Nothing in this PRD describes how a course publish snapshots or versions the new Chapter/Topic/Subtopic/Page/Resource graph, or how version restore is expected to behave against the new shape.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">FR-44 doesn't define confirmation-reset behavior for a page move</h3>
+              <span class="finding-location">FR-44, FR-8</span>
+            </header>
+            <div class="finding-note">FR-44's rule is stated per single "immediate parent." Moving a page (FR-8) is a structural edit to two nodes at once, and also re-resolves inherited resources — the PRD never says whether both nodes reset, or whether the page's own confirmation resets.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">The reviewer-rejection path (InReview back to Draft) is never addressed</h3>
+              <span class="finding-location">FR-45, FR-48, UJ-4</span>
+            </header>
+            <div class="finding-note">FR-48's Draft-only edit guard and FR-45's confirmation gate interact once a course leaves Draft, but UJ-4 only shows the happy path to Review and stops — the PRD doesn't work through what happens when review sends work back, even though the lifecycle already has states for it.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">M-2, M-3 and M-4 lack a measurement window, cohort, or denominator rule</h3>
+              <span class="finding-location">§7</span>
+            </header>
+            <div class="finding-note">Bare percentages with no defined cohort/time boundary mean two people computing "the" number from the same data could get different answers — unlike M-1 and M-6, which specify "same session" and a concrete failure rate.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-note">Flag</span>
+              <h3 class="finding-title">DD-6's copy-on-insert stance creates unflagged content staleness</h3>
+              <span class="finding-location">DD-6, UJ-2</span>
+            </header>
+            <div class="finding-note">UJ-2's edge case has Meera re-extract into a new page after a corrected re-upload, but the original, now-known-wrong page keeps rendering to students indefinitely with no "source file changed since extraction" indicator anywhere in FR-18–FR-24.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li><strong>DD count mismatch.</strong> §0 claims "DD-1 … DD-10"; only DD-1…DD-7 exist, and §6.1 correctly states "DD-1 … DD-7."</li>
+        <li><strong>Assumptions Index roundtrip is partial.</strong> Only A-1 (FR-20) and A-2 (FR-44) have matching inline [ASSUMPTION: …] tags. A-3, A-4, A-5, A-6 are indexed with no inline marker at the sections they cite.</li>
+        <li><strong>Broken cross-reference.</strong> FR-42 points to Appendix A for a code/text extension allowlist that Appendix A does not contain.</li>
+        <li><strong>FR ID continuity is otherwise clean.</strong> FR-1…FR-48 contiguous; JTBD-1…7, UJ-1…4, OQ-1…6, A-1…6, M-1…6 all contiguous, no duplicates found.</li>
+        <li><strong>No [NON-GOAL for MVP] inline tags</strong> are used, but §5 and §6.2 together cover the same ground in full prose — functionally equivalent, just untagged.</li>
+        <li><strong>Glossary usage is consistent</strong> across FRs/DDs/UJs — no case, plural, or synonym drift found for the 13 defined terms.</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: .claude/skills/bmad-prd/assets/prd-validation-checklist.md</span>
+        <span>Generated: 2026-08-16</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

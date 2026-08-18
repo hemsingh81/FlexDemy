@@ -17,7 +17,8 @@ public class CourseFileServiceTests
         IFileStorageService FileStorage,
         ICourseService CourseService,
         IScanFileJobEnqueuer Enqueuer,
-        ICorrelationIdAccessor CorrelationIdAccessor);
+        ICorrelationIdAccessor CorrelationIdAccessor,
+        IContentRepository ContentRepository);
 
     private static Sut MakeSut()
     {
@@ -28,8 +29,13 @@ public class CourseFileServiceTests
         var courseService = Substitute.For<ICourseService>();
         var enqueuer = Substitute.For<IScanFileJobEnqueuer>();
         var correlationIdAccessor = Substitute.For<ICorrelationIdAccessor>();
-        var service = new CourseFileService(repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer, correlationIdAccessor);
-        return new Sut(service, repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer, correlationIdAccessor);
+        var contentRepository = Substitute.For<IContentRepository>();
+        // Story 10.2: default to "no file has an attached resource" -- individual tests override
+        // this when exercising GetFilesAsync's HasAttachedResources computation specifically.
+        contentRepository.GetCourseFileIdsWithResourcesAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<string>());
+        var service = new CourseFileService(repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer, correlationIdAccessor, contentRepository);
+        return new Sut(service, repository, unitOfWork, idGenerator, fileStorage, courseService, enqueuer, correlationIdAccessor, contentRepository);
     }
 
     // -- UploadFileAsync ------------------------------------------------------------------------
@@ -253,6 +259,50 @@ public class CourseFileServiceTests
         await sut.CourseService.Received(1).EnsureOwnedDraftAsync("draft_1", Arg.Any<CancellationToken>());
         Assert.Equal(2, result.Count);
         Assert.Equal("Malware detected: Eicar-Test-Signature", result.Single(f => f.Id == "f2").FailureReason);
+    }
+
+    // Story 10.2, FR-23: the delete-confirmation warning's accuracy depends on this flag being
+    // computed correctly per file, not defaulted true/false for the whole list.
+    [Fact]
+    public async Task GetFilesAsync_marks_HasAttachedResources_true_only_for_files_the_repository_reports_as_referenced()
+    {
+        var sut = MakeSut();
+        var files = new List<CourseFile>
+        {
+            new() { Id = "f1", CourseId = "draft_1", FileName = "a.pdf", ContentType = "application/pdf", StoredUrl = "/u/a.pdf", Status = JobItemStatus.Done },
+            new() { Id = "f2", CourseId = "draft_1", FileName = "b.pdf", ContentType = "application/pdf", StoredUrl = "/u/b.pdf", Status = JobItemStatus.Done },
+        };
+        sut.Repository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(files);
+        sut.ContentRepository.GetCourseFileIdsWithResourcesAsync(Arg.Is<IReadOnlyCollection<string>>(ids => ids.Contains("f1") && ids.Contains("f2")), Arg.Any<CancellationToken>())
+            .Returns(new List<string> { "f1" });
+
+        var result = await sut.Service.GetFilesAsync("draft_1");
+
+        Assert.True(result.Single(f => f.Id == "f1").HasAttachedResources);
+        Assert.False(result.Single(f => f.Id == "f2").HasAttachedResources);
+    }
+
+    // -- DeleteFileAsync --------------------------------------------------------------------------
+
+    // Story 10.2, Task 2's third subtask: confirms -- rather than assumes -- that deleting a
+    // CourseFile never touches the ContentRepository/Resource slice at all. A Resource attached via
+    // "Attach existing file" (Story 8.1) copies StoredUrl/ContentType/SizeBytes/FileName at attach
+    // time and only keeps a soft, non-FK CourseFileId reference (Resource.cs's own header comment)
+    // -- there is nothing here for DeleteFileAsync to cascade into, and this test locks that in.
+    [Fact]
+    public async Task DeleteFileAsync_removes_only_the_CourseFile_row_and_never_touches_Resources()
+    {
+        var sut = MakeSut();
+        var file = new CourseFile { Id = "f1", CourseId = "draft_1", FileName = "a.pdf", ContentType = "application/pdf", StoredUrl = "/u/a.pdf", Status = JobItemStatus.Done };
+        sut.Repository.GetByIdAsync("f1", Arg.Any<CancellationToken>()).Returns(file);
+
+        await sut.Service.DeleteFileAsync("draft_1", "f1");
+
+        await sut.CourseService.Received(1).EnsureOwnedDraftAsync("draft_1", Arg.Any<CancellationToken>());
+        sut.Repository.Received(1).Remove(file);
+        await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await sut.FileStorage.Received(1).DeleteAsync("/u/a.pdf", Arg.Any<CancellationToken>());
+        Assert.Empty(sut.ContentRepository.ReceivedCalls());
     }
 
     // -- GetPublishedFilesAsync -------------------------------------------------------------------

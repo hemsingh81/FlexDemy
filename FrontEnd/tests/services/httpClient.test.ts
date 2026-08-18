@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as authService from '@/src/services/authService';
-import { request, getCurrentCorrelationId, HttpClientError } from '@/src/services/httpClient';
+import { request, requestBlob, getCurrentCorrelationId, HttpClientError } from '@/src/services/httpClient';
 
 describe('httpClient', () => {
   beforeEach(() => {
@@ -72,6 +72,21 @@ describe('httpClient', () => {
 
     await expect(request('/api/v1/things', 'POST', {})).rejects.toThrow(HttpClientError);
     await expect(request('/api/v1/things', 'POST', {})).rejects.toThrow('Bad input.');
+  });
+
+  it('request() throws HttpClientError carrying the response status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 409, headers: new Headers(), json: async () => ({ detail: 'Conflict.' }) })
+    );
+
+    try {
+      await request('/api/v1/things', 'DELETE');
+      expect.fail('expected request() to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(HttpClientError);
+      expect((e as HttpClientError).status).toBe(409);
+    }
   });
 
   it('request() throws a generic HttpClientError when the network request itself fails', async () => {
@@ -149,5 +164,49 @@ describe('httpClient', () => {
     await expect(request('/api/v1/things', 'GET')).rejects.toThrow();
 
     expect(getCurrentCorrelationId()).toBe('corr-on-error');
+  });
+
+  // Story 8.3, Task 2: the first frontend consumer of binary content -- requestBlob mirrors
+  // request()'s own auth/correlation-ID plumbing but returns a Blob, never calling response.json().
+  describe('requestBlob', () => {
+    it('sends a bearer token and returns the response body as a Blob', async () => {
+      const blob = new Blob(['bytes'], { type: 'image/png' });
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(), blob: async () => blob });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await requestBlob('/api/v1/things/1/content');
+
+      expect(result).toBe(blob);
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toContain('/api/v1/things/1/content');
+      expect(options.method).toBe('GET');
+      expect(options.headers.Authorization).toBe('Bearer fake-jwt');
+    });
+
+    it('throws HttpClientError with the response status on a non-ok response', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: false, status: 404, headers: new Headers(), json: async () => ({ detail: 'Not found.' }) })
+      );
+
+      await expect(requestBlob('/api/v1/things/1/content')).rejects.toThrow(HttpClientError);
+      await expect(requestBlob('/api/v1/things/1/content')).rejects.toThrow('Not found.');
+    });
+
+    it('captures the X-Correlation-Id response header, same as request()', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'X-Correlation-Id': 'corr-blob' }),
+          blob: async () => new Blob(['x']),
+        })
+      );
+
+      await requestBlob('/api/v1/things/1/content');
+
+      expect(getCurrentCorrelationId()).toBe('corr-blob');
+    });
   });
 });

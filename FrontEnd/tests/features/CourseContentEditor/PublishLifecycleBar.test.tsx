@@ -1,8 +1,12 @@
+import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { PublishLifecycleBar } from '../../../src/features/CourseContentEditor/PublishLifecycleBar';
+import { CourseContentProvider } from '@/src/context/CourseContentContext';
 import * as courseDraftService from '@/src/services/courseDraftService';
 import type { PublishStatusDto } from '@/src/services/courseDraftService';
+import * as courseContentService from '@/src/services/courseContentService';
+import type { OutlineDto } from '@/src/services/courseContentService';
 
 vi.mock('@/src/services/courseDraftService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/courseDraftService')>('@/src/services/courseDraftService');
@@ -18,13 +22,34 @@ vi.mock('@/src/services/courseDraftService', async () => {
   };
 });
 
+vi.mock('@/src/services/courseContentService', async () => {
+  const actual = await vi.importActual<typeof import('@/src/services/courseContentService')>('@/src/services/courseContentService');
+  return { ...actual, getOutline: vi.fn() };
+});
+
 const makeStatus = (overrides: Partial<PublishStatusDto> = {}): PublishStatusDto => ({
   lifecycleState: 'Draft',
   ...overrides,
 });
 
+const EMPTY_OUTLINE: OutlineDto = { chapters: [] };
+
+// Story 11.1, Task 2: PublishLifecycleBar now reads CourseContentContext's `outline` (via
+// useCourseContent()) to compute its blocker list -- every render call needs a real
+// CourseContentProvider ancestor (it throws without one) and a mocked getOutline response.
+const renderBar = (props: { courseId?: string; outline?: OutlineDto; onActivateBlocker?: (blocker: { id: string; chapterId: string }) => void } = {}) => {
+  const { courseId = 'course_1', outline = EMPTY_OUTLINE, onActivateBlocker = vi.fn() } = props;
+  vi.mocked(courseContentService.getOutline).mockResolvedValue(outline);
+  render(
+    <CourseContentProvider courseId={courseId}>
+      <PublishLifecycleBar courseId={courseId} onActivateBlocker={onActivateBlocker} />
+    </CourseContentProvider>
+  );
+  return { onActivateBlocker };
+};
+
 // Publish is now a single, immediate, synchronous transition -- no per-node checklist/batch, so
-// this file mocks the plain HTTP calls and exercises the stage-nav/version-history UI only.
+// this file mocks the plain HTTP calls and exercises the stage-nav/version-history/blocker UI only.
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus());
@@ -34,6 +59,7 @@ beforeEach(() => {
   vi.mocked(courseDraftService.returnToDraft).mockResolvedValue(undefined);
   vi.mocked(courseDraftService.getVersions).mockResolvedValue([]);
   vi.mocked(courseDraftService.restoreVersion).mockResolvedValue(undefined);
+  vi.mocked(courseContentService.getOutline).mockResolvedValue(EMPTY_OUTLINE);
 });
 
 // Drives the bar through Draft -> InReview -> ReviewConfirmed.
@@ -46,7 +72,7 @@ const advanceToReviewConfirmed = async () => {
 
 describe('PublishLifecycleBar', () => {
   it('Publish is disabled at draft and inReview, enabled only at reviewConfirmed', async () => {
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
 
     const publishButton = screen.getByRole('button', { name: 'Publish' });
     expect(publishButton).toBeDisabled();
@@ -60,7 +86,7 @@ describe('PublishLifecycleBar', () => {
   });
 
   it('exactly one lifecycle stage carries aria-current="true", and it advances as state transitions', async () => {
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
 
     const nav = screen.getByRole('navigation', { name: 'Course publishing lifecycle' });
     const currentStageText = () => {
@@ -76,7 +102,7 @@ describe('PublishLifecycleBar', () => {
   });
 
   it('Publish shows a pending label and is disabled while the request is in flight', async () => {
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
     await advanceToReviewConfirmed();
 
     let resolvePublish: () => void = () => undefined;
@@ -99,21 +125,21 @@ describe('PublishLifecycleBar', () => {
   // -- Story 3.10: Return to Draft + version history ------------------------------------------
 
   it('Return to Draft is not rendered while the course is still Draft', () => {
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
 
     expect(screen.queryByRole('button', { name: 'Return to Draft' })).not.toBeInTheDocument();
   });
 
   it('Return to Draft renders once the course is Published', async () => {
     vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'Published' }));
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Return to Draft' })).toBeInTheDocument());
   });
 
   it('clicking Return to Draft calls the endpoint and the stage indicator moves back to Draft', async () => {
     vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'Published' }));
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
     const returnButton = await screen.findByRole('button', { name: 'Return to Draft' });
 
     vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue(makeStatus({ lifecycleState: 'Draft' }));
@@ -129,7 +155,7 @@ describe('PublishLifecycleBar', () => {
     vi.mocked(courseDraftService.getVersions).mockResolvedValue([
       { id: 'version_1', publishedAt: '2026-08-01T12:00:00Z', fileCount: 3 },
     ]);
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
 
     expect(screen.queryByLabelText('Version history')).not.toBeInTheDocument();
 
@@ -145,7 +171,7 @@ describe('PublishLifecycleBar', () => {
 
   it('shows an empty-state message when there are no prior versions', async () => {
     vi.mocked(courseDraftService.getVersions).mockResolvedValue([]);
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
 
     fireEvent.click(screen.getByRole('button', { name: 'Version History' }));
 
@@ -156,12 +182,93 @@ describe('PublishLifecycleBar', () => {
     vi.mocked(courseDraftService.getVersions).mockResolvedValue([
       { id: 'version_1', publishedAt: '2026-08-01T12:00:00Z', fileCount: 3 },
     ]);
-    render(<PublishLifecycleBar courseId="course_1" />);
+    renderBar();
     fireEvent.click(screen.getByRole('button', { name: 'Version History' }));
     const restoreButton = await screen.findByRole('button', { name: 'Restore' });
 
     fireEvent.click(restoreButton);
 
     await waitFor(() => expect(courseDraftService.restoreVersion).toHaveBeenCalledWith('course_1', 'version_1'));
+  });
+
+  // -- Story 11.1: blocker list (AC #1) --------------------------------------------------------
+
+  const OUTLINE_WITH_BLOCKERS: OutlineDto = {
+    chapters: [
+      {
+        id: 'chapter_1',
+        title: 'Chemical Reactions',
+        description: '',
+        isConfirmed: true,
+        order: 0,
+        pages: [],
+        topics: [
+          {
+            id: 'topic_1',
+            title: 'Combustion',
+            description: '',
+            isConfirmed: true,
+            order: 0,
+            pages: [],
+            subtopics: [
+              {
+                id: 'subtopic_1',
+                title: 'Combination Reactions',
+                description: '',
+                isConfirmed: false,
+                order: 0,
+                pages: [],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  it('no blocker toggle renders when everything is confirmed', async () => {
+    renderBar({ outline: { chapters: [{ id: 'c1', title: 'Ch 1', description: '', isConfirmed: true, order: 0, pages: [], topics: [] }] } });
+
+    await waitFor(() => expect(courseContentService.getOutline).toHaveBeenCalled());
+    expect(screen.queryByText(/blocker/)).not.toBeInTheDocument();
+  });
+
+  it('a blocker toggle renders in draft state when an Unconfirmed node exists, and Move to Review is disabled', async () => {
+    renderBar({ outline: OUTLINE_WITH_BLOCKERS });
+
+    const toggle = await screen.findByRole('button', { name: '1 blocker' });
+    expect(toggle).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move to Review' })).toBeDisabled();
+  });
+
+  it('opening the blocker toggle lists the blocker with its kind and title', async () => {
+    renderBar({ outline: OUTLINE_WITH_BLOCKERS });
+    const toggle = await screen.findByRole('button', { name: '1 blocker' });
+
+    fireEvent.click(toggle);
+
+    const list = await screen.findByRole('list', { name: 'Content blocking Move to Review' });
+    expect(list).toHaveTextContent('Sub-Topic:');
+    expect(list).toHaveTextContent('Combination Reactions');
+  });
+
+  it('activating a blocker link calls onActivateBlocker with its id and chapterId', async () => {
+    const { onActivateBlocker } = renderBar({ outline: OUTLINE_WITH_BLOCKERS });
+    fireEvent.click(await screen.findByRole('button', { name: '1 blocker' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Combination Reactions/ }));
+
+    expect(onActivateBlocker).toHaveBeenCalledWith(expect.objectContaining({ id: 'subtopic_1', chapterId: 'chapter_1' }));
+  });
+
+  it('Move to Review is enabled again once the outline has no more Unconfirmed content', async () => {
+    renderBar({
+      outline: {
+        chapters: [{ id: 'c1', title: 'Ch 1', description: '', isConfirmed: true, order: 0, pages: [], topics: [] }],
+      },
+    });
+
+    await waitFor(() => expect(courseContentService.getOutline).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Move to Review' })).not.toBeDisabled();
   });
 });

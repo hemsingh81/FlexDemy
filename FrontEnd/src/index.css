@@ -235,6 +235,110 @@
   }
 }
 
+/* Story 7.2: DESIGN.md's content-doc-heading.pattern -- Topic (h2) / Sub-Topic (h3) headings each
+   carry a small amber eyebrow tag ("TOPIC"/"SUB-TOPIC") above the heading text. Tried as a plain
+   CSS ::before on the stock Heading node first (per that story's Task 3 guidance) rather than a
+   NodeView -- these two heading levels only ever mean Topic/Sub-Topic in this document schema, so
+   a level-scoped selector needs no extra node attribute to key off. Scoped to
+   .content-doc-heading (DocumentCanvas.tsx's own wrapper class) so it never leaks into headings
+   rendered elsewhere in the app (e.g. MarkdownViewer.tsx's own h2/h3 output). */
+.content-doc-heading .ProseMirror h2::before,
+.content-doc-heading .ProseMirror h3::before {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 0.125rem;
+}
+.content-doc-heading .ProseMirror h2::before {
+  content: 'Topic';
+}
+.content-doc-heading .ProseMirror h3::before {
+  content: 'Sub-Topic';
+}
+
+/* Story 7.3: DESIGN.md's content-page-marker token -- a dashed top rule, a small amber "PAGE"
+   eyebrow, and a right-aligned Confirmed/Unconfirmed badge-pill (a shape difference via the
+   badge's own pill styling, never color-alone). AC #3: h5/h6 sub-headings inside a Page's body
+   get plain, smaller typography with NO eyebrow tag -- they must never be mistaken for a
+   structural Topic/Sub-Topic/Page heading in the document's heading tree. */
+.content-doc-heading .ProseMirror h4 {
+  border-top: 1px dashed var(--color-border);
+  padding-top: 0.75rem;
+  margin-top: 2rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.content-doc-heading .ProseMirror h4::before {
+  content: 'Page';
+  font-family: var(--font-sans);
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+.content-doc-heading .ProseMirror h4::after {
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: 0.625rem;
+  font-weight: 800;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+}
+.content-doc-heading .ProseMirror h4:not([data-creating='true'])[data-confirmed='true']::after {
+  content: 'Confirmed';
+  color: var(--color-success);
+  background: color-mix(in oklch, var(--color-success) 15%, transparent);
+}
+.content-doc-heading .ProseMirror h4:not([data-creating='true'])[data-confirmed='false']::after {
+  content: 'Unconfirmed';
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+}
+.content-doc-heading .ProseMirror h4[data-creating='true']::after {
+  content: 'Creating…';
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+}
+.content-doc-heading .ProseMirror h5 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-top: 1rem;
+}
+.content-doc-heading .ProseMirror h6 {
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+  color: var(--color-muted-foreground);
+}
+
+/* Story 7.3, Task 6 (AC #6): the raw-block fallback -- content the block editor can't represent,
+   preserved verbatim rather than silently dropped. Deliberately plain/muted, reading as "not a
+   normal block" without implying an error state. */
+.raw-block {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  background: var(--color-muted);
+}
+.raw-block-label {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  margin-bottom: 0.25rem;
+}
+.raw-block pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-foreground);
+}
+
 /* Lumen Style Guide Narration Highlight -- references tokens, never raw hex (Style Guide p.2 rule 2) */
 .active-sentence-highlight {
   position: relative;

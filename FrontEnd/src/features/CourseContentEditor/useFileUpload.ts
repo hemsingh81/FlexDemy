@@ -16,6 +16,11 @@ export interface FileUploadEntry {
   // Populated once status === 'done' -- the raw text Docling parsed from this file, with no AI
   // structuring step in between. Undefined while pending/failed, or before the first server sync.
   parsedContent?: string | null;
+  // Story 10.2, FR-23: true once at least one Resource has been attached from this file (server
+  // computed, refreshed by any getFiles() poll/reconcile) -- also flipped locally by
+  // markResourceAttached below the instant an "Insert from file" attach succeeds, so the
+  // delete-confirmation warning is accurate even before the next poll/reload.
+  hasAttachedResources?: boolean;
 }
 
 // How often to poll getFiles() for the async scan/parse outcome while any file is in a
@@ -45,6 +50,7 @@ const toEntry = (dto: CourseFileDto, name: string, sizeBytes: number): FileUploa
   status: toStatus(dto.status),
   failureReason: dto.failureReason ?? undefined,
   parsedContent: dto.parsedContent,
+  hasAttachedResources: dto.hasAttachedResources,
 });
 
 interface UseFileUploadResult {
@@ -59,6 +65,11 @@ interface UseFileUploadResult {
   // Clears the file list, cancels the poll, and forgets every retained File -- called by the
   // caller when the screen closes or switches to a different draft.
   resetFiles: () => void;
+  // Story 10.2: flips a file's hasAttachedResources flag on locally the instant an "Insert from
+  // file" attach call (DocumentCanvas.tsx) succeeds -- without this, the delete-confirmation
+  // warning would stay stale (server-computed, only refreshed by the next getFiles() call) for a
+  // file attached and then immediately deleted within the same session.
+  markResourceAttached: (id: string) => void;
 }
 
 // Feature-local hook (AD-2). Story 2.6 live-wires this against real courseFileService.ts
@@ -99,6 +110,7 @@ export const useFileUpload = (courseId: string | null): UseFileUploadResult => {
           status: toStatus(match.status),
           failureReason: match.failureReason ?? undefined,
           parsedContent: match.parsedContent,
+          hasAttachedResources: match.hasAttachedResources,
         };
       })
     );
@@ -223,5 +235,9 @@ export const useFileUpload = (courseId: string | null): UseFileUploadResult => {
     setError(null);
   };
 
-  return { data, isLoading, error, addFiles, retryFile, deleteFile, resetFiles };
+  const markResourceAttached = (id: string) => {
+    setData((prev) => prev.map((f) => (f.id === id ? { ...f, hasAttachedResources: true } : f)));
+  };
+
+  return { data, isLoading, error, addFiles, retryFile, deleteFile, resetFiles, markResourceAttached };
 };

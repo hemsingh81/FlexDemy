@@ -19,6 +19,7 @@ const makeDto = (overrides: Partial<CourseFileDto> = {}): CourseFileDto => ({
   status: 'Queued',
   failureReason: null,
   parsedContent: null,
+  hasAttachedResources: false,
   ...overrides,
 });
 

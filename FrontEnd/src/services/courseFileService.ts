@@ -12,6 +12,9 @@ export interface CourseFileDto {
   status: string;
   failureReason: string | null;
   parsedContent: string | null;
+  // Story 10.2, FR-23: true once at least one Resource has been attached from this file via
+  // "Attach existing file" -- backs the delete-confirmation warning's accuracy.
+  hasAttachedResources: boolean;
 }
 
 export class CourseFileError extends Error {}
@@ -36,9 +39,3 @@ export const getFiles = (courseId: string): Promise<CourseFileDto[]> =>
 
 export const deleteFile = (courseId: string, fileId: string): Promise<void> =>
   call(() => request<void>(`/api/v1/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(fileId)}`, 'DELETE'));
-
-// Student-facing read: a published course's uploaded files and their raw parsed text -- no AI
-// structuring step in between. Unlike getFiles above, this isn't ownership-gated (mirrors
-// coursesService.ts's own open-read GetCourseById shape).
-export const getCourseContent = (courseId: string): Promise<CourseFileDto[]> =>
-  call(() => request<CourseFileDto[]>(`/api/v1/courses/${encodeURIComponent(courseId)}/content`, 'GET'));

@@ -17,13 +17,27 @@
 // Anything outside that subset degrades to plain text rather than throwing. If a document ever
 // needs more (footnotes, task lists, reference links), extend this file and its tests -- don't
 // reach for innerHTML.
+//
+// Story 9.2 grows this subset deliberately beyond Docling's own output -- Math/Callout/Resource
+// card are tutor-authored constructs (via the Course Content Editor's slash menu), never
+// extracted-document artifacts:
+//   blocks -- Math (`$$…$$` fenced, block-level only, no inline `$…$`), Callout (a blockquote
+//             whose first line starts with `[!note]`, degrading to a plain blockquote otherwise),
+//             Resource card (a paragraph whose sole content is one `[label](resource:{id})` link
+//             -- promoted from an ordinary inline link only when it's the paragraph's only content)
+//   inline -- `resource:` is now a SAFE_LINK scheme too (needed for a Resource card's own link,
+//             and reused by resourceImage's image-href check, Story 8.3)
 
 export type InlineNode =
   | { type: 'text'; value: string }
   | { type: 'code'; value: string }
   | { type: 'strong'; children: InlineNode[] }
   | { type: 'em'; children: InlineNode[] }
-  | { type: 'link'; href: string; children: InlineNode[] };
+  | { type: 'link'; href: string; children: InlineNode[] }
+  // Story 8.3, FR-30: an image whose href is a `resource:{resourceId}` URI -- the one exception
+  // to "images render as alt text only" below. Never carries a raw storage URL; resolving
+  // resourceId to a real served URL happens at render time (MarkdownViewer.tsx), not here.
+  | { type: 'resourceImage'; resourceId: string; alt: string };
 
 export interface ListItem {
   content: InlineNode[];
@@ -37,13 +51,30 @@ export type MarkdownBlock =
   | { type: 'list'; ordered: boolean; items: ListItem[] }
   | { type: 'table'; header: InlineNode[][]; rows: InlineNode[][][] }
   | { type: 'blockquote'; children: MarkdownBlock[] }
-  | { type: 'hr' };
+  | { type: 'hr' }
+  // Story 9.2, FR-28: block-level `$$…$$` math, rendered via KaTeX (lib/renderLatex.ts) at
+  // render time. No inline `$…$` variant -- out of scope, per this story's own explicit decision.
+  | { type: 'math'; value: string }
+  // Story 9.2, FR-28: a blockquote whose first line starts with `[!note]` -- the marker is
+  // stripped from that first line's content once recognized. Any blockquote without the marker
+  // stays a plain `blockquote` (unchanged, pre-existing behavior) -- this IS the mechanism behind
+  // AC #2's "degrading to a plain blockquote anywhere unsupported."
+  | { type: 'callout'; children: MarkdownBlock[] }
+  // Story 9.2, FR-28/FR-30/FR-31: promoted from an ordinary paragraph only when its entire
+  // content is exactly one `[label](resource:{id})` link and nothing else -- a `resource:` link
+  // sharing a paragraph with other text stays an ordinary inline link (see the promotion check
+  // at the bottom of parseMarkdown below).
+  | { type: 'resourceCard'; resourceId: string; label: string };
 
 // Only these schemes become real links. A bare `[click](javascript:alert(1))` is the one genuine
 // injection vector left once HTML is off the table -- React happily sets any string as href -- so
 // anything else renders as plain text instead. Protocol-relative `//evil.com` is also rejected:
 // it has no scheme to match here but the browser would resolve it as one.
-const SAFE_LINK = /^(https?:\/\/|mailto:|#|\/(?!\/))/i;
+// Story 9.2: `resource:` added -- needed for a Resource card's own link (and shared with
+// resourceImage's own independent, narrower `/^resource:/` check, Story 8.3 -- that check stays
+// separate on purpose, see that story's own "Gating gotcha" note: broadening SAFE_LINK must never
+// make an ordinary `http://` image href start rendering, only `resource:` ones for images).
+const SAFE_LINK = /^(https?:\/\/|mailto:|#|\/(?!\/)|resource:)/i;
 
 const INLINE_SOURCE = [
   '(`+)([\\s\\S]*?)\\1', // 1-2: code span (longest-run fence, so `` a ` b `` works)
@@ -78,12 +109,18 @@ export const parseInline = (text: string): InlineNode[] => {
     pushText(text.slice(lastIndex, match.index));
     lastIndex = pattern.lastIndex;
 
-    const [, , codeValue, imageAlt, , linkText, linkHref, boldStar, boldUnderscore, italicStar, italicUnderscore] =
+    const [, , codeValue, imageAlt, imageHref, linkText, linkHref, boldStar, boldUnderscore, italicStar, italicUnderscore] =
       match;
 
     if (codeValue !== undefined) nodes.push({ type: 'code', value: codeValue.trim() });
-    else if (imageAlt !== undefined) pushText(imageAlt); // no remote fetches from document text
-    else if (linkText !== undefined) {
+    else if (imageAlt !== undefined) {
+      // Story 8.3, FR-30: a `resource:{id}` URI is the one image href this parser resolves at
+      // all -- everything else still degrades to alt text only (no remote fetches from document
+      // text, unchanged from before this story).
+      const resourceMatch = /^resource:(.+)$/.exec(imageHref ?? '');
+      if (resourceMatch) nodes.push({ type: 'resourceImage', resourceId: resourceMatch[1], alt: imageAlt });
+      else pushText(imageAlt);
+    } else if (linkText !== undefined) {
       if (SAFE_LINK.test(linkHref ?? '')) nodes.push({ type: 'link', href: linkHref, children: parseInline(linkText) });
       else pushText(match[0]); // unsafe scheme: keep the source text visible, drop the link
     } else if (boldStar !== undefined) nodes.push({ type: 'strong', children: parseInline(boldStar) });
@@ -102,6 +139,23 @@ const HR = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
 const BLOCKQUOTE = /^\s*>\s?(.*)$/;
 const UNORDERED = /^(\s*)[-*+]\s+(.*)$/;
 const ORDERED = /^(\s*)\d+[.)]\s+(.*)$/;
+// Story 9.2: a line that is exactly `$$` (block math fence) -- mirrors FENCE's own "collect until
+// the matching closing marker" shape.
+const MATH_FENCE = /^\s*\$\$\s*$/;
+const CALLOUT_MARKER = /^\[!note\]\s*/i;
+
+// Flattens an inline tree back to plain text -- used for a Resource card's own `label` (its link
+// text is always plain, since it's tutor-typed via the "Resource card" command's own UI, not
+// free-form prose that could carry nested bold/italic/links). Exported (Story 10.1) for
+// lib/editor/splitIntoSections.ts's own need to extract a heading's plain-text title for display.
+export const inlineText = (nodes: InlineNode[]): string =>
+  nodes
+    .map((node) => {
+      if (node.type === 'text' || node.type === 'code') return node.value;
+      if (node.type === 'strong' || node.type === 'em' || node.type === 'link') return inlineText(node.children);
+      return '';
+    })
+    .join('');
 // A table separator is what actually distinguishes a table from a paragraph that merely contains
 // pipes -- GitHub-flavoured Markdown requires it, and so does this parser.
 const TABLE_SEPARATOR = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/;
@@ -162,6 +216,20 @@ export const parseMarkdown = (source: string): MarkdownBlock[] => {
       continue;
     }
 
+    // Story 9.2: checked before FENCE -- a `$$` line never matches FENCE's own backtick/tilde
+    // pattern, but this keeps math grouped with the other "collect until closing marker" blocks.
+    if (MATH_FENCE.test(line)) {
+      i += 1;
+      const body: string[] = [];
+      while (i < lines.length && !MATH_FENCE.test(lines[i])) {
+        body.push(lines[i]);
+        i += 1;
+      }
+      i += 1; // consume the closing $$ (a no-op past EOF for an unterminated block)
+      blocks.push({ type: 'math', value: body.join('\n').trim() });
+      continue;
+    }
+
     const fence = FENCE.exec(line);
     if (fence) {
       const marker = fence[1][0];
@@ -198,7 +266,16 @@ export const parseMarkdown = (source: string): MarkdownBlock[] => {
         quoted.push(BLOCKQUOTE.exec(lines[i])![1]);
         i += 1;
       }
-      blocks.push({ type: 'blockquote', children: parseMarkdown(quoted.join('\n')) });
+      // Story 9.2: a `[!note]` marker on the first quoted line promotes this from a plain
+      // blockquote to a callout -- the marker is stripped before re-parsing the quoted lines as
+      // the callout's own children. No marker -- unchanged, pre-existing blockquote behavior.
+      const calloutMatch = CALLOUT_MARKER.exec(quoted[0] ?? '');
+      if (calloutMatch) {
+        quoted[0] = quoted[0].slice(calloutMatch[0].length);
+        blocks.push({ type: 'callout', children: parseMarkdown(quoted.join('\n')) });
+      } else {
+        blocks.push({ type: 'blockquote', children: parseMarkdown(quoted.join('\n')) });
+      }
       continue;
     }
 
@@ -231,6 +308,7 @@ export const parseMarkdown = (source: string): MarkdownBlock[] => {
         paragraph.length > 0 &&
         (HEADING.test(next) ||
           FENCE.test(next) ||
+          MATH_FENCE.test(next) ||
           HR.test(next) ||
           BLOCKQUOTE.test(next) ||
           UNORDERED.test(next) ||
@@ -242,7 +320,16 @@ export const parseMarkdown = (source: string): MarkdownBlock[] => {
       paragraph.push(next.trim());
       i += 1;
     }
-    blocks.push({ type: 'paragraph', content: parseInline(paragraph.join(' ')) });
+    const content = parseInline(paragraph.join(' '));
+    // Story 9.2: promote to a Resource card only when the link is the paragraph's SOLE content --
+    // a `resource:` link sharing a paragraph with other text stays an ordinary inline link. This
+    // is the deliberate design decision that makes `[label](resource:{id})` a standalone download
+    // card only when it looks exactly like what the "Resource card" command itself would emit.
+    if (content.length === 1 && content[0].type === 'link' && /^resource:/i.test(content[0].href)) {
+      blocks.push({ type: 'resourceCard', resourceId: content[0].href.slice('resource:'.length), label: inlineText(content[0].children) });
+    } else {
+      blocks.push({ type: 'paragraph', content });
+    }
   }
 
   return blocks;

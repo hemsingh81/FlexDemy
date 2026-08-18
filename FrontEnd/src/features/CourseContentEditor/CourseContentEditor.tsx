@@ -1,11 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Code2, Eye, Maximize2, Minimize2, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Code2, Eye, GraduationCap, Maximize2, Minimize2, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { useFileUpload, type FileUploadEntry, type FileUploadStatus } from './useFileUpload';
 import { ConfirmModal } from '../../ui/ConfirmModal';
 import { PublishLifecycleBar } from './PublishLifecycleBar';
+import { useCourseLifecycle } from './useCourseLifecycle';
+import { useContentDocument } from './useContentDocument';
+import { DocumentCanvas } from './DocumentCanvas';
+import { PreviewAsStudent, type PreviewScope } from './PreviewAsStudent';
 import { Spinner } from '../../ui/Spinner';
 import { MarkdownViewer } from '../../ui/MarkdownViewer';
 import { SegmentedTabs, type SegmentedTab } from '../../ui/SegmentedTabs';
+import { CourseContentProvider } from '../../context/CourseContentContext';
+import { useToast } from '../../context/ToastContext';
 
 interface CourseContentEditorProps {
   isOpen: boolean;
@@ -177,14 +183,59 @@ const FileContentCard: React.FC<FileContentCardProps> = ({ file, onDelete }) => 
 // real shell. Shows each uploaded file's raw parsed text directly, with no AI structuring step
 // in between, and a permanent delete action per file.
 export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen, onClose, draftId, fullWidth = false }) => {
-  const { data, error: fileUploadError, addFiles, retryFile, deleteFile, resetFiles } = useFileUpload(draftId);
+  const { data, error: fileUploadError, addFiles, retryFile, deleteFile, resetFiles, markResourceAttached } = useFileUpload(draftId);
+  // AC #9: a Published course opens the document read-only. useCourseLifecycle already exposes
+  // `state`/`triggerReturnToDraft` (PublishLifecycleBar uses the same hook internally) -- reused
+  // here rather than building a second "take offline" path or a shared Context this story
+  // deliberately doesn't introduce yet (Task 6's own scope note).
+  const { state: lifecycleState, triggerReturnToDraft } = useCourseLifecycle(draftId);
+  const isPublished = lifecycleState === 'published';
+  const {
+    status: documentStatus,
+    title: chapterTitle,
+    document: chapterDocument,
+    chapterId,
+    resetKey,
+    saveTitle,
+    reload: reloadContentDocument,
+    addChapter,
+    switchChapter,
+    retry: retryLoadContentDocument,
+  } = useContentDocument(draftId);
+  const { showToast } = useToast();
+  // Story 11.1, Task 2: set by activating a blocker link in PublishLifecycleBar -- the id of the
+  // node DocumentCanvas should move real DOM focus to next. Threaded through as a plain prop
+  // (rather than lifting the Tiptap editor instance itself up here) since PublishLifecycleBar and
+  // DocumentCanvas are siblings, both rendered directly below, neither owning the other's state.
+  const [pendingFocusNodeId, setPendingFocusNodeId] = useState<string | null>(null);
+  const activateBlocker = (blocker: { id: string; chapterId: string }) => {
+    if (blocker.chapterId !== chapterId) {
+      // Code-review patch: switchChapter previously ran fire-and-forget with no error handling --
+      // a network failure here failed completely silently. A toast, matching this app's
+      // established InsertFromFilePicker.tsx-style failure feedback, at least tells the tutor the
+      // navigation didn't happen instead of leaving them staring at the unchanged Chapter.
+      switchChapter(blocker.chapterId).catch(() => {
+        showToast({ message: 'Could not switch to that chapter. Please try again.', variant: 'error' });
+      });
+    }
+    setPendingFocusNodeId(blocker.id);
+  };
+  // Stable reference (not an inline arrow at the DocumentCanvas call site) so its own focus-move
+  // effect's dependency array doesn't churn on every unrelated CourseContentEditor re-render.
+  const clearPendingFocus = useCallback(() => setPendingFocusNodeId(null), []);
+  // Story 11.2 (AC #1): owned here (not inside DocumentCanvas) since the overlay needs no Tiptap
+  // editor at all and rendering it at this top level keeps its fixed inset-0 z-50 takeover clean
+  // of DocumentCanvas's own layout/scroll containers.
+  const [previewScope, setPreviewScope] = useState<PreviewScope | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // requestKey bumps on every open, even for the same file id -- ConfirmModal now animates its
   // own close (a real delay before the real onConfirm/onCancel fires), so re-requesting delete
   // on the same file right after Cancel must mount a genuinely fresh instance (via key=) rather
   // than reuse one still mid-close, whose backdrop is still pointer-events-none from that close.
   const deleteRequestSeqRef = useRef(0);
-  const [deleteFileTarget, setDeleteFileTarget] = useState<{ key: number; id: string; name: string } | null>(null);
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{ key: number; id: string; name: string; hasAttachedResources: boolean } | null>(
+    null
+  );
   // Visual feedback only while a native OS drag is over the dropzone below -- not persisted
   // anywhere, reset unconditionally on drop/leave.
   const [isDraggingFilesOver, setIsDraggingFilesOver] = useState(false);
@@ -213,6 +264,18 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
     const text = overflow > 0 ? `${messages.join('. ')}. And ${overflow} more file${overflow === 1 ? '' : 's'} updated.` : messages.join('. ');
     setAnnouncement(text);
     pendingMessagesRef.current = [];
+  };
+
+  // Story 7.2: shared with the Document Canvas's Topic/Sub-Topic delete/reorder actions below --
+  // reuses this same batching/debounce pipeline (Task 5's own instruction) rather than a second
+  // aria-live region.
+  const queueAnnouncement = (message: string) => {
+    pendingMessagesRef.current.push(message);
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(flushAnnouncement, STATUS_ANNOUNCE_DEBOUNCE_MS);
+    if (!maxWaitTimerRef.current) {
+      maxWaitTimerRef.current = setTimeout(flushAnnouncement, STATUS_ANNOUNCE_MAX_WAIT_MS);
+    }
   };
 
   // Batches per-file status-transition announcements into one aria-live update, rather than one
@@ -330,6 +393,12 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
   const doneFiles = data.filter((file) => file.status === 'done');
 
   return (
+    // Story 7.4 (AD-4): CourseContentContext is mounted here, scoped to this editor session --
+    // not at App.tsx's composition root, since its outline/confirmation data is meaningless
+    // outside an open editor. Confirmed against App.tsx's own DomainProvider/ToastProvider/
+    // SiteSettingsProvider pattern (all three mount at the composition root, app-lifetime scoped)
+    // -- this is a deliberate deviation, not an oversight.
+    <CourseContentProvider courseId={draftId}>
     <div
       // animate-[fade-in-scale...] (FRONTEND_TRANSITIONS.md #3): this whole component is
       // conditionally rendered by its parent (`{isOpen && <CourseContentEditor .../>}`-equivalent
@@ -380,6 +449,17 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
         >
           <h2 className="text-lg font-extrabold text-[#142030]">Course Content Editor</h2>
           <div className="flex items-center gap-1">
+            {draftId && (
+              <button
+                type="button"
+                onClick={() => setPreviewScope({ kind: 'course' })}
+                aria-label="Preview whole course as student"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#5E6A79] hover:bg-white hover:text-[#142030] transition-colors"
+              >
+                <GraduationCap className="w-4 h-4" />
+                Preview as student
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setIsMaximized((prev) => !prev)}
@@ -399,7 +479,7 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
           </div>
         </div>
 
-        <PublishLifecycleBar key={draftId} courseId={draftId} />
+        <PublishLifecycleBar key={draftId} courseId={draftId} onActivateBlocker={activateBlocker} />
       </div>
 
       {/* Full width, no max-w-* cap (DESIGN.md S"Full-width is the layout, not an option" --
@@ -409,6 +489,56 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
           header comment above) -- Normal has no such split, the whole card scrolls with the page
           as one block. */}
       <div className={`px-6 py-6 space-y-4 w-full ${isMaximized ? 'flex-1 overflow-y-auto' : ''}`}>
+        {/* Story 7.1: the document canvas. Published (AC #9) shows a read-only banner instead of
+            an editable document; reopening existing content (AC #8) shows visible loading text,
+            never a bare spinner, matching this app's "every loading state has visible text"
+            convention. */}
+        {isPublished && (
+          <div className="rounded-xl border border-[#E1DED4] bg-[#FAF7EC] px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-[#142030]">This course is Published — take it offline to make changes.</p>
+            <button
+              type="button"
+              onClick={triggerReturnToDraft}
+              className="shrink-0 text-xs font-bold text-[#143358] underline cursor-pointer"
+            >
+              Take Offline
+            </button>
+          </div>
+        )}
+
+        {documentStatus === 'error' ? (
+          // Code-review patch: a failed load previously left status stuck at 'loading' forever
+          // (the comment above this branch used to say so explicitly) -- this is the one way out,
+          // matching the autosave status indicator's own visible-text + Retry convention elsewhere
+          // in this file.
+          <p role="alert" className="text-xs font-bold text-destructive flex items-center gap-1.5">
+            Could not load this chapter.
+            <button type="button" onClick={retryLoadContentDocument} className="underline font-bold">
+              Retry
+            </button>
+          </p>
+        ) : documentStatus === 'loading' || !draftId ? (
+          <p className="text-sm text-[#5E6A79]">Loading your chapter…</p>
+        ) : (
+          <DocumentCanvas
+            key={resetKey}
+            courseId={draftId}
+            chapterId={chapterId}
+            title={chapterTitle}
+            document={chapterDocument}
+            isReadOnly={isPublished}
+            onTitleBlur={saveTitle}
+            onReload={reloadContentDocument}
+            onAnnounce={queueAnnouncement}
+            onAddChapter={addChapter}
+            doneFiles={doneFiles}
+            onFileAttached={markResourceAttached}
+            pendingFocusNodeId={pendingFocusNodeId}
+            onFocusHandled={clearPendingFocus}
+            onPreviewAsStudent={setPreviewScope}
+          />
+        )}
+
         <div>
           <h3 className="text-sm font-bold text-[#142030]">Uploaded Files</h3>
           <p className="text-xs text-[#5E6A79] mt-0.5">
@@ -465,7 +595,14 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
               <FileContentCard
                 key={file.id}
                 file={file}
-                onDelete={() => setDeleteFileTarget({ key: ++deleteRequestSeqRef.current, id: file.id, name: file.name })}
+                onDelete={() =>
+                  setDeleteFileTarget({
+                    key: ++deleteRequestSeqRef.current,
+                    id: file.id,
+                    name: file.name,
+                    hasAttachedResources: file.hasAttachedResources ?? false,
+                  })
+                }
               />
             ))}
           </div>
@@ -479,7 +616,16 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
       {deleteFileTarget && (
         <ConfirmModal
           key={deleteFileTarget.key}
-          message={`Delete "${deleteFileTarget.name}" and its content? This can't be undone.`}
+          // Story 10.2, AC #2/FR-23/DD-6: a file with at least one attached Resource gets an
+          // accurate, resource-aware warning -- naming only what actually happens (it disappears
+          // from the picker and from any page's Learning Resources) and explicitly reassuring that
+          // already-inserted page text is untouched (copy-on-insert, never a live link). A file
+          // with none keeps the original, unchanged message -- no regression for the common case.
+          message={
+            deleteFileTarget.hasAttachedResources
+              ? `Delete "${deleteFileTarget.name}"? It will disappear from the "Insert from file" picker and from any page's Learning Resources where it's attached as a resource. Text already inserted from this file elsewhere won't change.`
+              : `Delete "${deleteFileTarget.name}" and its content? This can't be undone.`
+          }
           onConfirm={() => {
             deleteFile(deleteFileTarget.id);
             setDeleteFileTarget(null);
@@ -488,5 +634,9 @@ export const CourseContentEditor: React.FC<CourseContentEditorProps> = ({ isOpen
         />
       )}
     </div>
+    {previewScope && draftId && (
+      <PreviewAsStudent courseId={draftId} scope={previewScope} onClose={() => setPreviewScope(null)} />
+    )}
+    </CourseContentProvider>
   );
 };

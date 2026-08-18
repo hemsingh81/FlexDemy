@@ -8,14 +8,14 @@ import { FocusSessionTimer } from './FocusSessionTimer';
 import { FlashcardsModal } from './FlashcardsModal';
 import { CourseReviewModal } from '../CourseOverview/CourseReviewModal';
 import { ttsManager } from '../../lib/tts';
-import { ContentNodeReadingPane } from './ContentNodeReadingPane';
+import { PageReadingPane } from './PageReadingPane';
 import { CoursePlayerHeader } from './CoursePlayerHeader';
 import { CoursePlayerSidebar } from './CoursePlayerSidebar';
 import { ExportSummaryModal } from './ExportSummaryModal';
 import { useLessonNavigation } from './useLessonNavigation';
 import { useNarrationPlayback } from './useNarrationPlayback';
 import { useLessonSummaryExport } from './useLessonSummaryExport';
-import { useCourseFileNavigation } from './useCourseFileNavigation';
+import { useCourseContentNavigation } from './useCourseContentNavigation';
 
 interface CoursePlayerProps {
   course: Course;
@@ -62,7 +62,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   const { generateLessonSummaryMarkdown, handleDownloadMarkdown, handleCopyMarkdown, isCopied } =
     useLessonSummaryExport(course, currentLesson, sentences);
 
-  const { files, selectedFileId, setSelectedFileId, selectedFile } = useCourseFileNavigation(course.id);
+  const { outline, selectedPageId, setSelectedPageId, selectedPage, isLoadingPage, pageLoadFailed } = useCourseContentNavigation(course.id);
 
   // Export Summary modal state
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
@@ -122,18 +122,18 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
             goToLesson(lessonId);
             setIsPlaying(false);
           }}
-          files={files}
-          selectedFileId={selectedFileId}
-          onSelectFile={setSelectedFileId}
+          outline={outline}
+          selectedPageId={selectedPageId}
+          onSelectPage={setSelectedPageId}
         />
 
         {/* Central Reader Canvas */}
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-8 bg-slate-50">
 
-          {selectedFile ? (
-            // Keyed by file id so switching between two files never shows stale content from the
+          {selectedPageId ? (
+            // Keyed by page id so switching between two pages never shows stale content from the
             // previous selection mid-render.
-            <ContentNodeReadingPane key={selectedFile.id} file={selectedFile} />
+            <PageReadingPane key={selectedPageId} courseId={course.id} page={selectedPage} isLoading={isLoadingPage} failed={pageLoadFailed} />
           ) : (
           <div className="w-full max-w-4xl mx-auto">
             <ReaderCanvas

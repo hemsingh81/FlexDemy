@@ -1,5 +1,12 @@
 # generated: 2026-08-11
-# last_updated: 2026-08-16 (Epic 5 done; Epic 6 all 5 stories done after code review -- epic itself pending retrospective)
+# last_updated: 2026-08-18 (bmad-code-review run across all 15 ContentAuthoring stories (7.1-11.4)
+#   as one combined pass -- see deferred-work.md's "code review of 7-1 through 11-4" entry for why
+#   a single-story-scoped diff wasn't meaningful here. 6 parallel reviewers (Blind/Edge/Acceptance
+#   x backend/frontend), every finding re-verified against real code before acting, 5 confirmed
+#   real bugs patched with new regression tests (backend: resource-download scan-status gate,
+#   MovePageAsync page-cap enforcement, resource-id substring-match safety; frontend: unhandled
+#   delete/move/reorder/drag-reorder rejections, a silently-fire-and-forget title save) -- full
+#   suite green both sides (967 backend, 802 frontend). Epics 7-11 moved review -> done.)
 # project: eLearning
 # project_key: NOKEY
 # tracking_system: file-system
@@ -44,9 +51,21 @@
 #   live-wire stories (Phase B) start. Epic 1's Stories 1.4 and 1.6, and Epic 2's Stories 2.8
 #   and 2.10, have no UI dependency and may start in parallel with Phase A if capacity allows
 #   (see epics.md's per-epic "Parallelization note").
+# - Epic numbering is one continuous sequence across ALL epics files in this project, not
+#   per-file restarts at Epic 1 -- epics.md (1-3), epics-ErrorObservability.md (4),
+#   epics-AdminSettings.md (5-6), epics-ContentAuthoring.md (7-11). Confirmed and enforced
+#   during ContentAuthoring's 2026-08-17 implementation-readiness check, which caught and
+#   renumbered that file from a colliding Epic 1-6 draft.
+# - Epics 7-11 (epics-ContentAuthoring.md) have no Phase-A/Phase-B UI-mock-then-live-wire split
+#   like Epics 1-3 -- each story is an integrated feature slice (frontend+backend together),
+#   already validated for backward-only dependencies during implementation-readiness review and
+#   again during 3 rounds of adversarial party-mode review. Work them in ascending order within
+#   each epic (e.g. 7.1 before 7.2); epics may build concurrently only where explicitly noted in
+#   epics-ContentAuthoring.md (Epic 8's resource domain and Epic 9's renderer extensions have no
+#   hard technical dependency on each other, per that epic's own implementation notes).
 
 generated: 2026-08-11
-last_updated: 2026-08-16 (Epic 5 done; Epic 6 all 5 stories done after code review -- epic itself pending retrospective)
+last_updated: 2026-08-18
 project: eLearning
 project_key: NOKEY
 tracking_system: file-system
@@ -114,6 +133,36 @@ development_status:
   6-5-combined-typography-presets-with-custom-fallback: done
   epic-6-retrospective: optional
 
+  epic-7: done
+  7-1-document-canvas-foundation-the-slash-command-menu: done
+  7-2-chapter-topic-sub-topic-structure: done
+  7-3-page-creation-basic-content-blocks: done
+  7-4-autosave-confirmation-tracking: done
+  epic-7-retrospective: optional
+
+  epic-8: done
+  8-1-learning-resources-block-add-role-caption-order: done
+  8-2-node-level-resources-downward-inheritance: done
+  8-3-stable-resource-references-delete-in-use-protection: done
+  epic-8-retrospective: optional
+
+  epic-9: done
+  9-1-image-blocks-with-required-alt-text: done
+  9-2-math-callout-table-resource-card-blocks: done
+  epic-9-retrospective: optional
+
+  epic-10: done
+  10-1-insert-from-file-two-pane-section-picker: done
+  10-2-attach-source-as-resource-deletion-safety: done
+  epic-10-retrospective: optional
+
+  epic-11: done
+  11-1-move-to-review-confirmation-gate: done
+  11-2-preview-as-student: done
+  11-3-reviewer-access-read-path-authorization: done
+  11-4-real-student-reading-via-course-player: done
+  epic-11-retrospective: optional
+
 action_items:
   - epic: 4
     action: "Commit Epic 4's work to git (currently 7 stories of uncommitted changes on one shared baseline)"
@@ -141,5 +190,13 @@ action_items:
     status: open
   - epic: 6
     action: "Story 6.5 found and fixed a real, pre-existing bug in SettingRepository.ApplyValueAsync (unaliased raw-SQL column name broke EF Core's SqlQuery<T> against real Postgres -- '42703: column s.Value does not exist') dating back to Story 6.1/6.2, invisible to every existing test because EF InMemory can't execute raw SqlQuery<T> at all. Only caught via a manual live-Docker verification step, not CI. Worth a deliberate sweep of this codebase's other raw-SQL call sites (AiTaskBudgetRepository.cs and any others) for the same unaliased-column risk, and reinforces the standing case for real Postgres-backed integration tests, not just unit tests against InMemory."
+    owner: "Dev"
+    status: open
+  - epic: 7
+    action: "Epics 7-11's work (all 15 ContentAuthoring stories, now done) is still entirely uncommitted on top of Epic 4/5/6's own already-flagged uncommitted baseline -- the same standing recommendation as those epics' items, now covering the whole ContentAuthoring initiative on one shared working tree. This absence of per-story commits is also *why* this code review had to run as one combined pass across all 15 stories rather than story-by-story (see deferred-work.md's '7-1 through 11-4' entry) -- committing per-story going forward would make each subsequent review a plain git diff again."
+    owner: "Dev"
+    status: open
+  - epic: 7
+    action: "During this review, the working tree was found fully re-staged (git add, not committed) twice in one session with no explicit request for it, and a repo-root 'Backend' vs git-tracked 'BackEnd' directory-casing mismatch silently made every backend git pathspec match zero files in an earlier verification pass (Windows filesystem is case-insensitive, git's pathspec matching is not, even with core.ignorecase=true) -- both times caught and safely undone (plain 'git reset', HEAD confirmed unchanged throughout), but the *cause* of the repeated auto-staging was never identified (checked .claude/settings.json's hooks and .bmad-loop/ scripts -- neither does it). Worth the user checking their local tooling (IDE git integration auto-stage setting, a global git hook, etc.) for what's re-staging the tree, and always using the 'BackEnd' casing (not 'Backend') in any git pathspec against this repo."
     owner: "Dev"
     status: open

@@ -63,4 +63,31 @@ describe('MarkdownViewer', () => {
     const { container } = render(<MarkdownViewer source="" />);
     expect(container.textContent).toBe('');
   });
+
+  // Story 8.3, FR-30/Task 2.
+  describe('resource: URI resolution', () => {
+    it('renders the alt text (never a raw storage URL) when no resolver is configured', async () => {
+      render(<MarkdownViewer source="![Diagram](resource:res_1)" />);
+      expect(await screen.findByText('Diagram')).toBeInTheDocument();
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    });
+
+    it('resolves a resource: reference to a real <img src> via the resolver prop', async () => {
+      const resolveResourceUrl = async (resourceId: string) => `blob:resolved-${resourceId}`;
+      render(<MarkdownViewer source="![Diagram](resource:res_1)" resolveResourceUrl={resolveResourceUrl} />);
+
+      const img = await screen.findByRole('img', { name: 'Diagram' });
+      expect(img).toHaveAttribute('src', 'blob:resolved-res_1');
+    });
+
+    it('falls back to the alt text if the resolver rejects', async () => {
+      const resolveResourceUrl = async () => {
+        throw new Error('not found');
+      };
+      render(<MarkdownViewer source="![Diagram](resource:res_1)" resolveResourceUrl={resolveResourceUrl} />);
+
+      expect(await screen.findByText('Diagram')).toBeInTheDocument();
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    });
+  });
 });

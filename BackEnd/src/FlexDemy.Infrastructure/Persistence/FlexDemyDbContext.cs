@@ -18,6 +18,11 @@ public class FlexDemyDbContext(DbContextOptions<FlexDemyDbContext> options) : Db
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<CourseThumbnail> CourseThumbnails => Set<CourseThumbnail>();
     public DbSet<CourseFile> CourseFiles => Set<CourseFile>();
+    public DbSet<Chapter> Chapters => Set<Chapter>();
+    public DbSet<Topic> Topics => Set<Topic>();
+    public DbSet<Subtopic> Subtopics => Set<Subtopic>();
+    public DbSet<Page> Pages => Set<Page>();
+    public DbSet<Resource> Resources => Set<Resource>();
     public DbSet<User> Users => Set<User>();
 
     public DbSet<Country> Countries => Set<Country>();

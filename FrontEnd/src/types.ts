@@ -2,6 +2,11 @@ export type SubjectCategory = 'computer_science' | 'stem_math' | 'physics' | 'da
 export type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 export type ContentType = 'interactive' | 'video_text' | 'problem_based';
 
+// Story 7.3: AD-20's pinned wire contract for Page/Resource's polymorphic ownership -- the four
+// literal strings here must match Backend's `ContentOwnerType` enum member names exactly
+// (Backend/src/FlexDemy.Domain/Courses/ContentOwnerType.cs), including "Subtopic" as one word.
+export type ContentOwnerType = 'Chapter' | 'Topic' | 'Subtopic' | 'Page';
+
 export interface Sentence {
   id: string;
   text: string;

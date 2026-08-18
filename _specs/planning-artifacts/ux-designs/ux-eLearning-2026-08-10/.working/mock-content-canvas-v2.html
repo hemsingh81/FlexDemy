@@ -1,0 +1,497 @@
+<title>FlexDemy — Content Authoring Canvas (key screen mock v2)</title>
+<style>
+/*
+  KEY SCREEN — Single-canvas Content Authoring (v2, supersedes the 4-step wizard mock)
+  Source PRD: prd-eLearning-ContentAuthoring-2026-08-16
+
+  Pivot per user direction (round 2 feedback): no more separate Wizard Step 1/2/3/4 screens.
+  Chapter -> Topic -> Sub-Topic -> Page -> Resources are all built inline on ONE continuous,
+  nested document canvas -- a Confluence/Jira-page-builder idiom (nested expandable sections,
+  inline "+ Add..." affordances between blocks, no Back/Next wizard chrome, no step indicator).
+
+  Two other explicit changes from v1:
+  1. Every name/description/title/caption field is now a wrapping, resizable <textarea>
+     (`.field-ml`), not a single-line <input> -- content is treated as multi-line-capable
+     everywhere, chapter name down to alt text.
+  2. "This page's resources" is no longer a dedicated fixed panel. It's now a generic,
+     insertable "Learning Resources" section block (`.resource-block`) -- the SAME component
+     reused twice in this mock at two different nesting levels (once at Chapter level, once at
+     Page level) to demonstrate it is a reusable block type, not an app-chrome sidebar.
+
+  NOTE FOR PM/PRD: this is a genuine interaction-model change from FR-9..FR-17's discrete
+  4-step wizard (Step 1 of 4 / Back / Next) to a single always-editable canvas. The PRD's wizard
+  language (FR-9, FR-13, FR-14, FR-16) will need an update pass once this direction is confirmed
+  -- flagged here, not silently absorbed.
+
+  Reuses FlexDemy DESIGN.md tokens (ink-navy/citrus-amber/parchment/hairline, Fraunces/Outfit).
+  Inline CSS only, no JS, no network calls, renders fully offline. Single light theme (FlexDemy's
+  DESIGN.md is explicitly light-only).
+*/
+
+:root{
+  --ink-navy:#143358;
+  --citrus-amber:#BA5012;
+  --citrus-amber-on-dark:#EC7B38;
+  --signal-green:#179765;
+  --parchment:#FAF7EC;
+  --hairline:#E1DED4;
+  --ink:#142030;
+  --muted:#5E6A79;
+  --canvas:#FCFAF4;
+  --surface-secondary:#F3F0E6;
+  --error:#DC2626;
+  --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body:'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:#DCE3EA; font-family:var(--font-body); color:var(--ink); -webkit-font-smoothing:antialiased;}
+
+.page-wrap{max-width:1360px; margin:24px auto 48px;}
+
+.browser-frame{border-radius:14px; overflow:hidden; box-shadow:0 30px 60px -20px rgba(20,32,48,0.35), 0 2px 8px rgba(20,32,48,0.12); border:1px solid #C7CFD8; background:#fff;}
+.browser-chrome{background:#EEF1F5; border-bottom:1px solid #D6DBE2; padding:10px 14px; display:flex; align-items:center; gap:10px;}
+.dots{display:flex; gap:6px;}
+.dot{width:11px; height:11px; border-radius:50%;}
+.dot.red{background:#FF5F57;} .dot.amber{background:#FEBC2E;} .dot.green{background:#28C840;}
+.addr-bar{flex:1; background:#fff; border:1px solid #D6DBE2; border-radius:999px; padding:6px 14px; font-size:12px; color:var(--muted); font-family:var(--font-body);}
+.browser-viewport{background:var(--canvas); min-height:900px;}
+
+/* ---- Header (app chrome, unrelated to the wizard-vs-canvas decision) ---- */
+.editor-header{position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid var(--hairline); padding:14px 32px;}
+.header-top{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
+.header-left{display:flex; flex-direction:column; gap:2px;}
+.eyebrow{font-size:0.625rem; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted);}
+.course-title{font-family:var(--font-display); font-size:1.5rem; font-weight:700; line-height:1.2; letter-spacing:-0.02em; color:var(--ink-navy); margin:0;}
+.header-actions{display:flex; gap:10px; align-items:center;}
+.btn{font-family:var(--font-body); font-weight:700; font-size:0.8125rem; border-radius:0.75rem; padding:0.625rem 1.25rem; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px;}
+.btn.small{padding:0.45rem 0.9rem; font-size:0.75rem;}
+.btn-primary{background:var(--citrus-amber); color:#fff;}
+.btn-secondary{background:var(--ink-navy); color:#fff;}
+.btn-ghost{background:#fff; color:var(--ink-navy); border:1px solid var(--hairline);}
+
+.lifecycle{display:flex; align-items:center; gap:0; flex-wrap:wrap;}
+.stage{display:flex; align-items:center; gap:8px; padding:6px 14px 6px 6px; font-size:0.75rem; font-weight:700; color:var(--muted);}
+.stage .num{width:22px; height:22px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:var(--surface-secondary); color:var(--muted); font-size:0.7rem; border:1px solid var(--hairline);}
+.stage.current{color:var(--ink-navy);}
+.stage.current .num{background:var(--ink-navy); color:#fff; border-color:var(--ink-navy);}
+.stage-connector{width:28px; height:2px; background:var(--hairline);}
+
+.autosave{font-size:0.75rem; color:var(--muted); display:flex; align-items:center; gap:6px; margin-right:6px;}
+.autosave .glyph{color:var(--signal-green); font-weight:800;}
+
+/* ---- Layout: outline rail (table of contents) + single scrolling canvas ---- */
+.workspace{display:flex;}
+.rail{width:270px; flex-shrink:0; border-right:1px solid var(--hairline); background:#fff; padding:18px 14px; align-self:flex-start; position:sticky; top:97px; max-height:calc(100vh - 120px); overflow-y:auto;}
+.rail-title{font-size:0.625rem; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--muted); padding:0 6px 10px;}
+.rail-node{border-radius:0.5rem; padding:7px 8px; margin-bottom:2px; cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.8125rem;}
+.rail-node.chapter{font-weight:700; color:var(--ink-navy); font-family:var(--font-display); font-size:0.9375rem;}
+.rail-node.topic{margin-left:14px; font-weight:700; color:var(--ink);}
+.rail-node.subtopic{margin-left:28px; color:var(--ink);}
+.rail-node.page{margin-left:42px; color:var(--muted); font-size:0.75rem;}
+.rail-node.active{background:var(--ink-navy); color:#fff !important;}
+.rail-node .dot-u{width:6px; height:6px; border-radius:999px; border:1px solid var(--muted); margin-left:auto; flex-shrink:0;}
+.rail-node.active .dot-u{border-color:#fff;}
+.rail-add{padding:8px 6px; margin-top:6px;}
+
+.canvas{flex:1; min-width:0; padding:32px 40px 96px; max-width:880px;}
+
+/* ---- Shared multi-line field style (v2: everything is a textarea) ---- */
+.field-ml{
+  width:100%; background:#fff; border:1px solid var(--hairline); border-radius:0.6rem;
+  padding:0.55rem 0.8rem; font-family:var(--font-body); font-size:0.875rem; color:var(--ink);
+  line-height:1.5; resize:vertical; min-height:2.5em; white-space:pre-wrap;
+}
+.field-ml:focus{outline:2px solid var(--citrus-amber); outline-offset:1px; border-color:var(--citrus-amber);}
+.field-ml.title-lg{font-family:var(--font-display); font-weight:700; font-size:1.375rem; color:var(--ink-navy); border-color:transparent; background:none; padding:0.2rem 0.3rem; min-height:1.6em;}
+.field-ml.title-lg:focus{background:#fff; border-color:var(--citrus-amber);}
+.field-ml.title-md{font-family:var(--font-display); font-weight:700; font-size:1.0625rem; color:var(--ink-navy); min-height:2em;}
+.field-ml.title-sm{font-weight:700; font-size:0.9375rem; color:var(--ink); min-height:1.9em;}
+.field-hint{font-size:0.75rem; color:var(--muted); margin:2px 0 8px; font-style:italic;}
+.field-label{display:block; font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:5px;}
+
+/* ---- Chapter block ---- */
+.chapter-block{margin-bottom:8px;}
+.eyebrow-tag{font-size:0.625rem; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; display:block;}
+.bullet-row{display:flex; align-items:flex-start; gap:8px; margin-bottom:6px;}
+.bullet-row .dot{width:6px; height:6px; border-radius:999px; background:var(--citrus-amber); flex-shrink:0; margin-top:12px;}
+.bullet-row .field-ml{flex:1; min-height:2.2em;}
+.icon-btn{width:30px; height:30px; border-radius:0.5rem; border:1px solid var(--hairline); background:#fff; color:var(--ink-navy); display:flex; align-items:center; justify-content:center; font-size:0.8rem; cursor:pointer; flex-shrink:0;}
+.icon-btn.danger{color:var(--error);}
+.link-btn{background:none; border:none; color:var(--ink-navy); font-family:var(--font-body); font-weight:700; font-size:0.8125rem; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:6px;}
+.link-btn .plus{width:18px; height:18px; border-radius:999px; background:var(--surface-secondary); display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem;}
+
+/* ---- Confluence/Jira-style "insert here" row between blocks ---- */
+.insert-row{display:flex; align-items:center; gap:10px; margin:18px 0; opacity:0.55;}
+.insert-row:hover{opacity:1;}
+.insert-row .line{flex:1; height:1px; background:var(--hairline); border:none;}
+.insert-row .chip{display:flex; gap:6px; flex-wrap:wrap;}
+.insert-chip{background:#fff; border:1px dashed var(--hairline); border-radius:999px; padding:5px 12px; font-size:0.7rem; font-weight:700; color:var(--ink-navy); cursor:pointer; display:inline-flex; align-items:center; gap:5px;}
+.insert-chip .plus{color:var(--citrus-amber); font-weight:800;}
+
+/* ---- Nested outline sections (Topic / Sub-topic), Jira/Confluence nested-page idiom ---- */
+.outline-section{border:1px solid var(--hairline); border-radius:0.85rem; background:#fff; margin-top:14px; overflow:hidden;}
+.outline-section.level-topic{margin-left:0;}
+.outline-section.level-subtopic{margin-left:28px; margin-top:12px; border-color:var(--hairline);}
+.section-head{display:flex; align-items:center; gap:10px; padding:12px 16px; background:var(--surface-secondary); border-bottom:1px solid var(--hairline);}
+.section-head .chev{color:var(--muted); font-size:0.75rem; flex-shrink:0;}
+.section-head .field-ml{background:none; border-color:transparent; flex:1;}
+.section-head .field-ml:focus{background:#fff; border-color:var(--citrus-amber);}
+.section-head .kind-tag{font-size:0.625rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); flex-shrink:0; white-space:nowrap;}
+.section-head .actions{display:flex; gap:4px; flex-shrink:0;}
+.section-body{padding:14px 18px 18px;}
+.section-body.collapsed{padding:4px 18px 14px; color:var(--muted); font-size:0.8125rem; font-style:italic;}
+
+/* ---- Page (nested inside a topic/sub-topic) ---- */
+.page-block{border:1px solid var(--hairline); border-radius:0.75rem; margin-top:12px; background:#fff;}
+.page-block-head{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-bottom:1px solid var(--hairline);}
+.page-block-head .field-ml{flex:1;}
+.view-toggle{display:flex; border:1px solid var(--hairline); border-radius:999px; overflow:hidden; flex-shrink:0;}
+.view-toggle span{padding:5px 12px; font-size:0.7rem; font-weight:700; color:var(--muted); cursor:pointer;}
+.view-toggle span.active{background:var(--ink-navy); color:#fff;}
+.block-palette{display:flex; gap:6px; padding:8px 14px; border-bottom:1px solid var(--hairline); background:var(--parchment); flex-wrap:wrap;}
+.palette-btn{background:#fff; border:1px solid var(--hairline); border-radius:0.5rem; padding:5px 9px; font-size:0.7rem; font-weight:700; color:var(--ink-navy); cursor:pointer; display:flex; align-items:center; gap:4px;}
+.page-body{padding:16px 18px;}
+.block{margin-bottom:14px; padding:2px 8px; border-radius:0.5rem;}
+.block:hover{background:var(--surface-secondary);}
+.block-kind{font-size:0.625rem; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted); margin-bottom:3px; opacity:0;}
+.block:hover .block-kind{opacity:1;}
+.block h4{font-family:var(--font-display); font-size:1rem; color:var(--ink-navy); margin:0 0 4px;}
+.block ul{margin:0; padding-left:18px; line-height:1.65; font-size:0.875rem;}
+.block-image{border:1px solid var(--hairline); border-radius:0.6rem; overflow:hidden; background:var(--surface-secondary);}
+.block-image .img-placeholder{height:140px; background:repeating-linear-gradient(135deg,#fff,#fff 10px,var(--surface-secondary) 10px,var(--surface-secondary) 20px); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.75rem;}
+.block-image .alt-row{padding:8px 12px; background:#fff; border-top:1px solid var(--hairline);}
+.block-image .alt-row .field-label{margin-bottom:3px;}
+.block-image .alt-row .field-ml{min-height:2em; font-size:0.75rem;}
+.block-callout{border:1px solid var(--citrus-amber); background:#FDF3EC; border-radius:0.6rem; padding:10px 14px; font-size:0.8125rem; display:flex; gap:8px;}
+.block-callout .g{color:var(--citrus-amber);}
+
+/* ---- Generic "Learning Resources" block -- reused at chapter level AND page level ---- */
+.resource-block{border:1px solid var(--hairline); border-radius:0.75rem; margin-top:14px; background:var(--parchment);}
+.resource-block-head{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 16px; border-bottom:1px solid var(--hairline);}
+.resource-block-head .name{display:flex; align-items:center; gap:8px; font-family:var(--font-display); font-weight:700; font-size:0.9375rem; color:var(--ink-navy);}
+.resource-block-head .reuse-tag{font-size:0.625rem; font-weight:800; text-transform:uppercase; letter-spacing:0.03em; color:var(--muted); background:#fff; border:1px solid var(--hairline); border-radius:999px; padding:3px 9px;}
+.resource-block-body{padding:12px 16px 16px; display:flex; flex-direction:column; gap:8px;}
+.res-card{border:1px solid var(--hairline); border-radius:0.6rem; padding:9px 11px; display:flex; gap:10px; align-items:flex-start; background:#fff;}
+.res-icon{width:32px; height:32px; border-radius:0.45rem; display:flex; align-items:center; justify-content:center; font-size:0.85rem; flex-shrink:0;}
+.res-icon.pdf{background:#FEE2E2; color:#B91C1C;}
+.res-icon.img{background:#E0EDFF; color:var(--ink-navy);}
+.res-icon.code{background:#E7F7EF; color:var(--signal-green);}
+.res-body{flex:1; min-width:0;}
+.res-name{font-size:0.8125rem; font-weight:700; color:var(--ink);}
+.res-caption{font-size:0.6875rem; color:var(--muted); margin-top:1px;}
+.res-role{margin-top:5px; display:flex; gap:6px; flex-wrap:wrap;}
+.badge-pill{border-radius:999px; font-size:0.625rem; font-weight:800; letter-spacing:0.02em; padding:0.2rem 0.6rem; white-space:nowrap; text-transform:uppercase;}
+.badge-navy{background:var(--ink-navy); color:#fff;}
+.badge-amber{background:var(--citrus-amber); color:#fff;}
+.badge-muted{background:var(--surface-secondary); color:var(--muted);}
+.res-drop{border:1.5px dashed var(--hairline); border-radius:0.6rem; padding:12px; text-align:center; color:var(--muted); font-size:0.7rem; background:#fff;}
+.res-drop-actions{display:flex; gap:6px; justify-content:center; margin-top:8px; flex-wrap:wrap;}
+
+.a11y-note{margin:24px 0 0; background:#fff; border:1px dashed var(--hairline); border-radius:0.75rem; padding:14px 18px; font-size:0.75rem; color:var(--muted);}
+.a11y-note b{color:var(--ink-navy);}
+.pm-note{margin:16px 0 0; background:#FDF3EC; border:1px solid var(--citrus-amber); border-radius:0.75rem; padding:14px 18px; font-size:0.8125rem; color:var(--ink);}
+.pm-note b{color:var(--citrus-amber);}
+</style>
+
+<div class="page-wrap">
+  <div class="browser-frame">
+    <div class="browser-chrome">
+      <div class="dots"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span></div>
+      <div class="addr-bar">app.flexdemy.com/tutor/courses/cbse10-science/content</div>
+    </div>
+    <div class="browser-viewport">
+
+      <div class="editor-header">
+        <div class="header-top">
+          <div class="header-left">
+            <span class="eyebrow">Course Content Editor &middot; single canvas, no wizard steps</span>
+            <h1 class="course-title">CBSE Class 10 Science</h1>
+          </div>
+          <div class="header-actions">
+            <span class="autosave"><span class="glyph">&#10003;</span> Saved a moment ago</span>
+            <button class="btn btn-ghost small">Preview as Student</button>
+            <button class="btn btn-secondary small">Confirm Chapter</button>
+          </div>
+        </div>
+        <nav class="lifecycle" aria-label="Course publishing lifecycle">
+          <div class="stage current" aria-current="true"><span class="num">1</span>Draft</div>
+          <div class="stage-connector"></div>
+          <div class="stage"><span class="num">2</span>In Review</div>
+          <div class="stage-connector"></div>
+          <div class="stage"><span class="num">3</span>Confirmed</div>
+          <div class="stage-connector"></div>
+          <div class="stage"><span class="num">4</span>Published</div>
+        </nav>
+      </div>
+
+      <div class="workspace">
+        <!-- Outline rail = table of contents into the single canvas, Confluence page-tree idiom -->
+        <div class="rail">
+          <p class="rail-title">Outline</p>
+          <div class="rail-node chapter">Chemical Reactions and Equations</div>
+          <div class="rail-node topic">Chemical Equations <span class="dot-u"></span></div>
+          <div class="rail-node topic">Types of Reactions <span class="dot-u"></span></div>
+          <div class="rail-node subtopic active">Combination Reactions</div>
+          <div class="rail-node page active">What is a combination reaction?</div>
+          <div class="rail-node subtopic">Decomposition Reactions <span class="dot-u"></span></div>
+          <div class="rail-node topic">Corrosion and Rancidity <span class="dot-u"></span></div>
+          <div class="rail-add"><button class="link-btn"><span class="plus">+</span> Add topic</button></div>
+        </div>
+
+        <!-- The single canvas: everything built inline, top to bottom -->
+        <div class="canvas">
+
+          <!-- CHAPTER -->
+          <div class="chapter-block">
+            <span class="eyebrow-tag">Chapter</span>
+            <textarea class="field-ml title-lg" rows="1">Chemical Reactions and Equations</textarea>
+
+            <div style="margin-top:14px;">
+              <label class="field-label">What will a student get from this chapter?</label>
+              <textarea class="field-ml" rows="3">By the end of this chapter, you&#39;ll be able to write and balance a chemical equation, recognise the type of reaction at a glance, and explain why iron rusts but gold doesn&#39;t.</textarea>
+            </div>
+
+            <div style="margin-top:14px;">
+              <label class="field-label">What you&rsquo;ll learn <span style="text-transform:none; font-weight:400;">(optional)</span></label>
+              <div class="bullet-row">
+                <span class="dot"></span>
+                <textarea class="field-ml" rows="1">Balance a chemical equation using the law of conservation of mass</textarea>
+                <button class="icon-btn danger" title="Remove">&times;</button>
+              </div>
+              <div class="bullet-row">
+                <span class="dot"></span>
+                <textarea class="field-ml" rows="1">Tell a combination, decomposition and displacement reaction apart</textarea>
+                <button class="icon-btn danger" title="Remove">&times;</button>
+              </div>
+              <button class="link-btn"><span class="plus">+</span> Add another point</button>
+            </div>
+          </div>
+
+          <!-- Generic Learning Resources block, instance #1: attached at CHAPTER level -->
+          <div class="resource-block">
+            <div class="resource-block-head">
+              <span class="name">&#128206; Learning Resources</span>
+              <span class="reuse-tag">Reusable block &middot; attached here to Chapter</span>
+            </div>
+            <div class="resource-block-body">
+              <div class="res-card">
+                <div class="res-icon pdf">&#128196;</div>
+                <div class="res-body">
+                  <textarea class="field-ml title-sm" rows="1" style="min-height:1.6em;">CBSE-Science-Syllabus.pdf</textarea>
+                  <div class="res-caption">Visible on every page under this chapter</div>
+                  <div class="res-role"><span class="badge-pill badge-amber">Attachment</span></div>
+                </div>
+              </div>
+              <div class="res-drop">
+                Drag files here, or
+                <div class="res-drop-actions">
+                  <button class="btn btn-ghost small">Upload</button>
+                  <button class="btn btn-ghost small">Attach existing&hellip;</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- insert row: add-anything affordance, Confluence/Jira "+" idiom -->
+          <div class="insert-row">
+            <hr class="line">
+            <div class="chip">
+              <button class="insert-chip"><span class="plus">+</span> Topic</button>
+              <button class="insert-chip"><span class="plus">+</span> Learning Resources</button>
+              <button class="insert-chip"><span class="plus">+</span> Cover Image</button>
+            </div>
+            <hr class="line">
+          </div>
+
+          <!-- TOPIC 1 (collapsed — no sub-topics/pages opened) -->
+          <div class="outline-section level-topic">
+            <div class="section-head">
+              <span class="chev">&#9656;</span>
+              <span class="kind-tag">Topic 1</span>
+              <textarea class="field-ml title-md" rows="1">Chemical Equations</textarea>
+              <div class="actions">
+                <button class="icon-btn" title="Reorder">&#10021;</button>
+                <button class="icon-btn danger" title="Delete">&times;</button>
+              </div>
+            </div>
+            <div class="section-body collapsed">Writing, balancing and reading a chemical equation. &mdash; collapsed, no sub-topics or pages added yet.</div>
+          </div>
+
+          <!-- TOPIC 2 (expanded, contains sub-topics) -->
+          <div class="outline-section level-topic">
+            <div class="section-head">
+              <span class="chev">&#9662;</span>
+              <span class="kind-tag">Topic 2</span>
+              <textarea class="field-ml title-md" rows="1">Types of Reactions</textarea>
+              <div class="actions">
+                <button class="icon-btn" title="Reorder">&#10021;</button>
+                <button class="icon-btn danger" title="Delete">&times;</button>
+              </div>
+            </div>
+            <div class="section-body">
+              <label class="field-label">Description</label>
+              <textarea class="field-ml" rows="2">Combination, decomposition, displacement and double displacement reactions.</textarea>
+
+              <!-- SUB-TOPIC 2.1 (expanded, contains a page) -->
+              <div class="outline-section level-subtopic">
+                <div class="section-head">
+                  <span class="chev">&#9662;</span>
+                  <span class="kind-tag">Sub-topic</span>
+                  <textarea class="field-ml title-sm" rows="1">Combination Reactions</textarea>
+                  <div class="actions">
+                    <button class="icon-btn" title="Reorder">&#10021;</button>
+                    <button class="icon-btn danger" title="Delete">&times;</button>
+                  </div>
+                </div>
+                <div class="section-body">
+                  <label class="field-label">Description</label>
+                  <textarea class="field-ml" rows="2">Two or more reactants combine to form a single product.</textarea>
+
+                  <!-- PAGE, nested inline with its own block editor -->
+                  <div class="page-block">
+                    <div class="page-block-head">
+                      <span class="kind-tag" style="flex-shrink:0;">Page 1</span>
+                      <textarea class="field-ml title-sm" rows="1">What is a combination reaction?</textarea>
+                      <div class="view-toggle">
+                        <span class="active">Edit</span><span>Preview</span><span>Markdown</span>
+                      </div>
+                    </div>
+                    <div class="block-palette" aria-label="Block palette">
+                      <button class="palette-btn">&#182; Paragraph</button>
+                      <button class="palette-btn">H Heading</button>
+                      <button class="palette-btn">&#8226; Bullets</button>
+                      <button class="palette-btn">&#60;/&#62; Code</button>
+                      <button class="palette-btn">&#128247; Image</button>
+                      <button class="palette-btn">&#128161; Callout</button>
+                      <button class="palette-btn">&#8730; Math</button>
+                      <button class="palette-btn">&#128206; Resources</button>
+                    </div>
+                    <div class="page-body">
+                      <div class="block">
+                        <div class="block-kind">Heading</div>
+                        <h4>Combination Reactions</h4>
+                      </div>
+                      <div class="block">
+                        <div class="block-kind">Paragraph</div>
+                        <textarea class="field-ml" rows="3">A combination reaction is one where two or more reactants join to form a single product. The general form is A + B &#8594; AB. You&#39;ll see this pattern again and again &mdash; it&#39;s the simplest of the four reaction types.</textarea>
+                      </div>
+                      <div class="block">
+                        <div class="block-kind">Bulleted list</div>
+                        <ul>
+                          <li>Iron and sulphur combine on heating to form iron sulphide</li>
+                          <li>Quicklime reacts with water to form slaked lime, releasing heat</li>
+                        </ul>
+                      </div>
+                      <div class="block">
+                        <div class="block-kind">Image</div>
+                        <div class="block-image">
+                          <div class="img-placeholder">&#128247; combination-reaction.png</div>
+                          <div class="alt-row">
+                            <label class="field-label">Alt text</label>
+                            <textarea class="field-ml" rows="2">Iron filings and sulphur powder being heated in a test tube to form iron sulphide</textarea>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="block">
+                        <div class="block-kind">Callout</div>
+                        <div class="block-callout"><span class="g">&#128161;</span> A combination reaction always has exactly one product &mdash; if you see two or more products, it isn&rsquo;t this type.</div>
+                      </div>
+
+                      <!-- Generic Learning Resources block, instance #2: same component, attached at PAGE level this time -->
+                      <div class="resource-block">
+                        <div class="resource-block-head">
+                          <span class="name">&#128206; Learning Resources</span>
+                          <span class="reuse-tag">Reusable block &middot; attached here to this Page</span>
+                        </div>
+                        <div class="resource-block-body">
+                          <div class="res-card">
+                            <div class="res-icon img">&#128247;</div>
+                            <div class="res-body">
+                              <textarea class="field-ml title-sm" rows="1" style="min-height:1.6em;">combination-reaction.png</textarea>
+                              <div class="res-caption">Used inline in the Image block above</div>
+                              <div class="res-role"><span class="badge-pill badge-navy">Inline</span></div>
+                            </div>
+                          </div>
+                          <div class="res-card">
+                            <div class="res-icon code">&#60;/&#62;</div>
+                            <div class="res-body">
+                              <textarea class="field-ml title-sm" rows="1" style="min-height:1.6em;">balance_equation.py</textarea>
+                              <div class="res-caption">Worked-example script referenced in the paragraph above</div>
+                              <div class="res-role"><span class="badge-pill badge-amber">Attachment</span></div>
+                            </div>
+                          </div>
+                          <div class="res-card" style="opacity:0.75;">
+                            <div class="res-icon pdf">&#128196;</div>
+                            <div class="res-body">
+                              <div class="res-name" style="font-weight:400; color:var(--muted); font-style:italic;">CBSE-Science-Syllabus.pdf &mdash; inherited from Chapter</div>
+                              <div class="res-role"><span class="badge-pill badge-muted">Attachment &middot; read-only here</span></div>
+                            </div>
+                          </div>
+                          <div class="res-drop">
+                            Drag files here, or
+                            <div class="res-drop-actions">
+                              <button class="btn btn-ghost small">Upload</button>
+                              <button class="btn btn-ghost small">Attach existing&hellip;</button>
+                              <button class="btn btn-ghost small">Insert from file&hellip;</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <button class="link-btn" style="margin-top:12px;"><span class="plus">+</span> Add page</button>
+                </div>
+              </div>
+
+              <!-- SUB-TOPIC 2.2 (collapsed) -->
+              <div class="outline-section level-subtopic">
+                <div class="section-head">
+                  <span class="chev">&#9656;</span>
+                  <span class="kind-tag">Sub-topic</span>
+                  <textarea class="field-ml title-sm" rows="1">Decomposition Reactions</textarea>
+                  <div class="actions">
+                    <button class="icon-btn" title="Reorder">&#10021;</button>
+                    <button class="icon-btn danger" title="Delete">&times;</button>
+                  </div>
+                </div>
+                <div class="section-body collapsed">A single reactant breaks down into two or more products. &mdash; no pages added yet.</div>
+              </div>
+
+              <button class="link-btn" style="margin-top:6px;"><span class="plus">+</span> Add sub-topic</button>
+            </div>
+          </div>
+
+          <!-- TOPIC 3 (collapsed) -->
+          <div class="outline-section level-topic">
+            <div class="section-head">
+              <span class="chev">&#9656;</span>
+              <span class="kind-tag">Topic 3</span>
+              <textarea class="field-ml title-md" rows="1">Corrosion and Rancidity</textarea>
+              <div class="actions">
+                <button class="icon-btn" title="Reorder">&#10021;</button>
+                <button class="icon-btn danger" title="Delete">&times;</button>
+              </div>
+            </div>
+            <div class="section-body collapsed">Why metals corrode and food goes rancid &mdash; and how we slow both down. &mdash; collapsed.</div>
+          </div>
+
+          <div class="insert-row">
+            <hr class="line">
+            <div class="chip"><button class="insert-chip"><span class="plus">+</span> Add topic</button></div>
+            <hr class="line">
+          </div>
+
+          <div class="pm-note"><b>Note for PM:</b> this canvas replaces the earlier 4-step wizard mock (Step 1 Chapter &rarr; Step 2 Topics &rarr; Step 3 Sub-Topics &rarr; Step 4 Page) with one continuous, always-editable document &mdash; Confluence/Jira-style nested sections with inline &ldquo;+&rdquo; inserts instead of Back/Next steps. This is a real interaction-model change from the PRD&rsquo;s FR-9/FR-13/FR-14/FR-16 wizard language, which will need an update pass once this direction is confirmed.</div>
+
+          <div class="a11y-note"><b>Note on this mock:</b> every name/title/description/caption field is now a resizable, wrapping textarea (multi-line by default), including single-word fields like a Page title &mdash; a tutor can still type one line, but nothing caps them to one. The &ldquo;Learning Resources&rdquo; block shown twice above (Chapter level, Page level) is the same generic block type, not two different components &mdash; it can be inserted at any nesting level via the &ldquo;+ Learning Resources&rdquo; chip. Collapsed sections, drag-reorder, and hover-only block controls are shown in a static always-legible state here for review purposes.</div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UX Design Validation: FlexDemy — Content Authoring Update</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .badge-sev-note { background: rgba(120, 113, 108, 0.14); color: var(--muted); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>FlexDemy — Content Authoring Update — UX Design Validation Report</h1>
+        <div class="subtitle">_specs/planning-artifacts/ux-designs/ux-eLearning-2026-08-10/{DESIGN.md, EXPERIENCE.md}</div>
+      </div>
+    </header>
+
+    <div class="synthesis">
+      <p>A downstream consumer can source-extract cleanly for most of this pair: tokens resolve, all four mockup files are linked with clear dispositions, all five PRD sources exist on disk, section shape matches the canonical templates, and the four new ContentAuthoring components (content-doc-heading, content-page-marker, content-resource-block, content-slash-menu) are coherent and consistently flagged wherever the superseded content-tree-node model still appears. Two real gaps keep this from "strong": the ContentAuthoring PRD's UJ-2 (extraction-to-blocks) and UJ-3 (resource depth/inheritance/delete-guard) have no Key Flow mirror at all — and UJ-2's "Insert from file" mechanic may be a genuine capability drop, not just a documentation gap — and the new authoring surface's "empty document / first open" state, despite being explicitly called out as replacing the old wizard's removed "Continue setting up" state, only exists as flow narrative, not as a formal State Patterns row.</p>
+      <p>The accessibility pass found deeper problems than a routine check usually turns up, and they materially shift the picture. The one artifact meant to demonstrate the new interaction contradicts the spine's own semantic-heading promise — Topic/Sub-Topic render as styled <code>&lt;div&gt;</code>s wrapping <code>&lt;textarea&gt;</code>s in <code>key-content-doc-slash.html</code>, not real <code>&lt;h2&gt;</code>/<code>&lt;h3&gt;</code> elements. The "+" click affordance the spine names as the accessible primary entry point (justifying "/" as a shortcut layered on top, not the sole path) is never actually rendered anywhere in that same mock. And Page markers are excluded from the heading tree while still appearing in the Table-of-Contents rail, directly contradicting the Accessibility Floor's claim that screen-reader heading-navigation "work[s] against the same structure a sighted tutor sees." None of this is unfixable, but the a11y story for this product's first command-driven interaction is currently asserted more confidently in prose than it's demonstrated in the one artifact meant to prove it out.</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card"><div class="dim-name">Flow coverage</div><div class="dim-verdict" style="color: var(--verdict-thin)">Thin</div></div>
+      <div class="dim-card"><div class="dim-name">Token completeness</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+      <div class="dim-card"><div class="dim-name">Component coverage</div><div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div></div>
+      <div class="dim-card"><div class="dim-name">State coverage</div><div class="dim-verdict" style="color: var(--verdict-thin)">Thin</div></div>
+      <div class="dim-card"><div class="dim-name">Visual reference coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+      <div class="dim-card"><div class="dim-name">Bloat &amp; overspecification</div><div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div></div>
+      <div class="dim-card"><div class="dim-name">Inheritance discipline</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+      <div class="dim-card"><div class="dim-name">Shape fit</div><div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div></div>
+    </div>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>1. Flow coverage</h2><span class="verdict-pill verdict-thin">Thin</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>Checked every UJ implied by EXPERIENCE.md's sources frontmatter against Key Flows for named protagonist, numbered steps, climax, and edge/failure path.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">High</span><h3 class="finding-title">ContentAuthoring PRD's UJ-2 and UJ-3 have no Key Flow entry</h3><span class="finding-location">Key Flows §ContentAuthoring PRD</span></header>
+            <div class="finding-note">UJ-2 (extraction-to-blocks via "Insert from file") and UJ-3 (per-node/page resource depth, ancestor inheritance, delete-blocked-while-in-use) are never mirrored — only UJ-1 is, and it's explicitly reinterpreted through the document model.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add Key Flow entries for UJ-2 and UJ-3, reinterpreted through the validated document model the same way UJ-1 was, or explicitly scope them out with a [NOTE FOR UX→PM].</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">Medium</span><h3 class="finding-title">Extraction-into-blocks mechanic has no clear analog in EXPERIENCE.md</h3><span class="finding-location">Component Patterns, "Learning Resources block" row</span></header>
+            <div class="finding-note">PRD FR-19–21's upload picker / two-pane section selector / copy-on-insert reads, where mentioned at all, as a resource-attach action, not a content-into-body-blocks action.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Confirm with PM/UX whether extraction-to-blocks survives the validated document model; document where it lives, or record the descope explicitly.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>2. Token completeness</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>All 17 colors have hex values; typography/spacing/rounded references all resolve.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">Medium</span><h3 class="finding-title">{components.spinner} referenced but never defined</h3><span class="finding-location">DESIGN.md, extraction-status-badge.inProgressSpinner</span></header>
+            <div class="finding-note">Used in prose but absent from the frontmatter components: block.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a minimal spinner component entry, or drop the token syntax and describe it as plain prose.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>3. Component coverage</h2><span class="verdict-pill verdict-adequate">Adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>The four new ContentAuthoring components each have real, specific behavioral rules in EXPERIENCE.md, and the superseded content-tree-node entry is explicitly marked "Superseded... kept as history" in every location except one.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-medium">Medium</span><h3 class="finding-title">course-content-editor bullet still describes stale tree composition</h3><span class="finding-location">DESIGN.md ## Components, lines 276–277</span></header>
+            <div class="finding-note">Still reads "Composed from {components.content-tree-node} rows..." — the correction lives only in the preceding bullet, so a reader jumping straight to course-content-editor can land on stale language.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a short inline pointer inside the course-content-editor bullet itself.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">Low</span><h3 class="finding-title">State Patterns still use generic "node" language</h3><span class="finding-location">EXPERIENCE.md State Patterns, lines 128–131</span></header>
+            <div class="finding-note">"Node pending confirmation," Publishing rows, etc. inherit pre-ContentAuthoring "node" wording while the new model's confirmable units are specifically headings and pages.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Define "node" as an explicit umbrella term for heading-or-page, or rename these rows.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">Low</span><h3 class="finding-title">"Course version history" has no DESIGN.md visual entry</h3><span class="finding-location">EXPERIENCE.md Component Patterns, line 84</span></header>
+            <div class="finding-note">Every other Component Patterns row has a matching DESIGN.md bullet or an explicit "composes from X" disclaimer; this one has neither.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a one-line visual note, or fold into the existing "not separately defined" disclaimer list.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">Low</span><h3 class="finding-title">Display names differ between DESIGN.md and EXPERIENCE.md for the same token</h3><span class="finding-location">e.g. content-resource-block, content-page-marker</span></header>
+            <div class="finding-note">Token IDs match so resolution isn't broken, but prose titles don't, complicating a straight name-match check.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Align display names to the token name, or a fixed transform of it.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details open>
+        <summary><h2>4. State coverage</h2><span class="verdict-pill verdict-thin">Thin</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>Walked every IA surface's states, focusing on Course Content Editor given the removal of the old wizard's "Continue setting up" state.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-high">High</span><h3 class="finding-title">No State Patterns row for "empty document / first open"</h3><span class="finding-location">State Patterns table (missing); narrated only in Key Flows UJ-1</span></header>
+            <div class="finding-note">Described only inside the ContentAuthoring UJ-1 Key Flow, not as a table row like every other empty state in the document — a consumer scanning only the canonical State Patterns table would miss it entirely.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add an explicit "Empty — first open / no content yet" row for Course Content Editor, cross-referencing the Key Flow.</div>
+          </article>
+          <article class="finding">
+            <header><span class="badge badge-sev-low">Low</span><h3 class="finding-title">No "cold-load / loading existing document" state defined</h3><span class="finding-location">State Patterns table</span></header>
+            <div class="finding-note">Distinct from My Courses' own "Loading" row, which covers the list, not the editor's content, when reopening a Chapter with existing content.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add a loading-state row, or state explicitly that it inherits the app's global loading pattern.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>5. Visual reference coverage</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>All four mockup files are referenced with named illustration purpose: key-course-content-editor.html (flagged stale/superseded), key-content-doc-slash.html (new surface), key-publishing-state.html, key-course-player-adaptive.html. No orphans, no unspecific references.</p></div></div>
+        <div class="findings-list"></div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>6. Bloat &amp; overspecification</h2><span class="verdict-pill verdict-adequate">Adequate</span></summary>
+        <div class="dim-body"><div class="dim-judgment"></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">Low</span><h3 class="finding-title">Multi-round remediation narrative reads like a changelog inside the living spec</h3><span class="finding-location">DESIGN.md Do's and Don'ts, "Resolved during this spec's authoring" bullets</span></header>
+            <div class="finding-note">The citrus-amber contrast-fix story, DrilldownPanel brand-sweep aside, TutorEducatorHubView max-w-7xl fix writeup — not incorrect, but dilutes the "what do I build against" signal.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Consider moving resolved-history narrative to a changelog appendix, leaving only the current rule in the main body.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>7. Inheritance discipline</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>All five sources frontmatter PRD paths resolve on disk. Component names used identically across sections; EXPERIENCE.md token references resolve to DESIGN.md tokens by name.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">Low</span><h3 class="finding-title">New Component Patterns rows don't self-cite their own token</h3><span class="finding-location">content-doc-heading, content-page-marker, content-slash-menu rows</span></header>
+            <div class="finding-note">Sibling rows in the same table cite their {components.X} token (e.g. Extraction status indicator, Maximize/Restore); these three don't, though resolution isn't actually broken since header names still line up.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Add the token citation to each new row for consistency.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary><h2>8. Shape fit</h2><span class="verdict-pill verdict-strong">Strong</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>DESIGN.md matches the canonical section order exactly. EXPERIENCE.md has all nine required sections present.</p></div></div>
+        <div class="findings-list">
+          <article class="finding">
+            <header><span class="badge badge-sev-low">Low</span><h3 class="finding-title">Key Flows and Responsive &amp; Platform are swapped relative to canonical order</h3><span class="finding-location">EXPERIENCE.md section order</span></header>
+            <div class="finding-note">Not load-bearing, purely ordering.</div>
+            <div class="finding-fix"><strong>Fix:</strong> Move Key Flows above Responsive &amp; Platform, or treat the swap as an accepted convention if intentional.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="reviewer-section">
+      <details>
+        <summary><h2>Accessibility review — Content Authoring document/slash-command model</h2><span class="reviewer-source">review-accessibility-contentauthoring.md</span></summary>
+        <div class="dim-body"><div class="dim-judgment"><p>A focused WCAG 2.1 AA-minded pass on the new "/" slash-command menu, the flowing-document heading model, and the Learning Resources block — the highest-novelty, highest-risk surface in this update. 23 findings; reported as a flat list per its review method (no severity ranking), preserved in its own adversarial-skeptical voice below.</p></div></div>
+        <div class="findings-list">
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">The accessible "+" primary entry is entirely absent from the reference mock</h3></header><div class="finding-note">EXPERIENCE.md's Accessibility Floor states "+" is "the accessible primary entry," but key-content-doc-slash.html never renders it anywhere in the document body — the only unrelated "+" is the rail's "+ New chapter." No visual spec for size, placement, or hover/focus-reveal exists either.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">No confirmation "+" is keyboard-discoverable rather than hover-only</h3></header><div class="finding-note">Neither file states "+" must appear on keyboard :focus/:focus-within, not just :hover. If hover-only, the "accessible primary entry" justifying "/" as a mere shortcut is itself keyboard-inaccessible.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">"/" keydown isn't shown being suppressed during IME composition</h3></header><div class="finding-note">Offering "+" as an alternative doesn't stop the "/" handler from still firing mid-Devanagari-composition. Neither file specifies gating on event.isComposing / compositionstart–compositionend.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Firefox's native Quick Find ("/") conflict is not addressed</h3></header><div class="finding-note">Pressing "/" outside a form field opens Firefox's built-in Quick Find toolbar. The DOM structure of an "empty line" (contenteditable vs. focused textarea) isn't specified precisely enough to rule this out, and the conflict is never mentioned.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">The mock's own heading markup contradicts the spec's semantic-heading promise</h3></header><div class="finding-note">EXPERIENCE.md says Topic/Sub-Topic are "real semantic &lt;h2&gt;/&lt;h3&gt; elements... not styled divs" — the mock implements exactly that anti-pattern: a styled &lt;div class="doc-heading h2"&gt; wrapping a &lt;textarea&gt;. How an element is simultaneously a real heading and a live-editable field is never resolved.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Chapter-title heading level is never specified — hierarchy possibly headless at the top</h3></header><div class="finding-note">Only Topic=h2/Sub-Topic=h3 are committed. The mock renders the Chapter title as a bare &lt;textarea&gt; with no heading role, leaving h2 as the highest level with no h1 above it, and it's unclear whether the app chrome's own title is meant as the real h1.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Page markers excluded from the heading tree but included in the ToC rail — contradicts "same structure" claim</h3></header><div class="finding-note">A sighted tutor can jump to a Page via the rail; a screen-reader user relying on native heading-navigation cannot, since Page markers are deliberately not headings — directly contradicting the Accessibility Floor's "same structure a sighted tutor sees" claim.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Slash-menu's keyboard model repurposes Tab nonstandardly</h3></header><div class="finding-note">"Up/Down (or Tab) moves the highlighted row" conflicts with Tab's conventional role of moving focus out of the widget; not reconciled against ARIA APG's listbox/combobox pattern.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Zero-match state for the slash menu is undefined</h3></header><div class="finding-note">Every other surface in State Patterns has an empty state defined; the trivially-reachable "no commands match" case (e.g. typing "/xyz") has none.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Escape's focus-return destination is unstated</h3></header><div class="finding-note">Unlike the Assignment creation modal's explicit focus-return spec, the slash-menu's Accessibility Floor bullet says only "Escape closes without inserting" with no stated focus destination or whether typed filter characters are stripped.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">ARIA wiring for the menu is incompletely specified</h3></header><div class="finding-note">Only aria-activedescendant is named. A working combobox/listbox needs role="listbox"/"option", role="combobox" or aria-controls/aria-expanded on the trigger, and defined handling for category-label rows — none addressed.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">No aria-live confirmation when a block is actually inserted</h3></header><div class="finding-note">Every other async/state-changing surface in the spec commits to an aria-live announcement; the headline new interaction has none for what was inserted or where focus landed.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Confirmed/unconfirmed heading state may not clear "never color-alone"</h3></header><div class="finding-note">content-doc-heading.confirmedState describes both states as dots differing only in color, unlike the Page marker's textual badge-pill — as literally described this doesn't satisfy WCAG 1.4.1.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Learning Resources block: metadata edits not confirmed keyboard-operable</h3></header><div class="finding-note">The non-drag upload path is specified, but setting role, editing caption, removing, or reordering resources has no specified control at all — the mock shows role/caption as static, non-interactive text.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">The mock's resource drop-zone doesn't render the buttons the spec promises</h3></header><div class="finding-note">EXPERIENCE.md requires an explicit Upload/Attach-existing/Insert-from-file button row; the mock's .res-drop element renders only hint text, no actual buttons.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">"Pointer to the ancestor" for inherited resources not confirmed operable</h3></header><div class="finding-note">Not specified whether this is a real focusable link or just descriptive text, inconsistent with the product's own "real element, not div onClick" discipline elsewhere.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">No loading state for opening Course Content Editor on a non-empty course</h3></header><div class="finding-note">State Patterns gives labeled-loading treatment elsewhere (My Courses, whole-app, Discover); the populated-course document fetch path is unaddressed.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">No error state for autosave failure</h3></header><div class="finding-note">Autosave-on-blur is the sole save mechanism, explicitly replacing a beforeunload dialog, but no visible-text error, retry, or aria-live announcement is defined if it fails — a real regression risk versus the safety net it replaced.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Editing state of a Published (read-only?) course is unaddressed</h3></header><div class="finding-note">Unclear whether Course Content Editor even opens on a Published course, and if so whether it's read-only — no analogous permission-denied/read-only row exists, unlike Group Study/Admin.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Editing interaction for blocks beyond heading/paragraph is unspecified</h3></header><div class="finding-note">Bulleted lists, tables, code, and math render as static markup in the mock with no visible editing affordance or specified keyboard model — only Image (via alt text) has a demonstrated edit control.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Reduced-motion coverage omits the slash menu and block-insert transitions</h3></header><div class="finding-note">The Motion bullet names every other overlay/animated surface by name; the slash-command menu's own appear/dismiss animation is absent from that list despite being new, animated UI.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">ToC rail activation not confirmed to move real focus</h3></header><div class="finding-note">Not stated whether activating a rail entry moves DOM focus to the target heading or only scrolls — if scroll-only, a keyboard/screen-reader user ends up positioned at the rail link, not the target.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Focus destination after inserting a block via the slash menu is unstated</h3></header><div class="finding-note">Neither file specifies where cursor/focus lands after selecting e.g. "Topic heading" or "Image" — matters for both sighted keyboard users and screen-reader users tracking position.</div></article>
+          <article class="finding"><header><span class="badge badge-sev-note">Flag</span><h3 class="finding-title">Multi-chapter switching has no defined focus-management/heading-reset behavior</h3></header><div class="finding-note">In this router-less SPA, switching Chapters likely swaps content in place; neither file addresses whether focus/heading-navigation state resets appropriately when this happens.</div></article>
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li>All 5 sources frontmatter PRD paths resolve; no broken {colors.*}/{typography.*}/{spacing.*}/{rounded.*} token references found except the single {components.spinner} gap.</li>
+        <li>The superseded content-tree-node / "tree node" entries are consistently labeled "Superseded... kept as history" in all four locations except the one stale course-content-editor composition sentence noted in §3.</li>
+        <li>Display-name inconsistencies exist between DESIGN.md bullet titles and EXPERIENCE.md Component Patterns row titles for the four new components — token IDs match, prose titles don't.</li>
+        <li>EXPERIENCE.md's Key Flows and Responsive &amp; Platform sections are swapped relative to canonical order.</li>
+        <li>A .working/ directory of draft mocks (mock-content-canvas-v2.html, mock-content-doc-slash.html, mock-content-wizard-workspace.html) exists alongside mockups/ — iteration history, not counted as orphans.</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>Rubric: .claude/skills/bmad-ux/references/validate.md</span>
+        <span>Generated: 2026-08-16</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

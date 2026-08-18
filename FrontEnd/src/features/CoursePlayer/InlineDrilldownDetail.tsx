@@ -11,7 +11,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { DrillLevelData, ExampleItem, TopicDrilldown } from '../../types';
-import { renderLatex } from './renderLatex';
+import { renderLatex } from '../../lib/renderLatex';
 import { LLMAssistantMessage } from './useInlineDrilldownState';
 import { LlmAssistantPanel } from './LlmAssistantPanel';
 

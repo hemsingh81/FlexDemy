@@ -16,7 +16,11 @@ public class CourseFileService(
     IFileStorageService fileStorage,
     ICourseService courseService,
     IScanFileJobEnqueuer scanFileJobEnqueuer,
-    ICorrelationIdAccessor correlationIdAccessor) : ICourseFileService
+    ICorrelationIdAccessor correlationIdAccessor,
+    // Story 10.2: read-only cross-slice dependency for GetFilesAsync's HasAttachedResources check
+    // -- same already-established pattern ContentService itself uses for ICourseFileRepository,
+    // just in the opposite direction.
+    IContentRepository contentRepository) : ICourseFileService
 {
     // PRD FR-11's own stated assumption: 50MB/file, per the existing prototype's stated limit.
     // Public/const (code-review patch) so CourseFilesController's [RequestSizeLimit] attribute
@@ -103,7 +107,11 @@ public class CourseFileService(
     {
         await courseService.EnsureOwnedDraftAsync(courseId, cancellationToken);
         var files = await repository.GetByCourseIdAsync(courseId, cancellationToken);
-        return files.Select(f => f.ToDto()).ToList();
+        // Story 10.2, FR-23: one batched query for the whole file list rather than one per file --
+        // backs the delete-confirmation warning's accuracy (only this, the tutor's own editing
+        // view, ever shows a delete affordance).
+        var attachedIds = await contentRepository.GetCourseFileIdsWithResourcesAsync(files.Select(f => f.Id).ToList(), cancellationToken);
+        return files.Select(f => f.ToDto(attachedIds.Contains(f.Id))).ToList();
     }
 
     public async Task<IReadOnlyList<CourseFileDto>> GetPublishedFilesAsync(string courseId, CancellationToken cancellationToken = default)

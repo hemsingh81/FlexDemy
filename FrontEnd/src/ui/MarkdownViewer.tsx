@@ -1,11 +1,57 @@
-import React, { useMemo } from 'react';
+import React, { useContext, useMemo } from 'react';
+import { Paperclip, StickyNote } from 'lucide-react';
 import { parseMarkdown, type InlineNode, type MarkdownBlock, type ListItem } from '../lib/markdown';
+import { renderLatex } from '../lib/renderLatex';
+import { useResolvedResourceUrl } from '../hooks/useResolvedResourceUrl';
 
 // Renders the block tree from lib/markdown.ts as React elements. Deliberately no
 // dangerouslySetInnerHTML anywhere in this file -- see that module's header for why the whole
 // pipeline avoids HTML strings. Styling matches the app's reading surfaces (Lumen palette,
 // --font-display for headings) so a rendered document looks like part of the product rather than
 // a browser's default Markdown dump.
+
+// Story 8.3, FR-30/Task 2: the minimal resolver hook this story adds -- a `resource:{id}` URI
+// resolves to a real served URL at render time via this context, never a raw storage URL baked
+// into the Markdown. Context (not a threaded prop) since renderInline/BlockRenderer/
+// renderListItems recurse freely and a resolver is the same for the whole render tree. `null`
+// (no provider, or MarkdownViewer's own resolveResourceUrl prop omitted) degrades to showing the
+// image's alt text -- the same graceful degradation every other unsupported inline construct in
+// this parser already gets.
+type ResolveResourceUrl = (resourceId: string) => Promise<string>;
+const ResourceResolverContext = React.createContext<ResolveResourceUrl | null>(null);
+
+const ResolvedResourceImage: React.FC<{ resourceId: string; alt: string }> = ({ resourceId, alt }) => {
+  const resolve = useContext(ResourceResolverContext);
+  const { url: src, failed } = useResolvedResourceUrl(resolve, resourceId);
+
+  if (!resolve || failed) return <span className="italic text-[#5E6A79]">{alt}</span>;
+  if (!src) return <span className="italic text-[#5E6A79]">{alt}</span>;
+  return <img src={src} alt={alt} className="max-w-full rounded-lg my-2" />;
+};
+
+// Story 9.2, FR-28/FR-30/FR-31, Task 2: a download-card resolving its resourceId through the same
+// resolver context resourceImage uses -- reuses that same `resource:` URI resolution mechanism
+// (Story 8.3), just rendered as a labeled download card (Story 8.1's own resource-row visual
+// language) instead of an inline `<img>`.
+const ResolvedResourceCard: React.FC<{ resourceId: string; label: string }> = ({ resourceId, label }) => {
+  const resolve = useContext(ResourceResolverContext);
+  // Preserves this component's own pre-extraction behavior exactly: a resolve failure leaves
+  // `href` null (renders as an anchor with no href) rather than a distinct failed state --
+  // `failed` is deliberately unused here.
+  const { url: href } = useResolvedResourceUrl(resolve, resourceId);
+
+  return (
+    <a
+      href={href ?? undefined}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="my-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-[#E1DED4] bg-[#F3F0E6] text-sm font-semibold text-[#142030] no-underline hover:border-[#BA5012]"
+    >
+      <Paperclip className="w-4 h-4 text-[#BA5012] shrink-0" />
+      {label}
+    </a>
+  );
+};
 
 const renderInline = (nodes: InlineNode[], keyPrefix: string): React.ReactNode =>
   nodes.map((node, index) => {
@@ -45,6 +91,8 @@ const renderInline = (nodes: InlineNode[], keyPrefix: string): React.ReactNode =
             {renderInline(node.children, key)}
           </a>
         );
+      case 'resourceImage':
+        return <ResolvedResourceImage key={key} resourceId={node.resourceId} alt={node.alt} />;
       default:
         return null;
     }
@@ -134,21 +182,51 @@ const BlockRenderer: React.FC<{ block: MarkdownBlock; keyPrefix: string }> = ({ 
       );
     case 'hr':
       return <hr className="my-4 border-[#E1DED4]" />;
+    // Story 9.2, FR-28: KaTeX display-mode rendering, reusing lib/renderLatex.ts (relocated from
+    // features/CoursePlayer -- see that module's own header comment) rather than a second KaTeX
+    // integration. No dangerouslySetInnerHTML anywhere else in this file, but KaTeX's own output
+    // is trusted markup this module already had one other exception for nowhere -- this is the
+    // first, scoped to exactly KaTeX's own rendered HTML, never raw document text.
+    case 'math':
+      return <div className="my-3 overflow-x-auto text-center" dangerouslySetInnerHTML={{ __html: renderLatex(block.value) }} />;
+    // Story 9.2: no dedicated content-callout DESIGN.md token was found during this story's
+    // research -- composed from this app's existing card-shell/badge-pill visual language rather
+    // than inventing new unreviewed tokens; flagged here for a future UX pass.
+    case 'callout':
+      return (
+        <div className="my-3 p-3 rounded-xl border border-[#BA5012]/30 bg-[#BA5012]/5">
+          <div className="flex items-center gap-1.5 mb-1 text-[10px] font-extrabold uppercase tracking-wide text-[#BA5012]">
+            <StickyNote className="w-3.5 h-3.5" />
+            Note
+          </div>
+          {block.children.map((child, index) => (
+            <BlockRenderer key={`${keyPrefix}-co-${index}`} block={child} keyPrefix={`${keyPrefix}-co-${index}`} />
+          ))}
+        </div>
+      );
+    case 'resourceCard':
+      return <ResolvedResourceCard resourceId={block.resourceId} label={block.label} />;
     default:
       return null;
   }
 };
 
-export const MarkdownViewer: React.FC<{ source: string; className?: string }> = ({ source, className }) => {
+export const MarkdownViewer: React.FC<{ source: string; className?: string; resolveResourceUrl?: ResolveResourceUrl }> = ({
+  source,
+  className,
+  resolveResourceUrl,
+}) => {
   // Parsing is pure and the source only changes when a different file is selected, so this keeps
   // a long document off the critical path of unrelated re-renders (tab switches included).
   const blocks = useMemo(() => parseMarkdown(source), [source]);
 
   return (
-    <div className={`text-sm ${className ?? ''}`}>
-      {blocks.map((block, index) => (
-        <BlockRenderer key={`b-${index}`} block={block} keyPrefix={`b-${index}`} />
-      ))}
-    </div>
+    <ResourceResolverContext.Provider value={resolveResourceUrl ?? null}>
+      <div className={`text-sm ${className ?? ''}`}>
+        {blocks.map((block, index) => (
+          <BlockRenderer key={`b-${index}`} block={block} keyPrefix={`b-${index}`} />
+        ))}
+      </div>
+    </ResourceResolverContext.Provider>
   );
 };

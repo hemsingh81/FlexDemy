@@ -1,6 +1,7 @@
 using FlexDemy.Application.Common;
 using FlexDemy.Application.Courses;
 using FlexDemy.Domain.Courses;
+using FlexDemy.Domain.Users;
 using NSubstitute;
 using Xunit;
 
@@ -34,23 +35,26 @@ public class CourseServiceTests
     private sealed record Sut(
         CourseService Service,
         ICourseRepository Repository,
-        ICourseFileRepository CourseFileRepository,
         IUnitOfWork UnitOfWork,
         IIdGenerator IdGenerator,
         IFileStorageService FileStorage,
-        ICurrentUserService CurrentUser);
+        ICurrentUserService CurrentUser,
+        IContentRepository ContentRepository);
 
     private static Sut MakeSut(string? currentUserId = "tutor_1")
     {
         var repository = Substitute.For<ICourseRepository>();
-        var courseFileRepository = Substitute.For<ICourseFileRepository>();
         var unitOfWork = Substitute.For<IUnitOfWork>();
         var idGenerator = Substitute.For<IIdGenerator>();
         var fileStorage = Substitute.For<IFileStorageService>();
         var currentUser = Substitute.For<ICurrentUserService>();
         currentUser.UserId.Returns(currentUserId);
-        var service = new CourseService(repository, courseFileRepository, unitOfWork, idGenerator, fileStorage, currentUser);
-        return new Sut(service, repository, courseFileRepository, unitOfWork, idGenerator, fileStorage, currentUser);
+        var contentRepository = Substitute.For<IContentRepository>();
+        // Story 11.1: defaults to "nothing unconfirmed" -- individual MoveToReviewAsync tests
+        // override this when exercising the gate itself.
+        contentRepository.HasUnconfirmedContentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        var service = new CourseService(repository, unitOfWork, idGenerator, fileStorage, currentUser, contentRepository);
+        return new Sut(service, repository, unitOfWork, idGenerator, fileStorage, currentUser, contentRepository);
     }
 
     [Fact]
@@ -741,16 +745,6 @@ public class CourseServiceTests
 
     // -- MoveToReviewAsync / ConfirmReviewAsync ---------------------------------------------------
 
-    private static CourseFile MakeCourseFile(string id, FlexDemy.Domain.Jobs.JobItemStatus status) => new()
-    {
-        Id = id,
-        CourseId = "draft_1",
-        FileName = $"{id}.pdf",
-        ContentType = "application/pdf",
-        StoredUrl = $"/uploads/course-files/{id}.pdf",
-        Status = status,
-    };
-
     [Fact]
     public async Task MoveToReviewAsync_throws_ValidationException_when_the_course_is_not_Draft()
     {
@@ -780,40 +774,47 @@ public class CourseServiceTests
         await Assert.ThrowsAsync<UnauthorizedAppException>(() => sut.Service.MoveToReviewAsync("draft_1"));
     }
 
+    // Story 11.1, FR-45: replaces the old "at least one file parsed" gate outright -- the file-parsed
+    // check is gone, not kept as a redundant guard.
     [Fact]
-    public async Task MoveToReviewAsync_throws_ValidationException_when_no_file_has_finished_parsing()
+    public async Task MoveToReviewAsync_throws_ValidationException_when_the_course_has_unconfirmed_content()
     {
         var sut = MakeSut();
         sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
-        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>())
-            .Returns([MakeCourseFile("file_1", FlexDemy.Domain.Jobs.JobItemStatus.Parsing), MakeCourseFile("file_2", FlexDemy.Domain.Jobs.JobItemStatus.Failed)]);
+        sut.ContentRepository.HasUnconfirmedContentAsync("draft_1", Arg.Any<CancellationToken>()).Returns(true);
 
         await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
     }
 
     [Fact]
-    public async Task MoveToReviewAsync_throws_ValidationException_when_no_file_has_been_uploaded_at_all()
-    {
-        var sut = MakeSut();
-        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(MakeDraft());
-        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns([]);
-
-        await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
-    }
-
-    [Fact]
-    public async Task MoveToReviewAsync_sets_LifecycleState_InReview_when_at_least_one_file_has_finished_parsing()
+    public async Task MoveToReviewAsync_sets_LifecycleState_InReview_when_nothing_is_unconfirmed()
     {
         var sut = MakeSut();
         var course = MakeDraft();
         sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
-        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>())
-            .Returns([MakeCourseFile("file_1", FlexDemy.Domain.Jobs.JobItemStatus.Parsing), MakeCourseFile("file_2", FlexDemy.Domain.Jobs.JobItemStatus.Done)]);
+        sut.ContentRepository.HasUnconfirmedContentAsync("draft_1", Arg.Any<CancellationToken>()).Returns(false);
 
         await sut.Service.MoveToReviewAsync("draft_1");
 
         Assert.Equal(LifecycleState.InReview, course.LifecycleState);
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    // A course with zero content (no Chapters at all) vacuously passes this gate -- there is
+    // nothing to be Unconfirmed. FR-45 only gates on *existing* Unconfirmed items; whether an empty
+    // course should be rejected for a different reason is a separate, out-of-scope product question
+    // this story deliberately doesn't take a position on (see this story's own Completion Notes).
+    [Fact]
+    public async Task MoveToReviewAsync_succeeds_for_an_empty_course_with_no_content_at_all()
+    {
+        var sut = MakeSut();
+        var course = MakeDraft();
+        sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
+        sut.ContentRepository.HasUnconfirmedContentAsync("draft_1", Arg.Any<CancellationToken>()).Returns(false);
+
+        await sut.Service.MoveToReviewAsync("draft_1");
+
+        Assert.Equal(LifecycleState.InReview, course.LifecycleState);
     }
 
     [Fact]
@@ -875,8 +876,8 @@ public class CourseServiceTests
         await sut.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
         // Positively proves "content untouched" (a state transition only, distinct from
         // IVersionService.RestoreVersionAsync's genuine rollback) rather than just never
-        // referencing the course-file mock at all.
-        await sut.CourseFileRepository.DidNotReceiveWithAnyArgs().GetByCourseIdAsync(default!, default);
+        // referencing the content-gate mock at all.
+        await sut.ContentRepository.DidNotReceiveWithAnyArgs().HasUnconfirmedContentAsync(default!, default);
     }
 
     [Theory]
@@ -914,17 +915,17 @@ public class CourseServiceTests
     }
 
     // A course returned to Draft has no bypass back to Published -- MoveToReviewAsync's own
-    // precondition (LifecycleState == Draft, at least one file Done) applies identically
-    // regardless of whether the course was ever Published before; there is no separate
-    // "re-publish" code path to special-case.
+    // precondition (LifecycleState == Draft, nothing Unconfirmed) applies identically regardless of
+    // whether the course was ever Published before; there is no separate "re-publish" code path to
+    // special-case.
     [Fact]
-    public async Task after_ReturnToDraftAsync_MoveToReviewAsync_still_requires_the_normal_at_least_one_file_done_precondition()
+    public async Task after_ReturnToDraftAsync_MoveToReviewAsync_still_requires_the_normal_nothing_unconfirmed_precondition()
     {
         var sut = MakeSut();
         var course = MakeDraft();
         course.LifecycleState = LifecycleState.Draft; // as ReturnToDraftAsync would have left it
         sut.Repository.GetDraftByIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns(course);
-        sut.CourseFileRepository.GetByCourseIdAsync("draft_1", Arg.Any<CancellationToken>()).Returns([]);
+        sut.ContentRepository.HasUnconfirmedContentAsync("draft_1", Arg.Any<CancellationToken>()).Returns(true);
 
         await Assert.ThrowsAsync<ValidationException>(() => sut.Service.MoveToReviewAsync("draft_1"));
     }
@@ -1010,5 +1011,103 @@ public class CourseServiceTests
         sut.Repository.GetDraftByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
 
         await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.DeleteCourseAsync("missing"));
+    }
+
+    // -- EnsureReadableAsync (Story 11.3, AD-29) ---------------------------------------------------
+
+    [Theory]
+    [InlineData(LifecycleState.Draft)]
+    [InlineData(LifecycleState.InReview)]
+    [InlineData(LifecycleState.ReviewConfirmed)]
+    [InlineData(LifecycleState.Published)]
+    public async Task EnsureReadableAsync_succeeds_for_the_owning_tutor_at_every_LifecycleState(LifecycleState lifecycleState)
+    {
+        var sut = MakeSut(currentUserId: "owner_1");
+        var course = MakeDraft(tutorId: "owner_1");
+        course.LifecycleState = lifecycleState;
+        sut.Repository.GetByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await sut.Service.EnsureReadableAsync("course_1"); // does not throw
+    }
+
+    [Theory]
+    [InlineData(UserRole.Master, LifecycleState.InReview)]
+    [InlineData(UserRole.Master, LifecycleState.ReviewConfirmed)]
+    [InlineData(UserRole.Master, LifecycleState.Published)]
+    [InlineData(UserRole.Support, LifecycleState.InReview)]
+    [InlineData(UserRole.Support, LifecycleState.ReviewConfirmed)]
+    [InlineData(UserRole.Support, LifecycleState.Published)]
+    public async Task EnsureReadableAsync_succeeds_for_a_Master_or_Support_reviewer_at_InReview_ReviewConfirmed_or_Published(
+        UserRole role,
+        LifecycleState lifecycleState
+    )
+    {
+        var sut = MakeSut(currentUserId: "stranger");
+        sut.CurrentUser.Role.Returns(role);
+        var course = MakeDraft(tutorId: "owner_1");
+        course.LifecycleState = lifecycleState;
+        sut.Repository.GetByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await sut.Service.EnsureReadableAsync("course_1"); // does not throw
+    }
+
+    [Theory]
+    [InlineData(UserRole.Master)]
+    [InlineData(UserRole.Support)]
+    public async Task EnsureReadableAsync_throws_NotFoundException_for_a_Master_or_Support_reviewer_at_Draft(UserRole role)
+    {
+        var sut = MakeSut(currentUserId: "stranger");
+        sut.CurrentUser.Role.Returns(role);
+        var course = MakeDraft(tutorId: "owner_1");
+        course.LifecycleState = LifecycleState.Draft;
+        sut.Repository.GetByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.EnsureReadableAsync("course_1"));
+    }
+
+    // AC #3's own deny-by-default: no Enrollment primitive exists yet, so a plain Student or Tutor
+    // role never passes this gate for a course they don't own -- including at Published, where a
+    // real student read would eventually need to succeed once enrollment exists.
+    [Theory]
+    [InlineData(UserRole.Student, LifecycleState.Draft)]
+    [InlineData(UserRole.Student, LifecycleState.InReview)]
+    [InlineData(UserRole.Student, LifecycleState.ReviewConfirmed)]
+    [InlineData(UserRole.Student, LifecycleState.Published)]
+    [InlineData(UserRole.Tutor, LifecycleState.Draft)]
+    [InlineData(UserRole.Tutor, LifecycleState.InReview)]
+    [InlineData(UserRole.Tutor, LifecycleState.ReviewConfirmed)]
+    [InlineData(UserRole.Tutor, LifecycleState.Published)]
+    public async Task EnsureReadableAsync_throws_NotFoundException_for_a_non_owning_non_Admin_caller_at_every_LifecycleState(
+        UserRole role,
+        LifecycleState lifecycleState
+    )
+    {
+        var sut = MakeSut(currentUserId: "stranger");
+        sut.CurrentUser.Role.Returns(role);
+        var course = MakeDraft(tutorId: "owner_1");
+        course.LifecycleState = lifecycleState;
+        sut.Repository.GetByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.EnsureReadableAsync("course_1"));
+    }
+
+    [Fact]
+    public async Task EnsureReadableAsync_throws_NotFoundException_for_a_genuinely_unknown_course_id()
+    {
+        var sut = MakeSut();
+        sut.Repository.GetByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((Course?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.EnsureReadableAsync("missing"));
+    }
+
+    [Fact]
+    public async Task EnsureReadableAsync_throws_NotFoundException_never_UnauthorizedAppException_for_an_unauthenticated_caller()
+    {
+        var sut = MakeSut(currentUserId: null);
+        var course = MakeDraft(tutorId: "owner_1");
+        course.LifecycleState = LifecycleState.Published;
+        sut.Repository.GetByIdAsync("course_1", Arg.Any<CancellationToken>()).Returns(course);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.Service.EnsureReadableAsync("course_1"));
     }
 }

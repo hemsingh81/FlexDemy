@@ -51,9 +51,20 @@ public interface ICourseService
     // isn't its owner (same "don't leak existence to a non-owner" shape as GetCourseByIdAsync).
     Task EnsureOwnedAsync(string courseId, CancellationToken cancellationToken = default);
 
-    // The real Draft -> InReview -> ReviewConfirmed transitions. MoveToReviewAsync requires
-    // LifecycleState == Draft and at least one uploaded file successfully parsed (Status == Done);
-    // throws ValidationException otherwise. ConfirmReviewAsync requires LifecycleState == InReview.
+    // Story 11.3, AD-29: the reviewer-access read gate -- grants access to the course's own owning
+    // tutor (any LifecycleState), or to a Master/Support caller when the course is InReview,
+    // ReviewConfirmed, or Published. NotFoundException in every other case (never
+    // UnauthorizedAppException) -- same "don't leak existence to a non-owner" precedent
+    // GetCourseByIdAsync already established. The Student/enrollment branch is deliberately absent
+    // (Deferred until a real Enrollment primitive exists) -- a Published course is readable by its
+    // owner and by Admin only, until a future story adds a third branch to this exact method.
+    Task EnsureReadableAsync(string courseId, CancellationToken cancellationToken = default);
+
+    // The real Draft -> InReview -> ReviewConfirmed transitions. Story 11.1/FR-45: MoveToReviewAsync
+    // requires LifecycleState == Draft and that no Chapter/Topic/Subtopic/Page in the course is
+    // Unconfirmed (the prior "at least one uploaded file parsed" check is gone outright, not kept
+    // as a redundant guard); throws ValidationException otherwise. ConfirmReviewAsync requires
+    // LifecycleState == InReview.
     Task MoveToReviewAsync(string courseId, CancellationToken cancellationToken = default);
     Task ConfirmReviewAsync(string courseId, CancellationToken cancellationToken = default);
 

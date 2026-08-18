@@ -123,6 +123,23 @@ describe('parseInline', () => {
     expect(parseInline('![a diagram](https://example.com/x.png)')).toEqual([{ type: 'text', value: 'a diagram' }]);
   });
 
+  // Story 8.3, FR-30: the one exception to "images render as alt text only" -- a `resource:{id}`
+  // href becomes a resourceImage node instead, resolved to a real URL at render time
+  // (MarkdownViewer.tsx), never a raw storage URL baked into the Markdown.
+  it('parses a `resource:` image href into a resourceImage node carrying the resourceId and alt text', () => {
+    expect(parseInline('![Diagram](resource:res_abc123)')).toEqual([
+      { type: 'resourceImage', resourceId: 'res_abc123', alt: 'Diagram' },
+    ]);
+  });
+
+  it('still renders a non-resource image as plain alt text alongside a resourceImage sibling', () => {
+    const nodes = parseInline('![Remote](https://example.com/x.png) and ![Local](resource:res_1)');
+    expect(nodes).toEqual([
+      { type: 'text', value: 'Remote and ' },
+      { type: 'resourceImage', resourceId: 'res_1', alt: 'Local' },
+    ]);
+  });
+
   it('leaves surrounding text intact around inline markup', () => {
     expect(parseInline('use **this** now')).toEqual([
       { type: 'text', value: 'use ' },
@@ -135,5 +152,87 @@ describe('parseInline', () => {
     const [list] = parseMarkdown('- item one\n- item two');
     if (list.type !== 'list') throw new Error('expected a list');
     expect(list.items[0].content).toEqual([{ type: 'text', value: 'item one' }]);
+  });
+});
+
+// Story 9.2, Task 1/6.
+describe('parseMarkdown -- Math, Callout, Resource card (Story 9.2)', () => {
+  it('parses a block-level `$$…$$` fence into a math block', () => {
+    const [block] = parseMarkdown('$$\nE = mc^2\n$$');
+    expect(block).toEqual({ type: 'math', value: 'E = mc^2' });
+  });
+
+  it('parses a multi-line math block, trimming leading/trailing blank lines', () => {
+    const [block] = parseMarkdown('$$\n\\frac{a}{b}\n= c\n$$');
+    expect(block).toEqual({ type: 'math', value: '\\frac{a}{b}\n= c' });
+  });
+
+  it('ends a paragraph when a math fence starts on the very next line, with no blank line between', () => {
+    const blocks = parseMarkdown('Some lead-in text.\n$$\nE = mc^2\n$$');
+    expect(types(blocks)).toEqual(['paragraph', 'math']);
+  });
+
+  it('parses a `[!note]`-marked blockquote as a callout, stripping the marker from the first line', () => {
+    const [block] = parseMarkdown('> [!note] Remember to check units.');
+    expect(block.type).toBe('callout');
+    if (block.type !== 'callout') return;
+    expect(block.children).toEqual([{ type: 'paragraph', content: [{ type: 'text', value: 'Remember to check units.' }] }]);
+  });
+
+  it('degrades an un-marked blockquote to a plain blockquote, unchanged from before this story', () => {
+    const [block] = parseMarkdown('> just a quote, no marker');
+    expect(block.type).toBe('blockquote');
+  });
+
+  it('handles a multi-line callout, the marker stripped only from the first quoted line', () => {
+    const [block] = parseMarkdown('> [!note] First line.\n> Second line.');
+    expect(block.type).toBe('callout');
+    if (block.type !== 'callout') return;
+    const [paragraph] = block.children;
+    expect(paragraph).toEqual({ type: 'paragraph', content: [{ type: 'text', value: 'First line. Second line.' }] });
+  });
+
+  it('promotes a paragraph whose SOLE content is one `[label](resource:{id})` link into a resourceCard', () => {
+    const [block] = parseMarkdown('[Syllabus PDF](resource:res_abc123)');
+    expect(block).toEqual({ type: 'resourceCard', resourceId: 'res_abc123', label: 'Syllabus PDF' });
+  });
+
+  it('does NOT promote a `resource:` link that shares its paragraph with other text -- stays an ordinary inline link', () => {
+    const [block] = parseMarkdown('See the [Syllabus PDF](resource:res_abc123) for details.');
+    expect(block.type).toBe('paragraph');
+    if (block.type !== 'paragraph') return;
+    expect(block.content).toEqual([
+      { type: 'text', value: 'See the ' },
+      { type: 'link', href: 'resource:res_abc123', children: [{ type: 'text', value: 'Syllabus PDF' }] },
+      { type: 'text', value: ' for details.' },
+    ]);
+  });
+
+  it('does not promote a paragraph with two links, even if both are resource: links', () => {
+    const [block] = parseMarkdown('[A](resource:res_a) and [B](resource:res_b)');
+    expect(block.type).toBe('paragraph');
+  });
+
+  // AD-12's own named boundary case: a Math block immediately followed by a Callout, and the
+  // reverse -- both directions must parse as two distinct, correctly-typed blocks, not one
+  // merged/mis-tokenized block.
+  it('adjacency: a Math block immediately followed by a Callout, no blank line between, parses as two distinct blocks', () => {
+    const blocks = parseMarkdown('$$\nE = mc^2\n$$\n> [!note] Energy-mass equivalence.');
+    expect(types(blocks)).toEqual(['math', 'callout']);
+    expect(blocks[0]).toEqual({ type: 'math', value: 'E = mc^2' });
+  });
+
+  it('adjacency: a Callout immediately followed by a Math block, no blank line between, parses as two distinct blocks', () => {
+    const blocks = parseMarkdown('> [!note] Energy-mass equivalence.\n$$\nE = mc^2\n$$');
+    expect(types(blocks)).toEqual(['callout', 'math']);
+    expect(blocks[1]).toEqual({ type: 'math', value: 'E = mc^2' });
+  });
+});
+
+describe('SAFE_LINK -- `resource:` scheme (Story 9.2)', () => {
+  it('renders a `resource:` link as a real link node, not plain text', () => {
+    expect(parseInline('[Syllabus](resource:res_1)')).toEqual([
+      { type: 'link', href: 'resource:res_1', children: [{ type: 'text', value: 'Syllabus' }] },
+    ]);
   });
 });

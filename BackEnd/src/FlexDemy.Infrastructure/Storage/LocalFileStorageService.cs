@@ -15,7 +15,10 @@ public class LocalFileStorageService(IWebHostEnvironment environment) : IFileSto
     private const string PublicUploadsRelativePath = "uploads";
     private const string PrivateUploadsRelativePath = "private-uploads";
 
-    private static readonly HashSet<string> PrivateCategories = new(StringComparer.OrdinalIgnoreCase) { "course-files" };
+    // Story 8.1: "course-resources" (Learning Resources block uploads) gets the same
+    // authenticated-read-only treatment as "course-files" -- possibly not yet scanned or
+    // malware-positive, must never be reachable via app.UseStaticFiles().
+    private static readonly HashSet<string> PrivateCategories = new(StringComparer.OrdinalIgnoreCase) { "course-files", "course-resources" };
 
     public async Task<string> SaveAsync(Stream content, string fileName, string contentType, string category, CancellationToken cancellationToken = default)
     {

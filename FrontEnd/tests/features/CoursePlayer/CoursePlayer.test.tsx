@@ -5,37 +5,52 @@ import userEvent from '@testing-library/user-event';
 import { CoursePlayer } from '@/src/features/CoursePlayer/CoursePlayer';
 import * as userService from '@/src/services/userService';
 import * as scratchpadService from '@/src/services/scratchpadService';
-import * as courseFileService from '@/src/services/courseFileService';
-import type { CourseFileDto } from '@/src/services/courseFileService';
+import * as courseContentService from '@/src/services/courseContentService';
+import type { OutlineDto, PageDocumentDto } from '@/src/services/courseContentService';
 import { Course } from '@/src/types';
 
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
 vi.mock('@/src/services/userService');
 vi.mock('@/src/services/scratchpadService');
-vi.mock('@/src/services/courseFileService', async () => {
-  const actual = await vi.importActual<typeof import('@/src/services/courseFileService')>('@/src/services/courseFileService');
-  return { ...actual, getCourseContent: vi.fn() };
+vi.mock('@/src/services/courseContentService', async () => {
+  const actual = await vi.importActual<typeof import('@/src/services/courseContentService')>('@/src/services/courseContentService');
+  return { ...actual, getOutline: vi.fn(), getPage: vi.fn(), resolveResourceUrl: vi.fn() };
 });
 vi.mock('@/src/features/CourseOverview/CourseReviewModal', () => ({
   CourseReviewModal: () => null,
 }));
+
+const EMPTY_OUTLINE: OutlineDto = { chapters: [] };
 
 // jsdom does not implement scrollIntoView; ReaderCanvas calls it to keep the
 // active sentence in view.
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   vi.mocked(scratchpadService.getNotesForCourse).mockReturnValue([]);
-  vi.mocked(courseFileService.getCourseContent).mockResolvedValue([]);
+  vi.mocked(courseContentService.getOutline).mockResolvedValue(EMPTY_OUTLINE);
 });
 
-const makeFileDto = (overrides: Partial<CourseFileDto> = {}): CourseFileDto => ({
-  id: 'file_1',
-  fileName: 'lecture-notes.pdf',
-  contentType: 'application/pdf',
-  sizeBytes: 1024,
-  status: 'Done',
-  failureReason: null,
-  parsedContent: 'A wave transfers energy without transferring matter.',
+const makeOutlineWithOnePage = (): OutlineDto => ({
+  chapters: [
+    {
+      id: 'chapter_1',
+      title: 'Waves',
+      description: '',
+      isConfirmed: true,
+      order: 0,
+      pages: [{ id: 'page_1', title: 'Lecture Notes', isConfirmed: true, order: 0 }],
+      topics: [],
+    },
+  ],
+});
+
+const makePageDto = (overrides: Partial<PageDocumentDto> = {}): PageDocumentDto => ({
+  id: 'page_1',
+  title: 'Lecture Notes',
+  bodyMarkdown: 'A wave transfers energy without transferring matter.',
+  isConfirmed: true,
+  order: 0,
+  resources: [],
   ...overrides,
 });
 
@@ -131,8 +146,10 @@ describe('CoursePlayer', () => {
     );
   });
 
-  it('fetches this course real uploaded-file content and lists it in the Course Content sidebar section', async () => {
-    vi.mocked(courseFileService.getCourseContent).mockResolvedValue([makeFileDto()]);
+  // Story 11.4, AC #1: real Chapter/Topic/Sub-Topic/Page outline navigation, replacing the old
+  // flat uploaded-file list.
+  it('fetches this course real outline and lists its Pages in the sidebar tree', async () => {
+    vi.mocked(courseContentService.getOutline).mockResolvedValue(makeOutlineWithOnePage());
     render(
       <CoursePlayer
         course={course}
@@ -142,14 +159,15 @@ describe('CoursePlayer', () => {
       />
     );
 
-    await waitFor(() => expect(courseFileService.getCourseContent).toHaveBeenCalledWith('course_1'));
-    expect(await screen.findByText('Course Content')).toBeInTheDocument();
-    expect(screen.getByText('lecture-notes.pdf')).toBeInTheDocument();
+    await waitFor(() => expect(courseContentService.getOutline).toHaveBeenCalledWith('course_1'));
+    expect(await screen.findByText('Waves')).toBeInTheDocument();
+    expect(await screen.findByText('Lecture Notes')).toBeInTheDocument();
   });
 
-  it('selecting a file switches the reading pane to that files raw parsed text', async () => {
+  it('selecting a Page fetches its body via getPage (one page at a time) and renders it through MarkdownViewer', async () => {
     const user = userEvent.setup();
-    vi.mocked(courseFileService.getCourseContent).mockResolvedValue([makeFileDto()]);
+    vi.mocked(courseContentService.getOutline).mockResolvedValue(makeOutlineWithOnePage());
+    vi.mocked(courseContentService.getPage).mockResolvedValue(makePageDto());
     render(
       <CoursePlayer
         course={course}
@@ -162,13 +180,17 @@ describe('CoursePlayer', () => {
     // Legacy sentence-based reading pane is shown by default.
     expect(screen.getByText('Welcome to the lesson.')).toBeInTheDocument();
 
-    await user.click(await screen.findByRole('button', { name: /lecture-notes\.pdf/ }));
+    await user.click(await screen.findByRole('button', { name: 'Lecture Notes' }));
 
-    expect(screen.getByText('A wave transfers energy without transferring matter.')).toBeInTheDocument();
+    expect(courseContentService.getPage).toHaveBeenCalledWith('course_1', 'page_1');
+    expect(await screen.findByText('A wave transfers energy without transferring matter.')).toBeInTheDocument();
     expect(screen.queryByText('Welcome to the lesson.')).not.toBeInTheDocument();
   });
 
-  it('does not render a Course Content section when the course has no uploaded files yet', async () => {
+  it('shows a friendly state, not a blank pane, when the selected Page fails to load', async () => {
+    const user = userEvent.setup();
+    vi.mocked(courseContentService.getOutline).mockResolvedValue(makeOutlineWithOnePage());
+    vi.mocked(courseContentService.getPage).mockRejectedValue(new Error('not found'));
     render(
       <CoursePlayer
         course={course}
@@ -178,7 +200,22 @@ describe('CoursePlayer', () => {
       />
     );
 
-    await waitFor(() => expect(courseFileService.getCourseContent).toHaveBeenCalled());
-    expect(screen.queryByText('Course Content')).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Lecture Notes' }));
+
+    expect(await screen.findByText(/could not load this page/i)).toBeInTheDocument();
+  });
+
+  it('does not render the outline tree section when the course has no authored content yet', async () => {
+    render(
+      <CoursePlayer
+        course={course}
+        onBackToDashboard={vi.fn()}
+        onOpenAssignment={vi.fn()}
+        onCompleteLesson={vi.fn()}
+      />
+    );
+
+    await waitFor(() => expect(courseContentService.getOutline).toHaveBeenCalled());
+    expect(screen.queryByRole('tree', { name: 'Course content' })).not.toBeInTheDocument();
   });
 });

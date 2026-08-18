@@ -7,6 +7,22 @@ import { FILE_POLL_INTERVAL_MS } from '@/src/features/CourseContentEditor/useFil
 import * as courseFileService from '@/src/services/courseFileService';
 import type { CourseFileDto } from '@/src/services/courseFileService';
 import * as courseDraftService from '@/src/services/courseDraftService';
+import * as courseContentService from '@/src/services/courseContentService';
+
+// jsdom doesn't implement elementFromPoint -- ProseMirror's mousedown handler (posAtCoords)
+// calls it unconditionally, which throws rather than degrading gracefully. Story 7.1's document
+// canvas is the first thing in this file that mounts a real ProseMirror-backed editable region.
+if (typeof document.elementFromPoint !== 'function') {
+  document.elementFromPoint = () => null;
+}
+// Same reasoning for Range.getClientRects/getBoundingClientRect, which Tiptap's own
+// scrollIntoView-on-selection-change calls internally -- jsdom doesn't implement either at all.
+if (typeof Range.prototype.getClientRects !== 'function') {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+}
+if (typeof Range.prototype.getBoundingClientRect !== 'function') {
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
 
 vi.mock('@/src/services/courseFileService', async () => {
   const actual = await vi.importActual<typeof import('@/src/services/courseFileService')>('@/src/services/courseFileService');
@@ -20,6 +36,47 @@ vi.mock('@/src/services/courseDraftService', async () => {
   return { ...actual, moveToReview: vi.fn(), confirmReview: vi.fn(), publishCourse: vi.fn(), getPublishStatus: vi.fn() };
 });
 
+// Story 7.1: useContentDocument (which every render of this component now mounts, alongside the
+// Tiptap document canvas) calls these -- mocked the same way as the two services above so the
+// many pre-existing tests in this file, which know nothing about the document canvas, keep
+// passing unmodified.
+vi.mock('@/src/services/courseContentService', async () => {
+  const actual = await vi.importActual<typeof import('@/src/services/courseContentService')>('@/src/services/courseContentService');
+  return {
+    ...actual,
+    getChapters: vi.fn(),
+    getChapterDocument: vi.fn(),
+    createChapter: vi.fn(),
+    updateChapter: vi.fn(),
+    // Story 7.2
+    createTopic: vi.fn(),
+    updateTopic: vi.fn(),
+    getTopicDeleteImpact: vi.fn(),
+    deleteTopic: vi.fn(),
+    reorderTopic: vi.fn(),
+    createSubtopic: vi.fn(),
+    updateSubtopic: vi.fn(),
+    getSubtopicDeleteImpact: vi.fn(),
+    deleteSubtopic: vi.fn(),
+    reorderSubtopic: vi.fn(),
+    // Story 7.3
+    createPage: vi.fn(),
+    updatePage: vi.fn(),
+    getPageDeleteImpact: vi.fn(),
+    deletePage: vi.fn(),
+    reorderPage: vi.fn(),
+    movePage: vi.fn(),
+    // Story 7.4
+    getOutline: vi.fn(),
+  };
+});
+
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+
+vi.mock('@/src/context/ToastContext', () => ({
+  useToast: () => ({ showToast }),
+}));
+
 const makeFile = (name: string) => new File(['content'], name, { type: 'application/pdf' });
 
 let uploadedFileSeq = 0;
@@ -31,6 +88,7 @@ const makeDtoForFile = (file: File, overrides: Partial<CourseFileDto> = {}): Cou
   status: 'Queued',
   failureReason: null,
   parsedContent: null,
+  hasAttachedResources: false,
   ...overrides,
 });
 
@@ -42,6 +100,7 @@ const makeDto = (overrides: Partial<CourseFileDto> = {}): CourseFileDto => ({
   status: 'Done',
   failureReason: null,
   parsedContent: null,
+  hasAttachedResources: false,
   ...overrides,
 });
 
@@ -58,6 +117,35 @@ beforeEach(() => {
   vi.mocked(courseDraftService.confirmReview).mockResolvedValue(undefined);
   vi.mocked(courseDraftService.publishCourse).mockResolvedValue(undefined);
   vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue({ lifecycleState: 'Draft' });
+
+  vi.mocked(courseContentService.getChapters).mockReset();
+  vi.mocked(courseContentService.getChapterDocument).mockReset();
+  vi.mocked(courseContentService.createChapter).mockReset();
+  vi.mocked(courseContentService.updateChapter).mockReset();
+  vi.mocked(courseContentService.createTopic).mockReset();
+  vi.mocked(courseContentService.updateTopic).mockReset();
+  vi.mocked(courseContentService.getTopicDeleteImpact).mockReset();
+  vi.mocked(courseContentService.deleteTopic).mockReset();
+  vi.mocked(courseContentService.reorderTopic).mockReset();
+  vi.mocked(courseContentService.createSubtopic).mockReset();
+  vi.mocked(courseContentService.updateSubtopic).mockReset();
+  vi.mocked(courseContentService.getSubtopicDeleteImpact).mockReset();
+  vi.mocked(courseContentService.deleteSubtopic).mockReset();
+  vi.mocked(courseContentService.reorderSubtopic).mockReset();
+  vi.mocked(courseContentService.createPage).mockReset();
+  vi.mocked(courseContentService.updatePage).mockReset();
+  vi.mocked(courseContentService.getPageDeleteImpact).mockReset();
+  vi.mocked(courseContentService.deletePage).mockReset();
+  vi.mocked(courseContentService.reorderPage).mockReset();
+  vi.mocked(courseContentService.movePage).mockReset();
+  vi.mocked(courseContentService.getOutline).mockReset();
+  // Story 7.4: CourseContentProvider fetches the outline on every mount -- default to an empty
+  // one so every pre-existing test in this file (which knows nothing about confirmation state)
+  // keeps passing unmodified, same convention as the Story 7.2/7.3 mock defaults above.
+  vi.mocked(courseContentService.getOutline).mockResolvedValue({ chapters: [] });
+  // Default: an empty course (no Chapter yet) -- matches every pre-existing test's fixture,
+  // which sets up files/lifecycle state but never a Chapter.
+  vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
 });
 
 // fireEvent, not userEvent, for the fake-timer tests below -- userEvent's internal
@@ -67,6 +155,431 @@ const selectFilesSync = (files: File[]) => {
   Object.defineProperty(input, 'files', { value: files, configurable: true });
   fireEvent.change(input);
 };
+
+describe('CourseContentEditor -- document canvas (Story 7.1)', () => {
+  it('an empty course renders the document canvas with no create call fired', async () => {
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+    expect(courseContentService.createChapter).not.toHaveBeenCalled();
+    expect(courseContentService.getChapterDocument).not.toHaveBeenCalled();
+  });
+
+  it('a course with an existing Chapter shows loading text, then the fetched title', async () => {
+    let resolveDocument!: (value: courseContentService.ChapterDocumentDto) => void;
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockImplementation(
+      () => new Promise((resolve) => (resolveDocument = resolve))
+    );
+
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    expect(await screen.findByText('Loading your chapter…')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveDocument({ id: 'chapter-1', courseId: 'draft-1', title: 'Chemical Reactions', description: '', isConfirmed: false, topics: [], pages: [] });
+    });
+
+    await waitFor(() => expect(screen.queryByText('Loading your chapter…')).not.toBeInTheDocument());
+    expect(await screen.findByRole('heading', { level: 1, name: 'Chemical Reactions' })).toBeInTheDocument();
+  });
+
+  it('a Published course renders a read-only banner with a Take Offline link, and suppresses the "/" menu', async () => {
+    vi.mocked(courseDraftService.getPublishStatus).mockResolvedValue({ lifecycleState: 'Published' });
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Published Chapter', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue({
+      id: 'chapter-1',
+      courseId: 'draft-1',
+      title: 'Published Chapter',
+      description: '',
+      isConfirmed: true,
+      topics: [],
+      pages: [],
+    });
+
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    expect(await screen.findByText(/this course is published/i)).toBeInTheDocument();
+    const takeOfflineLink = screen.getByRole('button', { name: 'Take Offline' });
+    expect(takeOfflineLink).toBeInTheDocument();
+
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Published Chapter' });
+    expect(heading.closest('.ProseMirror')).toHaveAttribute('contenteditable', 'false');
+  });
+
+  // The title-blur-creates-the-Chapter behavior itself (create-vs-update branching, blank-title
+  // no-op) is a pure-logic concern owned by useContentDocument and covered by its own dedicated
+  // unit tests (tests/features/CourseContentEditor/useContentDocument.test.ts, per AD-5's
+  // "hooks get pure-logic unit tests, no DOM" convention) -- driving that same behavior through a
+  // real simulated keystroke into a live ProseMirror-managed contenteditable region is
+  // needlessly fragile against jsdom's incomplete selection/coordinate APIs and isn't required by
+  // this story's own test list; DocumentCanvas's onBlur wiring to that hook is a one-line,
+  // low-risk call, not independently worth a second, DOM-heavy test of the same logic.
+});
+
+describe('CourseContentEditor -- Topic/Sub-Topic structure (Story 7.2)', () => {
+  const chapterWithOneTopic = (): courseContentService.ChapterDocumentDto => ({
+    id: 'chapter-1',
+    courseId: 'draft-1',
+    title: 'Chemical Reactions',
+    description: '',
+    isConfirmed: false,
+    topics: [
+      {
+        id: 'topic-1',
+        title: 'Combustion',
+        description: '',
+        order: 0,
+        isConfirmed: false,
+        subtopics: [],
+        pages: [],
+      },
+    ],
+    pages: [],
+  });
+
+  it('renders a "+ Add chapter" control in the Table of Contents rail', async () => {
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([]);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    await waitFor(() => expect(document.querySelector('.ProseMirror')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /add chapter/i })).toBeInTheDocument();
+  });
+
+  it('clicking "Add chapter" clears the current Chapter title from view, without calling createChapter yet', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue({
+      id: 'chapter-1',
+      courseId: 'draft-1',
+      title: 'Chemical Reactions',
+      description: '',
+      isConfirmed: false,
+      topics: [],
+      pages: [],
+    });
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Chemical Reactions' })).toBeInTheDocument();
+
+    await u.click(screen.getByRole('button', { name: /add chapter/i }));
+
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: 'Chemical Reactions' })).not.toBeInTheDocument());
+    expect(courseContentService.createChapter).not.toHaveBeenCalled();
+  });
+
+  it('renders move-up/move-down/delete controls for an existing Topic heading', async () => {
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOneTopic());
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+    expect(screen.getByLabelText('Move Combustion up')).toBeInTheDocument();
+    expect(screen.getByLabelText('Move Combustion down')).toBeInTheDocument();
+    expect(screen.getByLabelText('Delete Combustion')).toBeInTheDocument();
+  });
+
+  it('clicking a Topic delete control fetches the delete-impact count and opens ConfirmModal with a kind-broken-out message', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOneTopic());
+    vi.mocked(courseContentService.getTopicDeleteImpact).mockResolvedValue({ topics: 0, subtopics: 3, pages: 0, pageResources: 0, nodeResources: 0 });
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+
+    await u.click(screen.getByLabelText('Delete Combustion'));
+
+    expect(courseContentService.getTopicDeleteImpact).toHaveBeenCalledWith('draft-1', 'topic-1');
+    expect(await screen.findByRole('dialog')).toHaveTextContent("Delete this topic and 3 sub-topics? This can't be undone.");
+    expect(courseContentService.deleteTopic).not.toHaveBeenCalled();
+  });
+
+  it('confirming a Topic delete calls deleteTopic then reloads the document', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument)
+      .mockResolvedValueOnce(chapterWithOneTopic())
+      .mockResolvedValueOnce({ ...chapterWithOneTopic(), topics: [] });
+    vi.mocked(courseContentService.getTopicDeleteImpact).mockResolvedValue({ topics: 0, subtopics: 0, pages: 0, pageResources: 0, nodeResources: 0 });
+    vi.mocked(courseContentService.deleteTopic).mockResolvedValue(undefined);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+
+    await u.click(screen.getByLabelText('Delete Combustion'));
+    await screen.findByRole('dialog');
+    await u.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(courseContentService.deleteTopic).toHaveBeenCalledWith('draft-1', 'topic-1'));
+    await waitFor(() => expect(courseContentService.getChapterDocument).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 2, name: 'Combustion' })).not.toBeInTheDocument());
+  });
+
+  it('clicking move-down on a Topic calls reorderTopic with "down" and reloads -- disabled at the last position, so a second Topic is needed', async () => {
+    const u = userEvent.setup();
+    const twoTopics: courseContentService.ChapterDocumentDto = {
+      ...chapterWithOneTopic(),
+      topics: [
+        ...chapterWithOneTopic().topics,
+        { id: 'topic-2', title: 'Oxidation', description: '', order: 1, isConfirmed: false, subtopics: [], pages: [] },
+      ],
+    };
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(twoTopics);
+    vi.mocked(courseContentService.reorderTopic).mockResolvedValue(undefined);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+
+    // The first Topic's own move-down is disabled once it's already the LAST heading of its kind
+    // -- with two Topics, only the first one's "down" (move toward the second) is meaningful.
+    expect(screen.getByLabelText('Move Combustion down')).not.toBeDisabled();
+    await u.click(screen.getByLabelText('Move Combustion down'));
+
+    await waitFor(() => expect(courseContentService.reorderTopic).toHaveBeenCalledWith('draft-1', 'topic-1', 'down'));
+    await waitFor(() => expect(courseContentService.getChapterDocument).toHaveBeenCalledTimes(2));
+  });
+
+  it('the Table of Contents rail lists the live document heading outline', async () => {
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOneTopic());
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+
+    const rail = screen.getByRole('navigation', { name: 'Table of contents' });
+    expect(within(rail).getByText('Chemical Reactions')).toBeInTheDocument();
+    expect(within(rail).getByText('Combustion')).toBeInTheDocument();
+  });
+});
+
+describe('CourseContentEditor -- Page creation & basic content blocks (Story 7.3)', () => {
+  const chapterWithOnePage = (): courseContentService.ChapterDocumentDto => ({
+    id: 'chapter-1',
+    courseId: 'draft-1',
+    title: 'Chemical Reactions',
+    description: '',
+    isConfirmed: false,
+    topics: [
+      {
+        id: 'topic-1',
+        title: 'Combustion',
+        description: '',
+        order: 0,
+        isConfirmed: false,
+        subtopics: [],
+        pages: [{ id: 'page-1', title: 'Fire Basics', bodyMarkdown: 'Some **body** text.', isConfirmed: false, order: 0 }],
+      },
+    ],
+    pages: [],
+  });
+
+  it('renders a Page marker (h4) with move/delete/preview/markdown controls', async () => {
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOnePage());
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+    await screen.findByRole('heading', { level: 4, name: 'Fire Basics' });
+    expect(screen.getByLabelText('Delete Fire Basics')).toBeInTheDocument();
+    expect(screen.getByLabelText('Preview Fire Basics')).toBeInTheDocument();
+    expect(screen.getByLabelText('Edit Fire Basics as Markdown')).toBeInTheDocument();
+  });
+
+  it('a Page delete has an all-zero impact this story, so the confirm message has no kind breakdown', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOnePage());
+    vi.mocked(courseContentService.getPageDeleteImpact).mockResolvedValue({ topics: 0, subtopics: 0, pages: 0, pageResources: 0, nodeResources: 0 });
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 4, name: 'Fire Basics' });
+
+    await u.click(screen.getByLabelText('Delete Fire Basics'));
+
+    expect(courseContentService.getPageDeleteImpact).toHaveBeenCalledWith('draft-1', 'page-1');
+    expect(await screen.findByRole('dialog')).toHaveTextContent("Delete this page? This can't be undone.");
+  });
+
+  it('confirming a Page delete calls deletePage then reloads', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument)
+      .mockResolvedValueOnce(chapterWithOnePage())
+      .mockResolvedValueOnce({ ...chapterWithOnePage(), topics: [{ ...chapterWithOnePage().topics[0], pages: [] }] });
+    vi.mocked(courseContentService.getPageDeleteImpact).mockResolvedValue({ topics: 0, subtopics: 0, pages: 0, pageResources: 0, nodeResources: 0 });
+    vi.mocked(courseContentService.deletePage).mockResolvedValue(undefined);
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 4, name: 'Fire Basics' });
+
+    await u.click(screen.getByLabelText('Delete Fire Basics'));
+    await screen.findByRole('dialog');
+    await u.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(courseContentService.deletePage).toHaveBeenCalledWith('draft-1', 'page-1'));
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 4, name: 'Fire Basics' })).not.toBeInTheDocument());
+  });
+
+  it('clicking Preview on a Page renders its body through the rendered-as-student MarkdownViewer', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOnePage());
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 4, name: 'Fire Basics' });
+
+    await u.click(screen.getByLabelText('Preview Fire Basics'));
+
+    const panel = screen.getByTestId('page-preview-panel');
+    expect(within(panel).getByText('Preview (rendered as student)')).toBeInTheDocument();
+    // MarkdownViewer renders "**body**" as a real <strong>, not literal asterisks.
+    expect(within(panel).getByText('body').tagName).toBe('STRONG');
+  });
+
+  it('clicking Markdown on a Page shows an editable textarea seeded with its current body source', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOnePage());
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 4, name: 'Fire Basics' });
+
+    await u.click(screen.getByLabelText('Edit Fire Basics as Markdown'));
+
+    const textarea = screen.getByLabelText('Page body Markdown source') as HTMLTextAreaElement;
+    expect(textarea.value).toContain('body');
+  });
+
+  it('"Move page to…" lists the document\'s Topic/Sub-Topic outline and calls movePage on selection', async () => {
+    const u = userEvent.setup();
+    const twoTopics: courseContentService.ChapterDocumentDto = {
+      ...chapterWithOnePage(),
+      topics: [
+        ...chapterWithOnePage().topics,
+        { id: 'topic-2', title: 'Oxidation', description: '', order: 1, isConfirmed: false, subtopics: [], pages: [] },
+      ],
+    };
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument)
+      .mockResolvedValueOnce(twoTopics)
+      .mockResolvedValueOnce({
+        ...twoTopics,
+        topics: [{ ...twoTopics.topics[0], pages: [] }, { ...twoTopics.topics[1], pages: twoTopics.topics[0].pages }],
+      });
+    vi.mocked(courseContentService.movePage).mockResolvedValue({ id: 'page-1', title: 'Fire Basics', bodyMarkdown: 'Some **body** text.', isConfirmed: false, order: 0 });
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 4, name: 'Fire Basics' });
+
+    await u.click(screen.getByLabelText('Move Fire Basics to…'));
+    const picker = screen.getByRole('listbox', { name: 'Move page to' });
+    expect(within(picker).getByText('Combustion')).toBeInTheDocument();
+    expect(within(picker).getByText('Oxidation')).toBeInTheDocument();
+
+    await u.click(within(picker).getByText('Oxidation'));
+
+    await waitFor(() => expect(courseContentService.movePage).toHaveBeenCalledWith('draft-1', 'page-1', 'Topic', 'topic-2'));
+    await waitFor(() => expect(courseContentService.getChapterDocument).toHaveBeenCalledTimes(2));
+  });
+
+  it('Close on the Preview/Markdown panel discards it without changing the document', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOnePage());
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 4, name: 'Fire Basics' });
+
+    await u.click(screen.getByLabelText('Preview Fire Basics'));
+    expect(screen.getByText('Preview (rendered as student)')).toBeInTheDocument();
+
+    await u.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByText('Preview (rendered as student)')).not.toBeInTheDocument();
+    expect(courseContentService.updatePage).not.toHaveBeenCalled();
+  });
+});
+
+describe('CourseContentEditor -- Autosave & Confirmation Tracking (Story 7.4)', () => {
+  const chapterWithOneTopic = (): courseContentService.ChapterDocumentDto => ({
+    id: 'chapter-1',
+    courseId: 'draft-1',
+    title: 'Chemical Reactions',
+    description: '',
+    isConfirmed: true,
+    topics: [
+      { id: 'topic-1', title: 'Combustion', description: '', order: 0, isConfirmed: false, subtopics: [], pages: [] },
+    ],
+    pages: [],
+  });
+
+  it('renders a filled-check glyph on a Confirmed heading and an outlined-circle glyph on an Unconfirmed one', async () => {
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOneTopic());
+    vi.mocked(courseContentService.getOutline).mockResolvedValue({
+      chapters: [
+        {
+          id: 'chapter-1',
+          title: 'Chemical Reactions',
+          description: '',
+          isConfirmed: true,
+          order: 0,
+          pages: [],
+          topics: [{ id: 'topic-1', title: 'Combustion', description: '', isConfirmed: false, order: 0, pages: [], subtopics: [] }],
+        },
+      ],
+    });
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+
+    expect(await screen.findByLabelText('Chemical Reactions: confirmed')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Combustion: unconfirmed')).toBeInTheDocument();
+  });
+
+  it('the Table of Contents rail exposes real ARIA tree semantics with roving tabindex', async () => {
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOneTopic());
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+
+    const tree = screen.getByRole('tree', { name: 'Document outline' });
+    const items = within(tree).getAllByRole('treeitem');
+    expect(items.length).toBeGreaterThanOrEqual(2);
+    expect(items[0]).toHaveAttribute('aria-level', '1');
+    expect(items[0]).toHaveAttribute('tabindex', '0');
+    // Only one item is ever part of the tab order at a time (roving tabindex).
+    expect(items.slice(1).every((item) => item.getAttribute('tabindex') === '-1')).toBe(true);
+  });
+
+  it('deleting a Topic that reverts its Chapter to Unconfirmed announces the reversion', async () => {
+    const u = userEvent.setup();
+    vi.mocked(courseContentService.getChapters).mockResolvedValue([{ id: 'chapter-1', title: 'Chemical Reactions', order: 0 }]);
+    vi.mocked(courseContentService.getChapterDocument).mockResolvedValue(chapterWithOneTopic());
+    vi.mocked(courseContentService.getTopicDeleteImpact).mockResolvedValue({ topics: 0, subtopics: 0, pages: 0, pageResources: 0, nodeResources: 0 });
+    vi.mocked(courseContentService.deleteTopic).mockResolvedValue(undefined);
+    // Before: Chapter is Confirmed. After the delete, the backend has flipped it to Unconfirmed
+    // (FR-44) -- the second getOutline call (post-refetch) reflects that.
+    vi.mocked(courseContentService.getOutline)
+      .mockResolvedValueOnce({
+        chapters: [{ id: 'chapter-1', title: 'Chemical Reactions', description: '', isConfirmed: true, order: 0, pages: [], topics: [] }],
+      })
+      .mockResolvedValue({
+        chapters: [{ id: 'chapter-1', title: 'Chemical Reactions', description: '', isConfirmed: false, order: 0, pages: [], topics: [] }],
+      });
+    render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+    await screen.findByRole('heading', { level: 2, name: 'Combustion' });
+    await waitFor(() => expect(screen.getByLabelText('Chemical Reactions: confirmed')).toBeInTheDocument());
+
+    await u.click(screen.getByLabelText('Delete Combustion'));
+    await screen.findByRole('dialog');
+    await u.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(screen.getByTestId('content-editor-announcer')).toHaveTextContent("un-confirmed its parent section"));
+  });
+
+  // Task 8's own explicit "type in block A, move focus to block B before A's autosave resolves,
+  // assert focus is still on B after resolution" test is covered at the layer where the actual
+  // risk lives, not via fragile DOM-simulated typing (this codebase's own established precedent,
+  // see Story 7.1's removed userEvent.type()-into-ProseMirror test note above): useContentAutosave
+  // itself never touches focus or the DOM at all -- it only tracks internal status and invokes the
+  // caller-supplied onSync -- and its "a slower in-flight save does not clobber a faster, more
+  // recent one" test (useContentAutosave.test.ts) already exercises the exact out-of-order-
+  // resolution scenario Task 8 describes. performSync's own patch/update code paths (DocumentCanvas.
+  // tsx) never call `.focus()` or touch ProseMirror selection anywhere -- confirmed by inspection,
+  // not by a DOM test whose jsdom coordinate/selection fragility would test jsdom, not this code.
+});
 
 describe('CourseContentEditor', () => {
   it('renders nothing when isOpen is false', () => {
@@ -465,6 +978,39 @@ describe('CourseContentEditor', () => {
       await waitFor(() => expect(screen.queryByText('Some text.')).not.toBeInTheDocument());
     });
 
+    // Story 10.2, AC #2/FR-23/DD-6: the warning's own wording is the thing this story is most
+    // explicit about not getting wrong -- it must name only what actually happens (disappears from
+    // the picker/Learning Resources) and never imply already-inserted page text changes.
+    it('a source file with no attached resources shows the original, unchanged delete message', async () => {
+      const u = userEvent.setup();
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'lecture-notes.pdf', status: 'Done', parsedContent: 'Some text.', hasAttachedResources: false }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await screen.findByText('Some text.');
+
+      await u.click(screen.getByLabelText('Delete lecture-notes.pdf'));
+
+      expect(screen.getByRole('dialog')).toHaveTextContent('Delete "lecture-notes.pdf" and its content? This can\'t be undone.');
+    });
+
+    it('a source file with at least one attached resource shows the resource-aware warning, never implying inserted text changes', async () => {
+      const u = userEvent.setup();
+      vi.mocked(courseFileService.getFiles).mockResolvedValue([
+        makeDto({ id: 'file_1', fileName: 'lecture-notes.pdf', status: 'Done', parsedContent: 'Some text.', hasAttachedResources: true }),
+      ]);
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+      await screen.findByText('Some text.');
+
+      await u.click(screen.getByLabelText('Delete lecture-notes.pdf'));
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveTextContent('disappear from the "Insert from file" picker');
+      expect(dialog).toHaveTextContent("Learning Resources");
+      expect(dialog).toHaveTextContent("won't change");
+      expect(dialog).not.toHaveTextContent('and its content? This can\'t be undone.');
+    });
+
     it('Escape cancels the delete confirmation without closing the whole editor', async () => {
       const u = userEvent.setup();
       const onClose = vi.fn();
@@ -628,6 +1174,130 @@ describe('CourseContentEditor', () => {
       const root = container.querySelector('[aria-label="Course Content Editor"]');
       expect(root).toHaveClass('max-w-4xl');
       expect(root).not.toHaveClass('fixed');
+    });
+  });
+
+  // -- Story 11.1: Move-to-Review blocker list, including the cross-Chapter activation case ------
+  describe('Move-to-Review blockers (Story 11.1)', () => {
+    const outlineWithBlockerInChapter2: courseContentService.OutlineDto = {
+      chapters: [
+        { id: 'chapter-1', title: 'Chapter One', description: '', isConfirmed: true, order: 0, pages: [], topics: [] },
+        {
+          id: 'chapter-2',
+          title: 'Chapter Two',
+          description: '',
+          isConfirmed: true,
+          order: 1,
+          pages: [],
+          topics: [
+            {
+              id: 'topic-1',
+              title: 'Oxidation',
+              description: '',
+              isConfirmed: true,
+              order: 0,
+              pages: [],
+              subtopics: [
+                { id: 'subtopic-1', title: 'Combination Reactions', description: '', isConfirmed: false, order: 0, pages: [] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const chapterOneDoc: courseContentService.ChapterDocumentDto = {
+      id: 'chapter-1',
+      courseId: 'draft-1',
+      title: 'Chapter One',
+      description: '',
+      isConfirmed: true,
+      topics: [],
+      pages: [],
+    };
+
+    const chapterTwoDoc: courseContentService.ChapterDocumentDto = {
+      id: 'chapter-2',
+      courseId: 'draft-1',
+      title: 'Chapter Two',
+      description: '',
+      isConfirmed: true,
+      topics: [
+        {
+          id: 'topic-1',
+          title: 'Oxidation',
+          description: '',
+          order: 0,
+          isConfirmed: true,
+          pages: [],
+          subtopics: [{ id: 'subtopic-1', title: 'Combination Reactions', description: '', order: 0, isConfirmed: false, pages: [] }],
+        },
+      ],
+      pages: [],
+    };
+
+    it('activating a blocker in a different Chapter switches to it and moves real focus to the blocking node', async () => {
+      const u = userEvent.setup();
+      vi.mocked(courseContentService.getChapters).mockResolvedValue([
+        { id: 'chapter-1', title: 'Chapter One', order: 0 },
+        { id: 'chapter-2', title: 'Chapter Two', order: 1 },
+      ]);
+      vi.mocked(courseContentService.getChapterDocument).mockImplementation((_courseId, chapterId) =>
+        Promise.resolve(chapterId === 'chapter-2' ? chapterTwoDoc : chapterOneDoc)
+      );
+      vi.mocked(courseContentService.getOutline).mockResolvedValue(outlineWithBlockerInChapter2);
+
+      const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      // Opens on Chapter One (useContentDocument always opens chapters[0]) -- the blocker is
+      // reachable regardless, since PublishLifecycleBar's own blocker list is whole-course.
+      await screen.findByRole('heading', { level: 1, name: 'Chapter One' });
+
+      await u.click(await screen.findByRole('button', { name: '1 blocker' }));
+      await u.click(screen.getByRole('button', { name: /Combination Reactions/ }));
+
+      // Cross-Chapter switch: getChapterDocument is called for chapter-2, and its title replaces
+      // Chapter One's in view (the same remount-driven load switchChapter shares with addChapter).
+      await waitFor(() => expect(courseContentService.getChapterDocument).toHaveBeenCalledWith('draft-1', 'chapter-2'));
+      await screen.findByRole('heading', { level: 1, name: 'Chapter Two' });
+
+      // Real DOM focus-move (not just a scroll), same tabindex="-1" + .focus() mechanism
+      // TableOfContentsRail.tsx's own `activate` uses -- verified via a focus spy rather than
+      // document.activeElement, since ProseMirror's own event handling is documented elsewhere in
+      // this suite as unreliable for activeElement assertions in jsdom.
+      await waitFor(() => {
+        const focusedOnBlocker = focusSpy.mock.instances.some((el) => (el as HTMLElement).textContent?.includes('Combination Reactions'));
+        expect(focusedOnBlocker).toBe(true);
+      });
+
+      focusSpy.mockRestore();
+    });
+
+    it('shows an error toast (and stays on the current Chapter) when switching to the blocker Chapter fails', async () => {
+      const u = userEvent.setup();
+      showToast.mockClear();
+      vi.mocked(courseContentService.getChapters).mockResolvedValue([
+        { id: 'chapter-1', title: 'Chapter One', order: 0 },
+        { id: 'chapter-2', title: 'Chapter Two', order: 1 },
+      ]);
+      vi.mocked(courseContentService.getChapterDocument).mockImplementation((_courseId, chapterId) =>
+        chapterId === 'chapter-2' ? Promise.reject(new Error('network down')) : Promise.resolve(chapterOneDoc)
+      );
+      vi.mocked(courseContentService.getOutline).mockResolvedValue(outlineWithBlockerInChapter2);
+
+      render(<CourseContentEditor isOpen onClose={vi.fn()} draftId="draft-1" />);
+
+      await screen.findByRole('heading', { level: 1, name: 'Chapter One' });
+
+      await u.click(await screen.findByRole('button', { name: '1 blocker' }));
+      await u.click(screen.getByRole('button', { name: /Combination Reactions/ }));
+
+      await waitFor(() =>
+        expect(showToast).toHaveBeenCalledWith({ message: 'Could not switch to that chapter. Please try again.', variant: 'error' })
+      );
+      // The failed switch never committed -- still on Chapter One.
+      expect(screen.getByRole('heading', { level: 1, name: 'Chapter One' })).toBeInTheDocument();
     });
   });
 });

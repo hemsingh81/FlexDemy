@@ -11,7 +11,6 @@ vi.mock('@/src/services/settingsService', async () => {
     getFontPairings: vi.fn(),
     getFontSizes: vi.fn(),
     getTypographyCombinations: vi.fn(),
-    applySetting: vi.fn(),
     applyTypographyCombination: vi.fn(),
     applyTypography: vi.fn(),
     getSettingHistory: vi.fn(),
@@ -393,7 +392,7 @@ describe('Settings', () => {
     expect(settingsService.applyTypography).not.toHaveBeenCalled();
   });
 
-  it('saves both selections in a single atomic call, not two independent applySetting calls', async () => {
+  it('saves both selections in a single atomic call', async () => {
     vi.mocked(settingsService.applyTypography).mockResolvedValue({
       font: { ...SETTINGS[0], value: 'warm-editorial' },
       fontSize: { ...SETTINGS[2], value: 'comfortable' },
@@ -407,8 +406,6 @@ describe('Settings', () => {
     fireEvent.click(within(section).getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => expect(settingsService.applyTypography).toHaveBeenCalledWith('warm-editorial', 'comfortable'));
-    // The half-applied state the single transactional endpoint exists to prevent.
-    expect(settingsService.applySetting).not.toHaveBeenCalled();
     await waitFor(() => expect(within(section).getByText(/Lora \+ Inter · 112% text size/)).toBeInTheDocument());
     expect(mockRefetch).toHaveBeenCalled();
   });
@@ -533,7 +530,6 @@ describe('Settings', () => {
     // preview and could half-apply a pair.
     expect(within(section).getByRole('combobox', { name: /^font$/i })).toHaveValue('warm-editorial');
     expect(settingsService.applyTypography).not.toHaveBeenCalled();
-    expect(settingsService.applySetting).not.toHaveBeenCalled();
   });
 
   it('a history entry whose newValue is no longer curated is not restorable', async () => {

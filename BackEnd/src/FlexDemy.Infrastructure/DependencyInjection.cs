@@ -20,6 +20,7 @@ using FlexDemy.Infrastructure.Permissions;
 using FlexDemy.Infrastructure.Persistence;
 using FlexDemy.Infrastructure.Persistence.Interceptors;
 using FlexDemy.Infrastructure.Repositories;
+using FlexDemy.Infrastructure.Sanitization;
 using FlexDemy.Infrastructure.Scanning;
 using FlexDemy.Infrastructure.Security;
 using FlexDemy.Infrastructure.Storage;
@@ -69,6 +70,7 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
 
         services.AddScoped<ICourseRepository, CourseRepository>();
+        services.AddScoped<IContentRepository, ContentRepository>();
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
         services.AddScoped<IUserRepository, UserRepository>();
 
@@ -97,6 +99,12 @@ public static class DependencyInjection
         });
         services.AddScoped<IParseFileJob, ParseFileJob>();
         services.AddScoped<IParseFileJobEnqueuer, ParseFileJobEnqueuer>();
+
+        // Story 8.1: Resource upload/scan pipeline (mirrors CourseFile's Story 2.6/2.7 pipeline
+        // above), plus SVG sanitization for the clean-scan branch.
+        services.AddScoped<ISvgSanitizer, SvgSanitizer>();
+        services.AddScoped<IScanResourceJob, ScanResourceJob>();
+        services.AddScoped<IScanResourceJobEnqueuer, ScanResourceJobEnqueuer>();
 
         services.AddScoped<IKeywordDefinitionRepository, KeywordDefinitionRepository>();
         services.AddScoped<IVersionRepository, VersionRepository>();
